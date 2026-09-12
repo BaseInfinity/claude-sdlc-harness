@@ -1,10 +1,32 @@
 # AI Setup Lanes
 
-Four recommended AI coding setups for this repo. Setups A, B, and C are complete triads: **planner → driver → reviewer**. Setup D is a lightweight driver-only lane for operational grunt work.
+Two flavors, four setups. The **Workhorse** flavor is the stable, field-proven pairing. The **Frontier** flavor (Setups A–C) tracks the latest models. Setup D is a lightweight driver-only lane.
 
 This is **guidance, not a hard rule**. Maintainer override is always allowed.
 
-## Setup A — Opus 5 + Fable Advisor (Recommended default, trial-flagged)
+## Workhorse — Opus 4.6[1m] + GPT-5.5 (Stable)
+
+The maintainer's daily-driver pairing, field-proven with an SDLC harness. Optimized for reliability over capability.
+
+| Role | Model | Effort |
+|------|-------|--------|
+| **Builder** | Opus 4.6 (`claude-opus-4-6[1m]`) | `max` (4.6's sweet spot — no `xhigh` on this model) |
+| **First brain / Reviewer** | GPT-5.5 via Codex CLI (repo-local `scripts/run-review-leg.sh`) | `xhigh` |
+| **Escalation brain** | Fable 5.1 via `advisor()` | `high` — **only when builder + first brain can't reach 95% confidence** |
+
+**The `[1m]` suffix is required.** Bare `claude-opus-4-6` pins a 200K context window. `claude-opus-4-6[1m]` gives 1M — confirmed by session header "Opus 4.6 (1M context)."
+
+**Escalation valve:** Default flow is Opus builds → GPT-5.5 reviews → ship. Call `advisor()` (Fable) only when the first two cannot resolve a design question or reach 95% confidence together. Fable sees the full conversation transcript on every call (not cached between calls), so it is the most expensive shape — spend it on design decisions, not on grading finished work.
+
+**Seat provenance:** v1.87.0's shipped docs named **GPT-5.6** as the reviewer. The maintainer runs **GPT-5.5** at work and finds it the most reliable pairing. The Workhorse flavor reflects the owner's live config, not what v1.87.0 shipped.
+
+**Package:** `npm install agentic-sdlc-wizard@opus-4.6` (v1.87.0, the last pre-Opus-5 release). Immutable on npm.
+
+**When to use:** Complex multi-file work, agentic tasks, anything where reliability matters more than having the latest model. This is the default for the maintainer's own work.
+
+---
+
+## Setup A — Opus 5 + Fable Advisor (Frontier, trial-flagged)
 
 **Default for genuine autonomous/agentic work on complex repos, trial-flagged not settled.** Opus 5 launched 2026-07-24; every capability claim behind this trial is Anthropic's own launch-day material, unreplicated by field data (confidence ~70%, not higher — see `project_opus5_launch_research` memory). Maintainer explicitly chose to adopt Opus 5 as default ahead of the 1-2 week field-data window this research recommended, judging the risk acceptable given Codex still gates every task and rollback is one settings change — an accepted-risk decision, not a refutation of the underlying uncertainty. Requires Claude Code v2.1.219+ (`claude update`) for the `opus` alias to resolve to Opus 5 — on older versions it still resolves to Opus 4.8. **Common gotcha:** a stale `ANTHROPIC_DEFAULT_OPUS_MODEL` env var (e.g. in `~/.zshrc`) silently pins an older Opus version and overrides `/model` picker choices — check your shell rc files if `/model opus` doesn't show Opus 5.
 
