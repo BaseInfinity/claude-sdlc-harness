@@ -14,10 +14,11 @@ A **self-evolving Software Development Life Cycle (SDLC) enforcement system for 
 > release before Opus 5 entered this repo, from the era the maintainer drove it
 > daily on Opus 4.6 (that known-goodness is recollection, being converted to
 > verified in [#689](https://github.com/BaseInfinity/claude-sdlc-harness/issues/689)).
-> The stable lane pairs v1.87.0 with the **Opus 4.6 driver it was built for**
-> (`/model claude-opus-4-6`, `/effort max`) — sessions on this pin have been
-> observed at a **200k context window**; a verified 1M launch path for 4.6 is an
-> open item in [#689](https://github.com/BaseInfinity/claude-sdlc-harness/issues/689).
+> The stable lane pairs v1.87.0 with the **Opus 4.6 driver it was built for**.
+> Use `/model claude-opus-4-6[1m]` for the **1M context window** (`/effort max`).
+> The bare `claude-opus-4-6` pin (without `[1m]`) gives only 200K.
+> The **Workhorse pairing** adds a cross-model reviewer and escalation brain —
+> see [AI_SETUP_LANES.md](AI_SETUP_LANES.md#workhorse--opus-461m--gpt-55-stable).
 > Everything after it — v1.88.0+, the Opus 5 era, **including `@latest`** — is
 > **experimental**: reworked and validated in the open. Follow the validation lane:
 > [#689](https://github.com/BaseInfinity/claude-sdlc-harness/issues/689),

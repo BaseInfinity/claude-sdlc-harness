@@ -1681,17 +1681,17 @@ test_ai_setup_lanes_reviewer_is_gpt56() {
     local bad=""
     # "5\.6" AND "Sol" (not just one or the other) so a Sol->Terra swap, or a
     # future GPT-5.7 Sol rename, both fail.
-    # (Line numbers re-pinned after the 2026-07-24 Opus 5 A/B lane restructure,
-    # and again on 2026-08-16 when #579 added the advisor-availability and
-    # Setup-B-unverified paragraphs. Re-pinning is the third time this check has
-    # cost a round to a pure insertion above it — the pins encode position, not
-    # the claim they mean to guard. Replacing them with content anchors is #659.)
-    for n in 15 26 45 60 62 140 192 196 234 235 238; do
+    # (Line numbers re-pinned after #707 added the Workhorse section at the top
+    # of AI_SETUP_LANES.md, shifting all Frontier-section lines by 22.
+    # Re-pinning is the FOURTH time this check has cost a round to a pure
+    # insertion above it. Replacing them with content anchors is #659.)
+    # The Workhorse section (lines 1-28) deliberately uses GPT-5.5 — skip it.
+    for n in 37 48 67 82 84 162 214 218 256 257 260; do
         bad="$bad$(_check_line_has_and_lacks "$F" "$n" "5\.6,Sol" "5\.5")"
     done
-    # L144 is the fallback-chain line: must name "5\.6" AND BOTH Sol (primary)
+    # L166 is the fallback-chain line: must name "5\.6" AND BOTH Sol (primary)
     # and Terra (fallback target) so a Terra->Luna swap also fails.
-    bad="$bad$(_check_line_has_and_lacks "$F" 144 "5\.6,Sol,Terra" "5\.5" "5\.4")"
+    bad="$bad$(_check_line_has_and_lacks "$F" 166 "5\.6,Sol,Terra" "5\.5" "5\.4")"
     if [ -z "$bad" ]; then
         pass "AI_SETUP_LANES.md: all reviewer-model lines reference GPT-5.6 Sol/Terra, none reference stale GPT-5.5/5.4"
     else
@@ -1709,7 +1709,7 @@ test_readme_reviewer_is_gpt56() {
     # the same day by the stability-lanes banner and its review repairs —
     # a position pin, not content — see #659, which keeps accumulating
     # evidence.)
-    bad="$bad$(_check_line_has_and_lacks "$F" 174 "5\.6,Sol,Terra" "5\.5" "5\.4")"
+    bad="$bad$(_check_line_has_and_lacks "$F" 175 "5\.6,Sol,Terra" "5\.5" "5\.4")"
     # Every OTHER line naming a GPT-5.x reviewer must name 5.6, by CONTENT.
     # This replaced position pins on lines 193-195 when the model-selection
     # research moved to AI_SETUP_LANES.md (#659 asked for exactly this: the
@@ -2805,7 +2805,7 @@ test_codex_reviewer_effort_is_high() {
                     --include='*.md' --include='*.sh' --include='*.json' --include='*.yml' --include='*.yaml' --include='*.js' \
                     "$REPO_ROOT" 2>/dev/null \
                 | grep -vE "$_hist" \
-                | grep -v 'model_reasoning_effort="\?high"\?' || true)
+                | grep -v 'model_reasoning_effort="\?\(x\)\?high"\?' || true)
     [ -n "$flag_hits" ] && offenders="$offenders
 INVOCATION at non-high effort:
 $flag_hits"

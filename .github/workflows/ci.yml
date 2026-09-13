@@ -138,6 +138,9 @@ jobs:
       - name: Run review-leg launcher tests (#590)
         run: ./tests/test-run-review-leg.sh
 
+      - name: Run escalation ladder pin tests (#707)
+        run: ./tests/test-escalation-ladder.sh
+
       - name: Run review-verdict schema tests (#617)
         run: ./tests/test-review-verdict-schema.sh
 
