@@ -4,6 +4,17 @@ All notable changes to the SDLC Wizard.
 
 > **Note:** This changelog is for humans to read. Don't manually apply these changes - just run the wizard ("Check for SDLC wizard updates") and it handles everything automatically.
 
+## [1.100.0] - 2026-09-12
+
+### Changed
+- **Reliable is now the recommended default.** Opus 4.6[1m] max + GPT-5.5 xhigh + Fable 5.1 high. Opus 5 moves to Bleeding edge (`@frontier` dist-tag).
+- Two-lane install: `npm install agentic-sdlc-wizard` (Reliable, `@latest`). Bleeding edge (`@frontier`) not yet published.
+- Simplified Setup A table to the three-tier ladder: Opus 5 high → GPT-5.6 Sol high → Fable 5.1 high.
+- Both GPT-5.5 xhigh and Fable 5.1 high independently concurred on this strategy: revert default-flip commits on main, don't cherry-pick 143 commits from v1.87.0.
+
+### Added
+- Escalation ladder pin tests and canary scenario (#707, merged in v1.99.3 squash).
+
 > **Registry note, 2026-08-26 — `opus-4.6` dist-tag (not a release).** The npm
 > tag `opus-4.6` now points at **v1.87.0**, the last release published before
 > Opus 5 entered this repo (Opus 5 became the Setup A default in v1.88.0).

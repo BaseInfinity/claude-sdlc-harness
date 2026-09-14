@@ -1681,17 +1681,17 @@ test_ai_setup_lanes_reviewer_is_gpt56() {
     local bad=""
     # "5\.6" AND "Sol" (not just one or the other) so a Sol->Terra swap, or a
     # future GPT-5.7 Sol rename, both fail.
-    # (Line numbers re-pinned after #707 added the Workhorse section at the top
-    # of AI_SETUP_LANES.md, shifting all Frontier-section lines by 22.
-    # Re-pinning is the FOURTH time this check has cost a round to a pure
-    # insertion above it. Replacing them with content anchors is #659.)
-    # The Workhorse section (lines 1-28) deliberately uses GPT-5.5 — skip it.
-    for n in 37 48 67 82 84 162 214 218 256 257 260; do
+    # (Line numbers re-pinned after the Reliable default-flip shortened
+    # Setup A and shifted all Frontier-section lines.
+    # Re-pinning is the FIFTH time this check has cost a round to a pure
+    # edit above it. Replacing them with content anchors is #659.)
+    # The Reliable section (lines 1-32) deliberately uses GPT-5.5 — skip it.
+    for n in 41 62 77 79 157 209 213 251 252 255; do
         bad="$bad$(_check_line_has_and_lacks "$F" "$n" "5\.6,Sol" "5\.5")"
     done
-    # L166 is the fallback-chain line: must name "5\.6" AND BOTH Sol (primary)
+    # L161 is the fallback-chain line: must name "5\.6" AND BOTH Sol (primary)
     # and Terra (fallback target) so a Terra->Luna swap also fails.
-    bad="$bad$(_check_line_has_and_lacks "$F" 166 "5\.6,Sol,Terra" "5\.5" "5\.4")"
+    bad="$bad$(_check_line_has_and_lacks "$F" 161 "5\.6,Sol,Terra" "5\.5" "5\.4")"
     if [ -z "$bad" ]; then
         pass "AI_SETUP_LANES.md: all reviewer-model lines reference GPT-5.6 Sol/Terra, none reference stale GPT-5.5/5.4"
     else
@@ -1709,15 +1709,12 @@ test_readme_reviewer_is_gpt56() {
     # the same day by the stability-lanes banner and its review repairs —
     # a position pin, not content — see #659, which keeps accumulating
     # evidence.)
-    bad="$bad$(_check_line_has_and_lacks "$F" 175 "5\.6,Sol,Terra" "5\.5" "5\.4")"
-    # Every OTHER line naming a GPT-5.x reviewer must name 5.6, by CONTENT.
-    # This replaced position pins on lines 193-195 when the model-selection
-    # research moved to AI_SETUP_LANES.md (#659 asked for exactly this: the
-    # pins had already been re-anchored once and broke again on the move).
-    # README carries no historical GPT-5.5 citation — the Vending-Bench one
-    # moved out with the research, and its own guard followed it there.
+    bad="$bad$(_check_line_has_and_lacks "$F" 163 "5\.6,Sol,Terra" "5\.5" "5\.4")"
+    # Every OTHER line naming a GPT-5.x reviewer must name 5.6, by CONTENT —
+    # EXCEPT the Reliable lane banner which legitimately names GPT-5.5 as its
+    # first brain. The Reliable lane uses 5.5; Bleeding edge uses 5.6.
     local stale
-    stale="$(grep -n 'GPT-5\.' "$F" | grep -v 'GPT-5\.6' || true)"
+    stale="$(grep -n 'GPT-5\.' "$F" | grep -v 'GPT-5\.6' | grep -v 'GPT-5\.5.*Fable 5\.1\|GPT-5\.5 review' || true)"
     [ -n "$stale" ] && bad="$bad$(printf ' stale-GPT-line:%s' "$(printf '%s' "$stale" | cut -d: -f1 | tr '\n' ',')")"
     grep -q 'GPT-5\.6 Sol' "$F" || bad="$bad README.md(no-sol-reference-at-all)"
     if [ -z "$bad" ]; then
@@ -2601,7 +2598,7 @@ test_driver_effort_default_is_high_not_xhigh() {
     # has a valid use is the same mistake ROADMAP #495 exists to end — assert what
     # the defining line must SAY, and a revert to xhigh-as-default fails that.
     bad="$bad$(_check_content_line_has_and_lacks "$REPO_ROOT/AI_SETUP_LANES.md" \
-        '| \*\*Driver\*\* | Opus 5' '\`high\` for complex,\`medium\`')"
+        '| \*\*Builder\*\* | Opus 5' '\`high\`')"
     bad="$bad$(_check_content_line_has_and_lacks "$REPO_ROOT/skills/sdlc/SKILL.md" \
         'Recommended: Opus 5' 'Opus 5 \`high\`,\`medium\`')"
 

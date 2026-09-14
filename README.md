@@ -4,38 +4,26 @@ A **self-evolving Software Development Life Cycle (SDLC) enforcement system for 
 
 **Built on 15+ years of software engineering and founding engineering experience** — battle-tested patterns from real production systems, baked into an AI agent that follows tried-and-true software quality practices so you don't have to enforce them manually.
 
-> **The experimental lane (v1.88.0+) is built and validated on frontier models.** It is developed against **Opus 5** as the driver, **Fable 5** as the design authority, and **GPT-5.6 Sol** as the cross-model adversarial check. That is the only configuration behind which the experimental lane has cycle data from real use. (The stable lane below has its own pairing.)
+> **The Reliable lane is the recommended default.** Opus 4.6[1m] max + GPT-5.5 xhigh + Fable 5.1 high — field-proven, actively dogfooded.
 >
-> **Experimental-lane behavior on earlier or smaller drivers is unmeasured.** Not "degraded," not "should still work" — nobody has run it and measured. The harness leans on the driver to hold a long plan, refuse its own shortcuts, and escalate when uncertain; how much of that survives on a weaker model is exactly the thing no one here has data on. If you run it elsewhere and measure something, that result is worth more than this paragraph.
+> The Bleeding edge lane (`@frontier`, not yet published) uses Opus 5 + GPT-5.6 Sol + Fable 5.1 and has cycle data from v1.88.0–v1.99.2 but is experimental.
 
 > **Built for Claude Code.** Using OpenAI's Codex CLI instead? Check out [`codex-sdlc-wizard`](https://github.com/BaseInfinity/codex-sdlc-wizard). Need privacy-first / any-backend (local Ollama, Azure OpenAI, hosted OSS)? See [`opencode-sdlc-wizard`](https://github.com/BaseInfinity/opencode-sdlc-wizard). ([Full ecosystem](#xdlc-ecosystem-sibling-projects).)
 
-> **Stability lanes.** The **most stable line is `opus-4.6`** — v1.87.0, the last
-> release before Opus 5 entered this repo, from the era the maintainer drove it
-> daily on Opus 4.6 (that known-goodness is recollection, being converted to
-> verified in [#689](https://github.com/BaseInfinity/claude-sdlc-harness/issues/689)).
-> The stable lane pairs v1.87.0 with the **Opus 4.6 driver it was built for**.
-> Use `/model claude-opus-4-6[1m]` for the **1M context window** (`/effort max`).
-> The bare `claude-opus-4-6` pin (without `[1m]`) gives only 200K.
-> The **Workhorse pairing** adds a cross-model reviewer and escalation brain —
-> see [AI_SETUP_LANES.md](AI_SETUP_LANES.md#workhorse--opus-461m--gpt-55-stable).
-> Everything after it — v1.88.0+, the Opus 5 era, **including `@latest`** — is
-> **experimental**: reworked and validated in the open. Follow the validation lane:
-> [#689](https://github.com/BaseInfinity/claude-sdlc-harness/issues/689),
-> [#694](https://github.com/BaseInfinity/claude-sdlc-harness/issues/694),
-> [#697](https://github.com/BaseInfinity/claude-sdlc-harness/issues/697) and the
-> findings filed from #697
-> ([#698](https://github.com/BaseInfinity/claude-sdlc-harness/issues/698)–[#702](https://github.com/BaseInfinity/claude-sdlc-harness/issues/702)).
-> Stable-lane install — pinned end-to-end, never `@latest` (see
-> [#699](https://github.com/BaseInfinity/claude-sdlc-harness/issues/699)):
+> **Two lanes.** Pick at install time:
 > ```bash
-> npm install -g agentic-sdlc-wizard@opus-4.6
-> npx -y agentic-sdlc-wizard@opus-4.6 init
+> npm install -g agentic-sdlc-wizard              # Reliable (default, @latest)
+> # npm install -g agentic-sdlc-wizard@frontier   # Bleeding edge (not yet published)
 > ```
+> **Reliable** (`@latest`) — Opus 4.6[1m] max + GPT-5.5 xhigh + Fable 5.1 high.
+> Field-proven, stable. Use `/model claude-opus-4-6[1m]` (`/effort max`).
+> The bare `claude-opus-4-6` pin (without `[1m]`) gives only 200K.
+> **Bleeding edge** (`@frontier`, not yet published) — Opus 5 high + GPT-5.6 Sol high + Fable 5.1 high.
+> Latest models, less field data. See [AI_SETUP_LANES.md](AI_SETUP_LANES.md)
+> for full details.
 > Known defect on **both** lanes: setup does not auto-invoke on a brand-new
 > project ([#698](https://github.com/BaseInfinity/claude-sdlc-harness/issues/698))
-> — run it manually on first launch: type `/` plus the skill name, which is
-> `setup-wizard` on the stable lane and `claude-setup-wizard` on latest.
+> — run it manually on first launch: type `/` plus the skill name.
 
 ## Install
 
@@ -45,8 +33,8 @@ Run from your terminal or from inside Claude Code (`!` prefix):
 ```bash
 npx -y agentic-sdlc-wizard@latest init
 ```
-This is the **experimental lane** — the Opus-5-era latest (see *Stability lanes* above; the stable-lane commands are there). The `@latest` pin forces npm to fetch the newest version. Without it, `npx` may serve a stale CLI from your local cache (#358); `init` also nudges if it detects a gap.
-Then start (or restart) Claude Code — type `/exit` then `claude` to reload hooks. Setup is meant to auto-invoke on first prompt — Claude reads the wizard doc, scans your project, and generates bespoke CLAUDE.md, SDLC.md, TESTING.md, and ARCHITECTURE.md. **Known defect:** on a brand-new project the auto-invoke does not fire ([#698](https://github.com/BaseInfinity/claude-sdlc-harness/issues/698)) — run the setup skill manually as described in *Stability lanes* above.
+The `@latest` pin forces npm to fetch the newest version. Without it, `npx` may serve a stale CLI from your local cache (#358); `init` also nudges if it detects a gap. Since v1.100.0, `@latest` is the **Reliable** lane (Opus 4.6 + GPT-5.5 + Fable 5.1).
+Then start (or restart) Claude Code — type `/exit` then `claude` to reload hooks. Setup is meant to auto-invoke on first prompt — Claude reads the wizard doc, scans your project, and generates bespoke CLAUDE.md, SDLC.md, TESTING.md, and ARCHITECTURE.md. **Known defect:** on a brand-new project the auto-invoke does not fire ([#698](https://github.com/BaseInfinity/claude-sdlc-harness/issues/698)) — run the setup skill manually: type `/` plus the skill name.
 
 <details>
 <summary>Alternative install methods</summary>
@@ -192,32 +180,32 @@ Reviewer effort is `high` (changed from `xhigh` 2026-08-01, for cost and review-
 The wizard ships a **default recommendation**, not a mandate. Swap to any Claude
 model at any time — `/model` per session, or pin in `.claude/settings.json`.
 
-**Default: Opus 5 at `high` effort for complex projects, `medium` for routine
-web/CRUD** (Setup A).
+**Default (Reliable): Opus 4.6[1m] at `max` effort** — the maintainer's daily driver.
+**Bleeding edge: Opus 5 at `high`** — install via `@frontier` when that dist-tag ships.
 **Sonnet 5 at `medium` effort** (Setup B) for simple or one-off work.
 
-**What has actually been exercised on this harness.** Current Setup A — Opus 5
-driving, Fable 5 advising, GPT-5.6 Sol gating — is what recent cycles run on.
-Earlier defaults existed (Opus 4.6, June 2026 — see `CHANGELOG.md`) but predate
-the current review setup, so none of that data transfers. The other lanes and
-the `claude-opus-4-6` / `claude-opus-4-8` pins are configuration that should
-work, not measured results.
+**What has actually been exercised on this harness.** The Reliable lane — Opus 4.6
+driving, GPT-5.5 reviewing, Fable 5.1 escalating — is the actively dogfooded
+configuration. The Bleeding edge lane (Opus 5 + GPT-5.6 Sol + Fable 5.1) has
+cycle data from v1.88.0–v1.99.2 but is experimental.
 
 ### Switch any time
 
 ```bash
-/model opus                # wizard's default (Setup A) — Opus 5, requires CC v2.1.219+
+/model claude-opus-4-6[1m]  # Reliable default — Opus 4.6, 1M context, `max` effort
+/model opus                # Bleeding edge (Setup A) — Opus 5, requires CC v2.1.219+
 /model sonnet              # Simple/one-off lane (Setup B) — native 1M context, lower cost
 /model opusplan            # Opus 5 plans (Shift+Tab), Sonnet executes — both Max-bundled (Setup C)
-/model claude-opus-4-8     # pin explicitly for Opus 4.8's field-proven behavior instead of Opus 5
-/model claude-opus-4-6     # pin explicitly for Opus 4.6's `max`-effort consistency profile
+/model claude-opus-4-8     # pin explicitly for Opus 4.8's field-proven behavior
 ```
 
 Or pin in `.claude/settings.json`:
 
 ```json
-{ "model": "opus", "advisorModel": "fable", "effortLevel": "high" }
+{ "model": "claude-opus-4-6[1m]", "advisorModel": "fable" }
 ```
+
+Set effort per session with `/effort max` — don't persist it in settings (the effort hook warns on a settings-only pin).
 
 Set effort per session with `/effort`, not a shell-rc or settings env var —
 persisting it that way silently overrides a later `/effort` change once you
@@ -229,7 +217,8 @@ The wizard defines four AI coding setups in [`AI_SETUP_LANES.md`](AI_SETUP_LANES
 
 | Lane | Advisor | Driver | Reviewer | Escalation |
 |------|---------|--------|----------|------------|
-| **A — Recommended (trial)** | Fable 5 (advisorModel, fallback subagent) | Opus 5, `high` / `medium` | GPT-5.6 Sol high | Opus 4.8 pinned or Fable review |
+| **Reliable (default)** | Fable 5.1 (`advisor()`) | Opus 4.6[1m], `max` | GPT-5.5 xhigh | Fable 5.1 high |
+| **A — Bleeding edge** | Fable 5.1 (`advisor()`) | Opus 5, `high` | GPT-5.6 Sol high | Fable 5.1 high |
 | **B — Simple/One-Off** | Fable 5 (advisorModel, fallback subagent) | Sonnet 5, `medium`→`high`→`xhigh` | GPT-5.6 Sol high | Opus 4.8 xhigh or Fable review |
 | **C — Saver** | Fable 5 or Opus 5 (advisorModel) | Opus 5 plans, Sonnet 5 executes | GPT-5.6 Sol high | None |
 | **D — Lite** | None | Sonnet 5, `medium` | None | None |

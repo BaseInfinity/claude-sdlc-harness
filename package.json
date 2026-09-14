@@ -1,6 +1,6 @@
 {
   "name": "agentic-sdlc-wizard",
-  "version": "1.99.2",
+  "version": "1.100.0",
   "description": "Self-evolving SDLC enforcement for Claude Code \u2014 hooks, skills, and one-command setup",
   "bin": {
     "sdlc-wizard": "cli/bin/sdlc-wizard.js"

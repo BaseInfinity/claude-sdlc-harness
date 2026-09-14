@@ -1,12 +1,17 @@
 # AI Setup Lanes
 
-Two flavors, four setups. The **Workhorse** flavor is the stable, field-proven pairing. The **Frontier** flavor (Setups A–C) tracks the latest models. Setup D is a lightweight driver-only lane.
+Two lanes. **Reliable** is the recommended default — field-proven, stable. **Bleeding edge** tracks the latest models. Pick your lane at install time:
+
+```
+npm install agentic-sdlc-wizard              # Reliable (@latest)
+# npm install agentic-sdlc-wizard@frontier   # Bleeding edge (not yet published)
+```
 
 This is **guidance, not a hard rule**. Maintainer override is always allowed.
 
-## Workhorse — Opus 4.6[1m] + GPT-5.5 (Stable)
+## Reliable — Opus 4.6[1m] + GPT-5.5 (Recommended default)
 
-The maintainer's daily-driver pairing, field-proven with an SDLC harness. Optimized for reliability over capability.
+The maintainer's daily-driver pairing, field-proven with an SDLC harness. Optimized for reliability over capability. This is `@latest` on npm.
 
 | Role | Model | Effort |
 |------|-------|--------|
@@ -18,35 +23,25 @@ The maintainer's daily-driver pairing, field-proven with an SDLC harness. Optimi
 
 **Escalation valve:** Default flow is Opus builds → GPT-5.5 reviews → ship. Call `advisor()` (Fable) only when the first two cannot resolve a design question or reach 95% confidence together. Fable sees the full conversation transcript on every call (not cached between calls), so it is the most expensive shape — spend it on design decisions, not on grading finished work.
 
-**Seat provenance:** v1.87.0's shipped docs named **GPT-5.6** as the reviewer. The maintainer runs **GPT-5.5** at work and finds it the most reliable pairing. The Workhorse flavor reflects the owner's live config, not what v1.87.0 shipped.
+**Seat provenance:** v1.87.0's shipped docs named **GPT-5.6** as the reviewer. The maintainer runs **GPT-5.5** at work and finds it the most reliable pairing. The Reliable lane reflects the owner's live config, not what v1.87.0 shipped.
 
-**Package:** `npm install agentic-sdlc-wizard@opus-4.6` (v1.87.0, the last pre-Opus-5 release). Immutable on npm.
+**Package:** `npm install agentic-sdlc-wizard` — this is `@latest`. The legacy `@opus-4.6` dist-tag still points at v1.87.0 (immutable, different reviewer defaults).
 
 **When to use:** Complex multi-file work, agentic tasks, anything where reliability matters more than having the latest model. This is the default for the maintainer's own work.
 
 ---
 
-## Setup A — Opus 5 + Fable Advisor (Frontier, trial-flagged)
+## Setup A — Opus 5 + Sol + Fable (Bleeding edge)
 
-**Default for genuine autonomous/agentic work on complex repos, trial-flagged not settled.** Opus 5 launched 2026-07-24; every capability claim behind this trial is Anthropic's own launch-day material, unreplicated by field data (confidence ~70%, not higher — see `project_opus5_launch_research` memory). Maintainer explicitly chose to adopt Opus 5 as default ahead of the 1-2 week field-data window this research recommended, judging the risk acceptable given Codex still gates every task and rollback is one settings change — an accepted-risk decision, not a refutation of the underlying uncertainty. Requires Claude Code v2.1.219+ (`claude update`) for the `opus` alias to resolve to Opus 5 — on older versions it still resolves to Opus 4.8. **Common gotcha:** a stale `ANTHROPIC_DEFAULT_OPUS_MODEL` env var (e.g. in `~/.zshrc`) silently pins an older Opus version and overrides `/model` picker choices — check your shell rc files if `/model opus` doesn't show Opus 5.
-
-| Role | Model | Effort |
-|------|-------|--------|
-| **Advisor** | Fable 5 (via `advisorModel: "fable"`) — **observed working 2026-08-16**, twice in one session, returning full rulings. This reverses the 2026-07-24 "server-side disabled" state; re-check by calling it, not by reading this row. **On `advisor()` failure, fall back to a Fable subagent call** (`Agent({model: "fable", effort: "high"})`) — go straight to the fallback rather than retrying. *The fallback path has never been observed firing, so its behavior is unverified.* | `high` (server-side); subagent fallback explicit `high` |
-| **Driver** | Opus 5 (`claude-opus-5`, via the `opus` alias) | `high` for complex projects, `medium` for routine web/CRUD work (maintainer decision 2026-08-02). Escalate to `xhigh` for genuinely hard or long-running agentic tasks — Anthropic's own framing for that tier — but do not run it as the standing default: Anthropic's Opus 5 prompting guide advises using lower effort liberally wherever quality holds, and higher effort increases elaboration and self-directed scope. |
-| **Reviewer** | Codex (GPT-5.6 Sol) high | Still gates every task at the end — unaffected by the driver/advisor change |
-| **Escalation** | `max` only as a last resort (marginal gains, doubles cost — not the default escalation path); Opus 4.8 pinned explicitly (`claude-opus-4-8`) as a secondary check when Opus-5-driver + Opus-5-fallback-advisor would otherwise be a same-family self-check | Stuck (2 failed attempts / LOW confidence) or high-stakes |
-
-**Effort mechanics — read this before assuming "set and forget."** The effort *tier* (low/medium/high/xhigh/max) is a static per-session setting — Claude Code never auto-switches tiers based on task difficulty; changing tiers still requires an explicit `/effort`. Setup A starts at `high` (2026-08-02), stepping to `medium` for routine web/CRUD work and up to `xhigh` only for genuinely hard or long-running runs. Anthropic's launch material recommends `xhigh` "for difficult tasks and long-running asynchronous workflows" — that is an escalation trigger, not a standing default, and their Opus 5 prompting guide separately advises using lower effort liberally wherever quality holds. What Opus 5 *does* have on top of that is documented **adaptive reasoning within a fixed tier**: at whatever tier you're on, it modulates how much it thinks per step (deeper on hard sub-problems, lighter on easy ones) without any manual intervention. Don't conflate the two — "effort scales with complexity" is only true within a tier, not across tiers.
-
-**Fallback lane (Sonnet 5 medium) — restore if the Opus 5 trial doesn't pan out:**
+**Experimental. Tracks the latest models — higher capability ceiling, less field data.** Install via `npm install agentic-sdlc-wizard@frontier` (dist-tag not yet published). Requires Claude Code v2.1.219+ for the `opus` alias to resolve to Opus 5.
 
 | Role | Model | Effort |
 |------|-------|--------|
-| **Advisor** | Fable 5 (via `advisorModel: "fable"`) | `high` (server-side) |
-| **Driver** | Sonnet 5 (`claude-sonnet-5`) | `medium` default, escalate `high` → `xhigh` for hard tasks |
-| **Reviewer** | Codex (GPT-5.6 Sol) high | — |
-| **Escalation** | Opus 4.8 xhigh takes over as driver (or run a Fable 5 review pass) | When stuck (2 failed attempts / LOW confidence) or high-stakes |
+| **Builder** | Opus 5 (`claude-opus-5`) | `high` |
+| **First brain / Reviewer** | GPT-5.6 Sol via Codex CLI (repo-local `scripts/run-review-leg.sh`) | `high` |
+| **Escalation brain** | Fable 5.1 via `advisor()` | `high` — only when builder + first brain can't reach 95% confidence |
+
+Same three-tier escalation ladder as Reliable, different models. The valve is identical: Fable fires only on escalation, not on every review.
 
 Sonnet 5 medium remains a fine default for less complex repos — see Setup B below. It's demoted from Setup A's primary slot here specifically because the maintainer's own workload is dominated by complex, agentic-heavy repos where Opus 5's extra capability is worth the cost; that's a workload-specific call, not a universal verdict that Sonnet 5 medium is inferior.
 
@@ -58,7 +53,7 @@ Sonnet 5 medium remains a fine default for less complex repos — see Setup B be
 
 **For one-off tasks, scripts, and less complex repos — not the main workflow.** Where Setup A is the default for genuine autonomous agentic work, Setup B is for lower-stakes, lower-complexity work where Sonnet 5's speed and cost outweigh Opus 5's extra capability.
 
-> **Setup B is unverified in this repo.** Every lane below rests on vendor material and general reasoning about cost and complexity, not on a measured run. Setup A is what this repo actually dogfoods, and the only lane behind which there is cycle data. Nothing here is a controlled comparison against Setup A — choose it on scope and cost, and do not read it as a measured capability claim in either direction.
+> **Setup B is unverified in this repo.** Every lane below rests on vendor material and general reasoning about cost and complexity, not on a measured run. The Reliable lane is what the maintainer dogfoods daily; Setup A (Bleeding edge) has cycle data from v1.88.0–v1.99.2. Neither Setup B nor C has been measured. Choose on scope and cost, not as a capability claim.
 
 | Role | Model | Effort |
 |------|-------|--------|
@@ -95,9 +90,9 @@ Cost-efficient hybrid using CC's native `opusplan` alias. `opusplan` follows the
 
 The "just do the thing" lane. No TDD enforcement, no cross-model review, no planning phase. You already know what to do — you just need a fast, cheap pair of hands.
 
-## When to Use Setup A
+## When to Use Setup A (Bleeding edge)
 
-The default for genuine autonomous/agentic work on complex repos — full discipline (TDD, cross-model review) with Opus 5's extra capability at higher quota cost than Setup B (see Credit-Spend Warning below):
+For work where you want the latest models and accept less field data. Install via `@frontier` dist-tag (not yet published). Full discipline (TDD, cross-model review) still applies:
 
 - Architecture or methodology changes
 - Complex multi-file features or refactors
@@ -275,7 +270,7 @@ The wizard does not enforce setup lane selection — it documents the recommende
 ## Model Selection — The Evidence
 
 Moved here from `README.md` so that section stays short. **Read the honesty
-note there first:** Setup A is the only lane with cycle data from this repo.
+note there first:** the Reliable lane is the actively dogfooded configuration; Setup A has cycle data from v1.88.0–v1.99.2.
 The research below is third-party field data about model behavior in general.
 It is the reasoning behind the lane assignments; it is not a measurement of
 this harness running on any lane other than A.
@@ -292,7 +287,7 @@ Two weeks of in-the-wild data after Opus 4.8's launch (2026-05-28) showed a clea
 - **[BSWEN effort decision guide](https://docs.bswen.com/blog/2026-04-19-claude-code-effort-level-decision-guide/)** — "Max on Opus causes overthinking on routine stuff. xHigh is the sweet spot for autonomous work"
 - **r/Claudeopus field reports** — one maintainer's literal A/B: "12 hours with 4.8 zero deliverables; plugged in 4.6, spec written + 133 tests green in one session." Top comment: "4.6 had the best overall balance at max"
 
-That research still stands as the reason **Sonnet 5 (not Opus 4.6, not Opus 4.8) is Setup B's driver** — Sonnet 5 doesn't have Opus 4.8's overthinking problem, and generally uses less quota for comparable-scope work. **Note what kind of evidence that is:** third-party field reports about model behavior in general, not a measurement of this harness running on Setup B. Setup A is the only lane behind which there is cycle data from this repo, and the lane tables above label Setup B unverified for exactly that reason. The two statements are consistent — the research picks Sonnet 5 *over other Setup B candidates*; it says nothing about Setup B versus Setup A. Opus 4.6/4.8 remain reachable as an explicit escalation/stability pin (see the lane tables above) for anyone who's tuned a workflow to their specific behavior, but neither is a lane driver anymore.
+That research still stands as the reason **Sonnet 5 (not Opus 4.6, not Opus 4.8) is Setup B's driver** — Sonnet 5 doesn't have Opus 4.8's overthinking problem, and generally uses less quota for comparable-scope work. **Note what kind of evidence that is:** third-party field reports about model behavior in general, not a measurement of this harness running on Setup B. The Reliable lane is the actively dogfooded configuration; Setup A has historical cycle data (v1.88.0–v1.99.2). Setup B remains unverified. The two statements are consistent — the research picks Sonnet 5 *over other Setup B candidates*; it says nothing about Setup B versus Setup A. Opus 4.6/4.8 remain reachable as an explicit escalation/stability pin (see the lane tables above) for anyone who's tuned a workflow to their specific behavior, but neither is a lane driver anymore.
 
 **Why Opus 5 became the default (2026-07-24), on top of that history.** Opus 5 launched today at the same price as Opus 4.8, positioned by Anthropic as "close to Fable 5 intelligence at half the price," with documented self-verification improvements. Every capability claim behind this is Anthropic's own launch-day material — zero field data exists yet, the exact evidence class the wizard's own process treats with skepticism (see this document's trial-flagged framing). The wizard maintainer chose to adopt it as default anyway, judging the risk acceptable since Codex still gates every task and reverting is one settings change. Sonnet 5 remains the wizard's evidence-backed pick for lower-stakes work — Setup B, not deprecated.
 
