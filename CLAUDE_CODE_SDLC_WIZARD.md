@@ -1456,7 +1456,19 @@ For Claude to be effective at SDLC enforcement, your project should have these d
 
 ### Step 0.0: Enable Branch Protection (CRITICAL)
 
-**Before setting up SDLC, protect your main branch.** This is non-negotiable for teams and highly recommended for solo developers.
+**Protect your main branch early — but not before CI can report.** This is non-negotiable for teams and highly recommended for solo developers.
+
+> **Do this in order, whichever method you use below.** A required status check
+> that has never reported blocks every merge — GitHub shows it as *Expected —
+> waiting for status* — and *Do not allow bypassing the above settings*
+> (`enforce_admins` in the API) removes the override that would let you merge
+> anyway. Protect a repo that has no CI yet and you lock yourself out of your
+> own `main`.
+>
+> 1. Add the workflow that produces `validate` and push it on a branch.
+> 2. Open a PR and watch `validate` go green at least once, so you know the
+>    check name exists and reports.
+> 3. **Then** apply protection — UI or CLI, both below.
 
 **Why this matters:**
 - SDLC enforcement is only as strong as your merge protection
@@ -1467,32 +1479,33 @@ For Claude to be effective at SDLC enforcement, your project should have these d
 
 | Setting | Value | Why |
 |---------|-------|-----|
-| Require pull request before merging | ✓ Enabled | All changes go through PR review |
+| Require a pull request before merging | ✓ Enabled | All changes go through PR review |
 | Require approvals | **0 (none)** | No one else to approve — CI is your gate |
-| Require status checks to pass | ✓ Enabled | CI must be green |
-| Require branches to be up to date | ✓ Enabled | No stale merges |
-| Include administrators | **✗ Disabled** | You're the only admin — this locks you out |
+| Require status checks to pass before merging | ✓ Enabled | CI must be green |
+| Require branches to be up to date before merging | ✓ Enabled | No stale merges |
+| Do not allow bypassing the above settings | **✓ Enabled** | Safe at 0 approvals — but set CI up first, see below |
 
 **Team Settings (2+ developers):**
 
 | Setting | Value | Why |
 |---------|-------|-----|
-| Require pull request before merging | ✓ Enabled | All changes go through PR review |
+| Require a pull request before merging | ✓ Enabled | All changes go through PR review |
 | Require approvals | 1+ (your choice) | Human must approve before merge |
-| Require status checks to pass | ✓ Enabled | CI must be green |
-| Require branches to be up to date | ✓ Enabled | No stale merges |
-| Include administrators | ✓ Enabled | No one bypasses the rules |
+| Require status checks to pass before merging | ✓ Enabled | CI must be green |
+| Require branches to be up to date before merging | ✓ Enabled | No stale merges |
+| Do not allow bypassing the above settings | ✓ Enabled | No one bypasses the rules |
 
 **How to enable (UI):**
 1. Go to: `Settings > Branches > Add rule`
 2. Branch name pattern: `main` (or `master`)
 3. Enable the settings above (solo or team, as appropriate)
 4. Add required status checks: `validate` (E2E is advisory — see note below)
-5. Save changes
+5. Click **Create** (the `Add rule` flow ends in `Create`; `Save changes` is the edit flow)
 
 > **Note (ROADMAP #212 Option 1, April 2026):** We no longer require `e2e-quick-check` as a blocking check. It burned Anthropic API credits on every PR, and branch protection pinned to GitHub Actions made local-maintainer check-run satisfaction impossible. E2E now runs advisory-only via `tests/e2e/local-shepherd.sh` on the maintainer's Max subscription. See `ROADMAP.md` #212 for the full rationale.
 
-**How to enable (CLI — solo dev):**
+**How to enable (CLI — solo dev):** *(the ordering rule at the top of Step 0.0
+applies — `validate` must have reported green once before you run this)*
 ```bash
 gh api repos/OWNER/REPO/branches/main/protection --method PUT --input - << 'EOF'
 {
@@ -1500,11 +1513,51 @@ gh api repos/OWNER/REPO/branches/main/protection --method PUT --input - << 'EOF'
     "strict": true,
     "contexts": ["validate"]
   },
-  "enforce_admins": false,
-  "required_pull_request_reviews": null,
+  "enforce_admins": true,
+  "required_pull_request_reviews": {
+    "required_approving_review_count": 0
+  },
   "restrictions": null
 }
 EOF
+```
+
+**Why `enforce_admins: true` for a solo dev.** The usual reason to leave it off
+is that it locks the only admin out. That reason is about *approvals*: GitHub
+refuses self-approval, so an admin with `required_approving_review_count: 1` and
+nobody else around cannot merge anything. At **0** approvals that particular
+trap is gone — what remains is a green `validate` and an up-to-date branch,
+which you were waiting for anyway. It is still a real lock if the check cannot
+report, which is what the ordering above is for.
+
+**Why `required_approving_review_count: 0` and not `null`.** `null` does not
+mean "a PR with no approvals" — it means **no pull request is required at
+all**, which is a different and much weaker setting. The `0` form requires the
+PR and asks nobody to approve it. This repo's own `main` still has `null`,
+which is why a direct push to it is possible today — see the next paragraph and
+#679.
+
+**What this does NOT do, and the ordering matters:** if you leave
+`required_pull_request_reviews` as `null`, admin enforcement does **not** stop a
+direct push to `main`. A commit that already carries a green `validate` lands —
+push a branch, let CI run, then push that same SHA to `main`. Check runs attach
+to commits rather than branches. Only a *fresh* commit is rejected. Requiring
+the pull request is what closes that, not `enforce_admins`.
+
+**And a green `validate` is not a trustworthy signal on its own.** The check is
+produced by a workflow file that lives in the repository, so a branch under
+review can change what `validate` does — including making it pass. Branch
+protection enforces that the check *reported success*; it cannot enforce what
+the check measured. Treat protection as a floor, not as review.
+
+**Changing one field later:** `PUT .../protection` **replaces the entire
+protection object**, so re-running one of these recipes to adjust a single
+setting silently drops everything absent from your payload — including any
+`checks[].app_id` pin. To change one field, use its sub-endpoint:
+
+```bash
+gh api -X POST repos/OWNER/REPO/branches/main/protection/enforce_admins   # on
+gh api -X DELETE repos/OWNER/REPO/branches/main/protection/enforce_admins # off
 ```
 
 **How to enable (CLI — team):**
@@ -1529,7 +1582,7 @@ EOF
 
 | Setting | Value | Why |
 |---------|-------|-----|
-| Require CODEOWNERS review | ✓ Enabled | Specific people must approve |
+| Require review from Code Owners | ✓ Enabled | Specific people must approve |
 
 **CODEOWNERS file (teams only):**
 Create `.github/CODEOWNERS`:
