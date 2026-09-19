@@ -51,7 +51,7 @@ Sonnet 5 medium remains a fine default for less complex repos — see Setup B be
 
 ## Setup B — Sonnet 5 Simple/One-Off (Legacy Flagship slot repurposed)
 
-**For one-off tasks, scripts, and less complex repos — not the main workflow.** Where Setup A is the default for genuine autonomous agentic work, Setup B is for lower-stakes, lower-complexity work where Sonnet 5's speed and cost outweigh Opus 5's extra capability.
+**For one-off tasks, scripts, and less complex repos — not the main workflow.** Where Setup A (bleeding edge) targets genuine autonomous agentic work, Setup B is for lower-stakes, lower-complexity work where Sonnet 5's speed and cost outweigh Opus 5's extra capability.
 
 > **Setup B is unverified in this repo.** Every lane below rests on vendor material and general reasoning about cost and complexity, not on a measured run. The Reliable lane is what the maintainer dogfoods daily; Setup A (Bleeding edge) has cycle data from v1.88.0–v1.99.2. Neither Setup B nor C has been measured. Choose on scope and cost, not as a capability claim.
 

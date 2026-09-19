@@ -1293,7 +1293,7 @@ test_wizard_doc_autocompact_sonnet5_scoped_not_opus5() {
     #     Now: require EXACTLY ONE Setup A row, its threshold cell to be
     #     `none`, and NO percentage or PCT key anywhere in the whole row.
     local setup_a_rows setup_a_count setup_a_row
-    setup_a_rows=$(echo "$section" | grep -E '^\|[^|]*Setup A[^|]*\|')
+    setup_a_rows=$(echo "$section" | grep -E '^\|[^|]*(Setup A|Opus 5.*bleeding)[^|]*\|')
     setup_a_count=$(printf '%s\n' "$setup_a_rows" | grep -c . || true)
     if [ "$setup_a_count" != "1" ]; then
         ok=false
