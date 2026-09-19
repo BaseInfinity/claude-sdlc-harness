@@ -211,9 +211,9 @@ Set effort per session with `/effort`, not a shell-rc or settings env var —
 persisting it that way silently overrides a later `/effort` change once you
 switch models.
 
-### Four Setup Lanes
+### Setup Lanes
 
-The wizard defines four AI coding setups in [`AI_SETUP_LANES.md`](AI_SETUP_LANES.md):
+The wizard defines five AI coding setups in [`AI_SETUP_LANES.md`](AI_SETUP_LANES.md):
 
 | Lane | Advisor | Driver | Reviewer | Escalation |
 |------|---------|--------|----------|------------|

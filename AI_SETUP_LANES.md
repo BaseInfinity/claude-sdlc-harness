@@ -220,7 +220,7 @@ For recommended `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` values per context window and 
 
 A common question: **"does the `[1m]` model alias get billed differently? Does it pull from my Max plan or from API credits?"**
 
-The short answer: **all four lanes are fully Max-bundled in interactive sessions** — Setup A (Opus 5), Setup B (Sonnet 5, native 1M), Setup C (opusplan, Opus plan-mode + Sonnet execute), and Setup D (Sonnet). Here's the detail.
+The short answer: **all five lanes are fully Max-bundled in interactive sessions** — Reliable (Opus 4.6[1m]), Setup A (Opus 5), Setup B (Sonnet 5, native 1M), Setup C (opusplan, Opus plan-mode + Sonnet execute), and Setup D (Sonnet). Here's the detail.
 
 ### 1M context is free on Max — no API premium
 
