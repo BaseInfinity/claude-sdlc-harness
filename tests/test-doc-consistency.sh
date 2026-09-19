@@ -2599,8 +2599,9 @@ test_driver_effort_default_is_high_not_xhigh() {
     # the defining line must SAY, and a revert to xhigh-as-default fails that.
     bad="$bad$(_check_content_line_has_and_lacks "$REPO_ROOT/AI_SETUP_LANES.md" \
         '| \*\*Builder\*\* | Opus 5' '\`high\`')"
-    bad="$bad$(_check_content_line_has_and_lacks "$REPO_ROOT/skills/sdlc/SKILL.md" \
-        'Recommended: Opus 4.6' '`max`')"
+    if ! grep -qE 'Recommended: Opus 4\.6\[1m\] `max`' "$REPO_ROOT/skills/sdlc/SKILL.md"; then
+        bad="${bad}${REPO_ROOT}/skills/sdlc/SKILL.md:(Reliable default 'Opus 4.6[1m] max' not found)"
+    fi
 
     # Repo-wide backstop. Codex caught driver-default contradictions in THREE
     # consecutive rounds — README, a lane table, a quota line, then two more in
