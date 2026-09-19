@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "SDLC enforcement for Claude Cowork sessions via skills and one prompt-based hook",
-    "version": "1.99.2"
+    "version": "1.100.0"
   },
   "plugins": [
     {
       "name": "sdlc-wizard-cowork",
       "source": ".",
       "description": "SDLC enforcement for Claude Cowork \u2014 TDD, planning, self-review via skills and one prompt-based hook",
-      "version": "1.99.2",
+      "version": "1.100.0",
       "author": {
         "name": "Stefan Ayala"
       },

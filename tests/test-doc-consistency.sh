@@ -2600,7 +2600,7 @@ test_driver_effort_default_is_high_not_xhigh() {
     bad="$bad$(_check_content_line_has_and_lacks "$REPO_ROOT/AI_SETUP_LANES.md" \
         '| \*\*Builder\*\* | Opus 5' '\`high\`')"
     bad="$bad$(_check_content_line_has_and_lacks "$REPO_ROOT/skills/sdlc/SKILL.md" \
-        'Recommended: Opus 5' 'Opus 5 \`high\`,\`medium\`')"
+        'Recommended: Opus 4.6' '`max`')"
 
     # Repo-wide backstop. Codex caught driver-default contradictions in THREE
     # consecutive rounds — README, a lane table, a quota line, then two more in

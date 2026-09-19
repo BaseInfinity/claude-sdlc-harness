@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "SDLC enforcement plugins for AI-assisted development",
-    "version": "1.99.2"
+    "version": "1.100.0"
   },
   "plugins": [
     {
@@ -16,7 +16,7 @@
         "repo": "BaseInfinity/claude-sdlc-harness"
       },
       "description": "SDLC enforcement for AI agents \u2014 TDD, planning, self-review, CI shepherd",
-      "version": "1.99.2",
+      "version": "1.100.0",
       "author": {
         "name": "Stefan Ayala"
       },
@@ -36,7 +36,7 @@
         "path": "cowork"
       },
       "description": "SDLC enforcement for Claude Cowork \u2014 TDD, planning, self-review via skills and one prompt-based hook",
-      "version": "1.99.2",
+      "version": "1.100.0",
       "author": {
         "name": "Stefan Ayala"
       },
