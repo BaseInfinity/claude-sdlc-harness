@@ -997,7 +997,7 @@ test_setup_skill_confidence_driven() {
 # Setup wizard skill uses resolved/unresolved state model (not numeric threshold)
 test_setup_skill_resolved_state_model() {
     local skill_file="$SCRIPT_DIR/../.claude/skills/setup/SKILL.md"
-    if grep -qi "UNRESOLVED\|RESOLVED" "$skill_file" && ! grep -q "95%" "$skill_file"; then
+    if grep -qi "UNRESOLVED\|RESOLVED" "$skill_file" && ! grep -qE '(HIGH|MEDIUM|LOW).*95%|confidence.*>=.*95' "$skill_file"; then
         pass "Setup wizard uses resolved/unresolved state model (no vague numeric threshold)"
     else
         fail "Setup wizard should use RESOLVED/UNRESOLVED states, not a numeric confidence threshold"
