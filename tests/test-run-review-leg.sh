@@ -508,6 +508,7 @@ fi
 # MODEL CONFIGURABILITY. The launcher defaults to gpt-5.5 but must accept
 # REVIEW_MODEL to run Sol or any other model without script copies.
 
+unset REVIEW_MODEL
 out=$(new_leg)
 modelfile="$(dirname "$out")/model-arg"
 set +e

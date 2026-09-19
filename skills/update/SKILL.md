@@ -95,7 +95,7 @@ Parse CHANGELOG entries between the user's installed version and the resolved la
 
 ```
 Installed: 1.42.0
-Latest:    1.99.2
+Latest:    1.100.0
 
 What changed:
 - [1.92.0] Cowork `Stop` hook REMOVED — it fired 12 times in one session and was wrong 11; Cowork now has no completion enforcement (documented in cowork/README.md).
