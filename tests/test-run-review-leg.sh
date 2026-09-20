@@ -71,12 +71,15 @@ fi
 # tests never ran is the defect this repo files as #642.
 VERDICT_PATH=""
 SCHEMA_ARG=""
+MODEL_ARG=""
 prev=""
 for arg in "$@"; do
     if [ "$prev" = "--output-last-message" ]; then VERDICT_PATH="$arg"; fi
     if [ "$prev" = "--output-schema" ]; then SCHEMA_ARG="$arg"; fi
+    if [ "$prev" = "-m" ]; then MODEL_ARG="$arg"; fi
     prev="$arg"
 done
+[ -n "${STUB_MODEL_FILE:-}" ] && printf '%s' "$MODEL_ARG" > "$STUB_MODEL_FILE"
 # Recorded so a row can pin that --output-schema was actually PASSED. Review
 # caught that nothing did: the stub ignored the flag, so deleting it from the
 # launcher left the whole suite green while every real leg lost the contract
@@ -499,6 +502,39 @@ if [ -s "$pidfile" ]; then
     fi
 else
     fail "the stub never recorded its pid — cannot prove the kill reached it"
+fi
+
+# ---------------------------------------------------------------------------
+# MODEL CONFIGURABILITY. The launcher defaults to gpt-5.5 but must accept
+# REVIEW_MODEL to run Sol or any other model without script copies.
+
+unset REVIEW_MODEL
+out=$(new_leg)
+modelfile="$(dirname "$out")/model-arg"
+set +e
+STUB_MODEL_FILE="$modelfile" STUB_STDOUT='ok' STUB_EXIT=0 \
+    "$RUNNER" "$out" 'review this' >/dev/null 2>&1
+rc=$?
+set -e
+check_rc "default model leg completes" 0 "$rc"
+if [ -s "$modelfile" ] && grep -qF 'gpt-5.5' "$modelfile"; then
+    pass "the default model is gpt-5.5"
+else
+    fail "default model is not gpt-5.5 (got: $(cat "$modelfile" 2>/dev/null))"
+fi
+
+out=$(new_leg)
+modelfile="$(dirname "$out")/model-arg-sol"
+set +e
+REVIEW_MODEL=gpt-5.6-sol STUB_MODEL_FILE="$modelfile" STUB_STDOUT='ok' STUB_EXIT=0 \
+    "$RUNNER" "$out" 'review this' >/dev/null 2>&1
+rc=$?
+set -e
+check_rc "REVIEW_MODEL override leg completes" 0 "$rc"
+if [ -s "$modelfile" ] && grep -qF 'gpt-5.6-sol' "$modelfile"; then
+    pass "REVIEW_MODEL=gpt-5.6-sol is passed to codex as -m gpt-5.6-sol"
+else
+    fail "REVIEW_MODEL override not passed (got: $(cat "$modelfile" 2>/dev/null))"
 fi
 
 echo ""

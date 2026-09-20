@@ -95,7 +95,7 @@ Parse CHANGELOG entries between the user's installed version and the resolved la
 
 ```
 Installed: 1.42.0
-Latest:    1.99.2
+Latest:    1.100.0
 
 What changed:
 - [1.92.0] Cowork `Stop` hook REMOVED — it fired 12 times in one session and was wrong 11; Cowork now has no completion enforcement (documented in cowork/README.md).
@@ -226,9 +226,9 @@ If CC < v2.1.170: skip. Resolve the live driver from the `model` pin, or — unp
 
 1. **Live driver is Fable** (pin `"fable"`/`"claude-fable-5"`, or unpinned + live identity Fable) — fires even with `advisorModel` already set (`/setup` 9.5 never offers Fable as driver, always a misconfig). Show:
 
-> **Model Setup** — Fable-as-driver isn't recommended; it can trigger safeguard auto-switches on medical/legal/bio content mid-session. **Setup A:** Opus 5 driver + Fable advisor (recommended, trial as of 2026-07-24, requires CC v2.1.219+ — unproven by field data yet, accepted-risk pick). **Setup B:** Sonnet 5 driver + Fable advisor (Simple/One-Off, generally lower quota than Opus 5, narrows at high effort). `[a/S]`?
+> **Model Setup** — Fable-as-driver isn't recommended; it can trigger safeguard auto-switches on medical/legal/bio content mid-session. **Reliable:** Opus 4.6[1m] + GPT-5.5 + Fable (recommended default). **Setup A:** Opus 5 + Fable (bleeding edge, requires CC v2.1.219+ — unproven by field data yet, accepted-risk pick). **Setup B:** Sonnet 5 driver + Fable advisor (Simple/One-Off, generally lower quota than Opus 5, narrows at high effort). `[r/a/S]`?
 
-`[a]` writes `model: "opus"`, `advisorModel: "fable"`, `effortLevel: "high"` (replaces existing pin; requires CC v2.1.219+, else falls back to Setup B's `sonnet`/`medium`). `[S]` (default): no change.
+`[r]` writes `model: "claude-opus-4-6[1m]"`, `advisorModel: "fable"` (no effortLevel — use `/effort max` per session). `[a]` writes `model: "opus"`, `advisorModel: "fable"`, `effortLevel: "high"` (bleeding edge; requires CC v2.1.219+). `[S]` (default): no change.
 
 2. **Pin exists (non-Fable), no `advisorModel`:** suggest per driver (`sonnet`/`opus`/`claude-opus-4-6`/`claude-opus-4-8` → `advisorModel: "fable"`, `opusplan` → `fable`). `[a/S]`; `[a]` writes **only** `advisorModel`, driver untouched.
 3. **No pin, live driver not Fable, or `advisorModel` set:** skip.
@@ -237,9 +237,9 @@ If CC < v2.1.170: skip. Resolve the live driver from the `model` pin, or — unp
 
 Runs regardless of version match (like Step 7.7). `check-only`: report only. Effort is model-aware (v1.84.0+, see `AI_SETUP_LANES.md`), not blanket `max` — this step detects the anti-pattern, doesn't push everyone toward `max`.
 
-1. Read `model` from the settings cascade. **No pin** = auto-mode, no fixed model — skip effort checks entirely (CC picks per turn). `opus` = Opus 5 (Setup A, `high`; `medium` for routine work). `sonnet` = Sonnet 5 (Setup B, `medium`). `opusplan` = mixed (Opus 5 planner `xhigh`, Sonnet 5 execution driver `medium`) — check the execution-driver effort, not the planner's. `claude-opus-4-6` = Opus 4.6. `claude-opus-4-8` = Opus 4.8.
+1. Read `model` from the settings cascade. **No pin** = auto-mode, no fixed model — skip effort checks entirely (CC picks per turn). `claude-opus-4-6` = Opus 4.6 (Reliable, `max`). `opus` = Opus 5 (bleeding edge, `high`; `medium` for routine work). `sonnet` = Sonnet 5 (Setup B, `medium`). `opusplan` = mixed (Opus 5 planner `xhigh`, Sonnet 5 execution driver `medium`) — check the execution-driver effort, not the planner's. `claude-opus-4-8` = Opus 4.8.
 2. **Opus 4.6 driver:** `CLAUDE_CODE_EFFORT_LEVEL=max` in `env` → pass (silent, 4.6's sweet spot). Only `effortLevel: "max"` in `settings.json` → warn: CC ignores session-only settings, only the env var persists — suggest moving it. Unset/below `max` → suggest `/effort max` + env entry.
-3. **Opus 5 driver (Setup A):** unset or `xhigh` pinned as a standing default → suggest `/effort high` (complex work) or `medium` (routine web/CRUD); `xhigh` is an escalation trigger for genuinely hard/long runs, not the default (changed 2026-08-02).
+3. **Opus 5 driver (bleeding edge):** unset or `xhigh` pinned as a standing default → suggest `/effort high` (complex work) or `medium` (routine web/CRUD); `xhigh` is an escalation trigger for genuinely hard/long runs, not the default (changed 2026-08-02).
 4. **Sonnet 5 driver (Setup B, or `opusplan`'s execution phase) or Opus 4.8 driver:** `CLAUDE_CODE_EFFORT_LEVEL=max` anywhere → warn (stale env var silently overrides `/effort high` post-switch). Recommend removing, use `/effort` per-session. Unset → pass (silent, `medium`/`xhigh` respectively are the model's own defaults).
 5. Never suggest a shell-rc export — only the project's `env` block, only for Opus 4.6.
 

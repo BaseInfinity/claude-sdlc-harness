@@ -224,7 +224,7 @@ Present suggestions and let the user confirm.
 
 ### Step 9.5: Context Window + Mixed-Mode Configuration (Opt-In)
 
-The CLI ships `cli/templates/settings.json` with **no** `model` or `env` pin, preserving Claude Code's model auto-selection. Users can opt into a pin during setup — see `AI_SETUP_LANES.md` (Setup A: Opus 5 + Fable, recommended if pinning; B: Sonnet 5 Simple/One-Off; C: OpusPlan Hybrid).
+The CLI ships `cli/templates/settings.json` with **no** `model` or `env` pin, preserving Claude Code's model auto-selection. Users can opt into a pin during setup — see `AI_SETUP_LANES.md` (Reliable: Opus 4.6[1m] + GPT-5.5 + Fable, recommended default; Setup A: Opus 5 + Fable, bleeding edge; B: Sonnet 5 Simple/One-Off; C: OpusPlan Hybrid).
 
 **Why this is opt-in (issue #198):** A top-level `"model"` in `settings.json` disables auto-mode for the session. Pinning is only worth it when you want consistent model behavior rather than per-turn auto-selection.
 
@@ -245,15 +245,27 @@ The output is JSON: `{ tier: "simple" | "complex", score, signals }`. Use the re
 > How do you want to configure the model for this repo?
 >
 > - **[N] No pin (default):** Auto-mode. CC picks model per turn. Simplest, no advisor.
-> - **[o] Opus 5 + Fable** *(Setup A — recommended if you want a pin, trial as of 2026-07-24):* Pins `model: "opus"`, `advisorModel: "fable"`. Requires CC v2.1.219+. Anthropic's newest flagship — unreplicated by field data yet, accepted-risk adoption. Effort: `high` (complex) / `medium` (routine web/CRUD); `xhigh` escalation only.
+> - **[r] Reliable — Opus 4.6[1m] + GPT-5.5 + Fable** *(Recommended default):* Pins `model: "claude-opus-4-6[1m]"`, `advisorModel: "fable"`. Proven stability. Effort: `max` per session via `/effort`. GPT-5.5 xhigh as first brain, Fable high as escalation.
+> - **[o] Opus 5 + Fable** *(Setup A — bleeding edge):* Pins `model: "opus"`, `advisorModel: "fable"`. Requires CC v2.1.219+. Effort: `high` (complex) / `medium` (routine web/CRUD); `xhigh` escalation only.
 > - **[s] Sonnet 5 + Fable** *(Setup B — Simple/One-Off, lower cost):* Pins `model: "sonnet"`, `advisorModel: "fable"`. Native 1M context, no `[1m]` suffix needed. Effort: `medium`, escalate `high` → `xhigh` for hard tasks.
 > - **[p] OpusPlan Hybrid** *(Setup C — cost-conscious, still want Opus reasoning):* Pins `model: "opusplan"`. Opus 5 plans (Shift+Tab), Sonnet 5 executes. Max-bundled. No API credit drain (#390).
 >
-> `[N/o/s/p]`
+> `[N/r/o/s/p]`
 
 **If the user answers `N` (default):** Make no edits to `.claude/settings.json`. Auto-mode stays on. Done.
 
-**If the user answers `o` (Opus 5 + Fable):** Edit `.claude/settings.json` and add:
+**If the user answers `r` (Reliable):** Edit `.claude/settings.json` and add:
+
+```json
+{
+  "model": "claude-opus-4-6[1m]",
+  "advisorModel": "fable"
+}
+```
+
+No `effortLevel` in settings — use `/effort max` per session. Tell the user: "Reliable lane (Opus 4.6[1m] + GPT-5.5 + Fable). Use GPT-5.5 xhigh as first brain for reviews, Fable high as escalation brain at <95% confidence. See AI_SETUP_LANES.md for the full brain ladder."
+
+**If the user answers `o` (Opus 5 + Fable, bleeding edge):** Edit `.claude/settings.json` and add:
 
 ```json
 {
@@ -263,7 +275,7 @@ The output is JSON: `{ tier: "simple" | "complex", score, signals }`. Use the re
 }
 ```
 
-Tell the user: "Opus 5 + Fable (Setup A, trial 2026-07-24). Effort `high` (complex) / `medium` (routine); `xhigh` escalation only. Needs CC v2.1.219+ (`! claude update`). Check shell rc for a stale `ANTHROPIC_DEFAULT_OPUS_MODEL` — it silently overrides this pin. No autocompact override: no Opus-5 proactive threshold is documented, so no percentage is supported (wizard doc → Autocompact Tuning)."
+Tell the user: "Bleeding-edge lane (Opus 5 + Fable). Effort `high` (complex) / `medium` (routine); `xhigh` escalation only. Needs CC v2.1.219+ (`! claude update`). Check shell rc for a stale `ANTHROPIC_DEFAULT_OPUS_MODEL` — it silently overrides this pin."
 
 **If the user answers `s` (Sonnet 5 + Fable):** Edit `.claude/settings.json` and add:
 

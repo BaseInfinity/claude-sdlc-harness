@@ -41,7 +41,7 @@ echo ""
 echo "--- Source-level pins ---"
 
 # 1. The review leg script must use GPT-5.5 as the first brain.
-if grep -q '\-m gpt-5\.5' "$RUNNER"; then
+if grep -q 'gpt-5.5' "$RUNNER"; then
     pass "run-review-leg.sh pins codex to gpt-5.5"
 else
     fail "run-review-leg.sh does not pin codex to gpt-5.5 — first brain is wrong"
@@ -55,7 +55,7 @@ else
 fi
 
 # 3. The model pin must not be commented out.
-if grep -E '^\s*#.*-m gpt-5\.5' "$RUNNER" | grep -qv '^\s*$'; then
+if grep -E '^\s*#.*gpt-5.5' "$RUNNER" | grep -qv '^\s*$'; then
     fail "the gpt-5.5 pin is commented out"
 else
     pass "the gpt-5.5 pin is not commented out"

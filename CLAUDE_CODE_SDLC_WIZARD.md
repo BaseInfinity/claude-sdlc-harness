@@ -268,7 +268,7 @@ Claude Code's **effort level** controls how much thinking the model does before 
 
 | Model | Recommended Effort | Why |
 |-------|--------------------|-----|
-| Opus 5 (recommended default, trial) | `high` (complex) / `medium` (routine web/CRUD) | Changed 2026-08-02. Escalate to `xhigh` for genuinely hard or long-running agentic work — Anthropic's own framing for that tier — but not as a standing default; their Opus 5 prompting guide advises using lower effort liberally wherever quality holds. Original rationale: Anthropic's recommendation for "difficult tasks and long-running asynchronous workflows" — Setup A's target use case, not `high`'s routine-work default. Effort tier is static per session, but adaptive reasoning modulates depth within it. Trial-flagged as of 2026-07-24 — see `AI_SETUP_LANES.md` |
+| Opus 5 (bleeding edge) | `high` (complex) / `medium` (routine web/CRUD) | Changed 2026-08-02. Escalate to `xhigh` for genuinely hard or long-running agentic work — Anthropic's own framing for that tier — but not as a standing default; their Opus 5 prompting guide advises using lower effort liberally wherever quality holds. Original rationale: Anthropic's recommendation for "difficult tasks and long-running asynchronous workflows" — Setup A's target use case, not `high`'s routine-work default. Effort tier is static per session, but adaptive reasoning modulates depth within it. Trial-flagged as of 2026-07-24 — see `AI_SETUP_LANES.md` |
 | Sonnet 5 (Simple/One-Off lane) | `medium`, escalate to `high`/`xhigh` for hard tasks | CodeRabbit testing: `medium` captures most of the upside at the lowest cost; blanket `xhigh`/`max` defaults add cost for marginal gains |
 | Opus 4.8 (escalation, pinned) | `xhigh` | `max` triggers excessive reasoning on 4.7/4.8 — documented 40-60x cache-token jump vs `high` (see "Opus 4.6" row below) |
 | Fable 5 (advisor / subagent fallback) | `high` everywhere — driver, subagent fallback, and `advisor()` (which exposes no effort parameter at all) | Adaptive thinking always on; server-side disabled as advisor currently — see "Advisor Model" below |
@@ -425,7 +425,8 @@ New built-in commands available to use alongside the wizard:
 
 | Driver | Advisor | Lane |
 |--------|---------|------|
-| Opus 5 (`opus`) | Fable (`"fable"`) | Setup A — default (trial) |
+| Opus 4.6[1m] (`claude-opus-4-6[1m]`) | GPT-5.5 xhigh + Fable (`"fable"`) | **Reliable — recommended default** |
+| Opus 5 (`opus`) | Fable (`"fable"`) | Setup A — bleeding edge |
 | Sonnet 5 (`sonnet`) | Fable (`"fable"`) | Setup B — Simple/One-Off |
 | Sonnet via opusplan | Opus 5 (`"claude-opus-5"`) | Setup C — OpusPlan Hybrid |
 | Opus 4.8 (`claude-opus-4-8`, pinned) | Fable (`"fable"`) | Escalation tier |
@@ -1066,19 +1067,20 @@ Override the default auto-compact threshold with environment variables. Per offi
 
 > **`env` is global, not per-model.** `env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` in `.claude/settings.json` applies to whichever model runs under that file — and, per the same doc row, "to both main conversations and subagents". Switching drivers does **not** switch its value: a file carrying Setup B's `75` keeps supplying `75` after you switch to Opus. No static `env` object can express "75 for Sonnet, none for Opus" — if you want per-model tuning, edit the key when you change persistent pins, or keep separate settings profiles.
 
-**Opt-in (issue #198):** The SDLC Harness CLI ships `.claude/settings.json` with **no** `model`, `advisorModel`, or `env` pin so Claude Code's auto-mode stays enabled. The setup skill's Step 9.5 offers four choices: no pin (default, auto-mode), Opus 5 + Fable advisor (recommended if pinning at all, Setup A, trial as of 2026-07-24), OpusPlan Hybrid with a Fable advisor (Setup C), and Sonnet 5 Simple/One-Off + Fable advisor (Setup B). Opus 4.8 itself is a pinned escalation model, not a persistent Step 9.5 pin — reach for it per-session via `/model claude-opus-4-8` when the driver gets stuck (see "Latest tier" below). Default is **No pin**. Pinning the model turns off per-turn auto-selection — a real tradeoff, so we ask.
+**Opt-in (issue #198):** The SDLC Harness CLI ships `.claude/settings.json` with **no** `model`, `advisorModel`, or `env` pin so Claude Code's auto-mode stays enabled. The setup skill's Step 9.5 offers choices: no pin (auto-mode), Opus 4.6[1m] + GPT-5.5 + Fable (Reliable — recommended default), Opus 5 + Fable (bleeding edge), OpusPlan Hybrid (Setup C), and Sonnet 5 Simple/One-Off (Setup B). Opus 4.8 itself is a pinned escalation model, not a persistent Step 9.5 pin — reach for it per-session via `/model claude-opus-4-8` when the driver gets stuck (see "Latest tier" below). Default is **No pin**. Pinning the model turns off per-turn auto-selection — a real tradeoff, so we ask.
 
-To opt in by hand, edit `.claude/settings.json` (Opus 5 example — the recommended default, trial as of 2026-07-24):
+To opt in by hand, edit `.claude/settings.json` (Reliable example — the recommended default):
 
 ```json
 {
-  "model": "opus",
-  "advisorModel": "fable",
-  "effortLevel": "high"
+  "model": "claude-opus-4-6[1m]",
+  "advisorModel": "fable"
 }
 ```
 
-No `env` block: Claude Code documents no Opus-5 proactive threshold, so there is no supported percentage to set (see "Opus 5 specifics" above).
+No `effortLevel` in settings — the hook warns on settings-only pins. Use `/effort max` per session.
+
+For the bleeding-edge lane (Opus 5 + Fable), see `AI_SETUP_LANES.md`.
 
 For the older `claude-opus-4-6` pin instead (still valid for proven stability), a percentage override *is* supported — Opus 4.6 without extended context is one of the documented proactive-compaction cases, so unlike on the current default driver the percentage is genuinely live here. **But mind the window it acts on.** An explicit `claude-opus-4-6` string pins **200K**; the Max auto-upgrade to 1M applies to the bare `opus` alias, not to an explicit version string. So a `30` here is 30% of 200K — a **~60K trigger**, the same over-aggressive setting this doc warns about for `opusplan` further down. Earlier revisions shipped exactly that pairing, annotated "(1M)", and it was wrong on both counts (GH #520). Use the 200K figures from the table above:
 
@@ -1099,7 +1101,7 @@ That block is the **legacy Opus 4.6 pin**, not Setup A. Setup A pins bare `opus`
 
 | Use Case | AUTOCOMPACT % | Why |
 |----------|--------------|-----|
-| **Setup A default driver (trial as of 2026-07-24)** | **none** | No proactive-compaction threshold is documented for it, so no percentage is supported — see "Opus 5 specifics". Use `CLAUDE_CODE_AUTO_COMPACT_WINDOW` if you want an earlier boundary. |
+| **Opus 5 (bleeding-edge driver)** | **none** | No proactive-compaction threshold is documented for it, so no percentage is supported — see "Opus 5 specifics". Use `CLAUDE_CODE_AUTO_COMPACT_WINDOW` if you want an earlier boundary. |
 | Sonnet 5 (Simple/One-Off driver) | **75%** | Fires at ~75% of its native ~967K threshold (~725K tokens) — safe margin without being overly conservative. Verified against official docs 2026-07-05. |
 | General development (200K `opus`) | 75% | Leaves room for implementation after planning |
 | Complex refactors (200K `opus`) | 80% | Slightly more context before compaction |
@@ -1174,7 +1176,7 @@ The `instructions-loaded-check.sh` `InstructionsLoaded` hook (session start/resu
 
 **Stay on auto-mode (default) when:** you're unsure, your work is mixed short/long, or you want Claude Code to do the model math for you.
 
-**How to opt in:** run `/model opus` in your session (transient) for the current default (Opus 5 on Max, auto-upgraded to 1M), `/model opus[1m]` to force 1M explicitly on other plans, or `/model claude-opus-4-6` if you specifically want Opus 4.6; set `"model"` to any of these values in `.claude/settings.json` for a persistent pin. Requires Claude Code v2.1.219+ for `opus` to resolve to Opus 5 (v2.1.154+ for the older `opus[1m]` alias, which still resolves to whichever Opus is current). The setup wizard's Step 9.5 also asks once, with default No.
+**How to opt in:** set `"model": "claude-opus-4-6[1m]"` in `.claude/settings.json` for the Reliable default, or `"opus"` for the bleeding-edge lane (Opus 5 on Max, auto-upgraded to 1M). Run `/model claude-opus-4-6[1m]` or `/model opus` per-session (transient). The setup wizard's Step 9.5 also asks once, with default No.
 
 **How to opt out:** remove the `model` line from `.claude/settings.json`, or run `/model` and pick "Default (recommended)".
 
@@ -1186,7 +1188,7 @@ The `instructions-loaded-check.sh` `InstructionsLoaded` hook (session start/resu
 
 This is **Setup C (OpusPlan Hybrid/Saver)** in `AI_SETUP_LANES.md`. CC's native `opusplan` alias gives you Opus reasoning during Plan Mode (Shift+Tab) and Sonnet execution — both Max-bundled, no API credit drain. `opusplan` follows the `opus` alias, currently Opus 5.
 
-| Layer | Setup C (OpusPlan) | Setup A (default, trial) | Setup B (Simple/One-Off) |
+| Layer | Setup C (OpusPlan) | Setup A (bleeding edge) | Setup B (Simple/One-Off) |
 |-------|--------------------|---------------------------|----------------------------|
 | Planner | Opus 5 `xhigh` (Plan Mode) | Opus 5 `high` (`medium` routine) | Sonnet 5 `medium`→`high`→`xhigh` |
 | Driver | Sonnet 5 `medium` (execute mode) | Opus 5 `high` (`medium` routine) | Sonnet 5 `medium`→`high`→`xhigh` |
@@ -1205,7 +1207,7 @@ Set effort per-session with `/effort` (planner `xhigh`, driver `medium`, escalat
 
 **When to use OpusPlan (Setup C):** routine SDLC work, simple repos, cost-conscious sessions where you still want an Opus plan-mode pass. Press Shift+Tab before architecture/blast-radius decisions to get Opus reasoning. For most day-to-day work, Setup B (Sonnet 5 + Fable) is the simpler, lower-cost option — see "Choosing Your Model" in [README.md](../README.md).
 
-**When to reach for Setup A (default, Opus 5):** genuine autonomous/agentic work on complex repos, architecture decisions, ambiguous debugging — Opus 5's extra capability at higher quota cost, not a split planner/driver.
+**When to reach for Setup A (bleeding edge, Opus 5):** genuine autonomous/agentic work on complex repos, architecture decisions, ambiguous debugging — Opus 5's extra capability at higher quota cost, not a split planner/driver.
 
 **Prove-It Gate (#233 acceptance criterion):** mixed-mode ships only if pair-tested on 3+ simple repos shows Sonnet-coder + Opus-reviewer produces ≥ same SDLC scores as full-Opus baseline. The first version of the heuristic ships v1.38.0; pair-test results land in CHANGELOG before recommending mixed-mode as the default for any tier.
 
@@ -1215,7 +1217,7 @@ Set effort per-session with `/effort` (planner `xhigh`, driver `medium`, escalat
 
 ### Latest tier — Opus 4.8 (pinned escalation model, #395)
 
-The wizard's default is **Opus 5** (Setup A, trial as of 2026-07-24 — see "Model Selection — The Evidence" in [AI_SETUP_LANES.md](../AI_SETUP_LANES.md) for the full evidence, including the accepted-risk framing). **Opus 4.8**, pinned explicitly (`claude-opus-4-8`), is the same-family-check escalation model: reach for it when the default driver stalls on architecture, a stuck bug, or anything needing a genuinely independent second pass — not as a daily driver. It ships SWE-Bench Pro / Terminal-Bench 2.1 gains, dynamic-workflows, and parallel-subagent-swarm features 4.6 doesn't have.
+The wizard's recommended default is the **Reliable lane** (Opus 4.6[1m] + GPT-5.5 + Fable — see `AI_SETUP_LANES.md`). **Opus 5** (Setup A) is the bleeding-edge lane for users who want the newest model at accepted risk. **Opus 4.8**, pinned explicitly (`claude-opus-4-8`), is the same-family-check escalation model: reach for it when the default driver stalls on architecture, a stuck bug, or anything needing a genuinely independent second pass — not as a daily driver. It ships SWE-Bench Pro / Terminal-Bench 2.1 gains, dynamic-workflows, and parallel-subagent-swarm features 4.6 doesn't have.
 
 **When Opus 4.8 is the right call:**
 - The driver is stuck (2+ failed attempts) and you want a fresh, deeper-reasoning pass
@@ -1242,7 +1244,7 @@ On Max plans, Opus auto-upgrades to 1M context. No `[1m]` suffix needed.
 
 **Effort tuning for 4.8:** `xhigh` (see the per-model effort table in "Recommended Effort Level" above — Opus 4.8 is escalation-only, so it doesn't get its own `max` tier the way Opus 4.6 does).
 
-**Escape hatch:** remove the `model` line (or run `/model opus`) to return to Opus 5, the wizard's recommended default.
+**Escape hatch:** remove the `model` line to return to auto-mode, or set it to `claude-opus-4-6[1m]` for the Reliable default.
 
 ### Community Feature-Discovery Scanner (roadmap #207)
 
@@ -3028,7 +3030,7 @@ If deployment fails or post-deploy verification catches issues:
 
 **SDLC.md:**
 ```markdown
-<!-- SDLC Harness Version: 1.99.2 -->
+<!-- SDLC Harness Version: 1.100.0 -->
 <!-- Setup Date: [DATE] -->
 <!-- Completed Steps: step-0.1, step-0.2, step-0.4, step-1, step-2, step-3, step-4, step-5, step-6, step-7, step-8, step-9 -->
 <!-- Git Workflow: [PRs or Solo] -->
@@ -4554,7 +4556,7 @@ Walk through updates? (y/n)
 Store wizard state in `SDLC.md` as metadata comments (invisible to readers, parseable by Claude):
 
 ```markdown
-<!-- SDLC Harness Version: 1.99.2 -->
+<!-- SDLC Harness Version: 1.100.0 -->
 <!-- Setup Date: 2026-01-24 -->
 <!-- Completed Steps: step-0.1, step-0.2, step-1, step-2, step-3, step-4, step-5, step-6, step-7, step-8, step-9 -->
 <!-- Git Workflow: PRs -->
