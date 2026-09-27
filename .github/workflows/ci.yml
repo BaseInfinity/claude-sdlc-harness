@@ -201,6 +201,9 @@ jobs:
       - name: Run release workflow tests
         run: ./tests/test-release-workflow.sh
 
+      - name: Run dist-tag derivation tests (#713)
+        run: ./tests/test-derive-dist-tag.sh
+
       - name: Run release-dry-run workflow tests
         run: ./tests/test-release-dry-run-workflow.sh
 

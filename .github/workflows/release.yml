@@ -23,7 +23,22 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.inputs.tag || github.ref }}
 
+      - name: Detect prerelease and derive dist-tag
+        id: dist-tag
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          DIST_TAG=$(./scripts/derive-dist-tag.sh "$PKG_VERSION")
+          if [ "$DIST_TAG" = "latest" ]; then
+            IS_PRERELEASE=false
+          else
+            IS_PRERELEASE=true
+          fi
+          echo "is_prerelease=$IS_PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "dist_tag=$DIST_TAG" >> "$GITHUB_OUTPUT"
+          echo "Detected: version=$PKG_VERSION prerelease=$IS_PRERELEASE dist-tag=$DIST_TAG"
+
       - name: Verify tag is on main branch
+        if: steps.dist-tag.outputs.is_prerelease == 'false'
         run: |
           git fetch origin main
           git merge-base --is-ancestor HEAD origin/main || {
@@ -86,7 +101,7 @@ jobs:
       # --provenance is auto-generated on a trusted publish, so the flag is
       # redundant (kept omitted for clarity).
       - name: Publish to npm (Trusted Publishing — OIDC, no token)
-        run: npm publish
+        run: npm publish --tag "${{ steps.dist-tag.outputs.dist_tag }}"
 
       - name: Create GitHub Release
         run: gh release create "$TAG_NAME" --generate-notes

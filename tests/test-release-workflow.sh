@@ -175,6 +175,30 @@ test_verifies_tag_on_main() {
     fi
 }
 
+test_dist_tag_derived_from_version() {
+    if grep -q 'DIST_TAG' "$WORKFLOW" && grep -q '\-\-tag' "$WORKFLOW"; then
+        pass "release.yml derives dist-tag from version and passes --tag to npm publish"
+    else
+        fail "release.yml does not derive dist-tag — bare npm publish steals @latest on prerelease tags (#713)"
+    fi
+}
+
+test_prerelease_skips_main_check() {
+    if grep -qE 'prerelease|IS_PRERELEASE|PRERELEASE' "$WORKFLOW"; then
+        pass "release.yml allows prerelease tags from non-main branches"
+    else
+        fail "release.yml forces all tags onto main — blocks frontier publishes (#713)"
+    fi
+}
+
+test_stable_still_requires_main() {
+    if grep -q 'merge-base --is-ancestor' "$WORKFLOW"; then
+        pass "release.yml still requires main-branch ancestry for stable releases"
+    else
+        fail "release.yml lost the main-branch check for stable releases"
+    fi
+}
+
 test_npm_provenance() {
     # ROADMAP: v1.75.0 migrated to npm Trusted Publishing. Trusted publish
     # auto-generates provenance — the explicit --provenance flag is no
@@ -218,6 +242,9 @@ test_upgrades_npm_for_trusted_publishing
 test_generates_release_notes
 test_npm_publish_step
 test_verifies_tag_on_main
+test_dist_tag_derived_from_version
+test_prerelease_skips_main_check
+test_stable_still_requires_main
 test_npm_provenance
 test_has_id_token_permission
 test_verifies_version_tag_match
