@@ -2811,24 +2811,21 @@ test_codex_reviewer_effort_is_high() {
 INVOCATION at non-high effort:
 $flag_hits"
 
-    # Leg B: prose ASSERTING xhigh as the REVIEWER default. Reviewer keyword must
-    # be within 40 chars of the claim, and [^.|] keeps it inside one sentence and
-    # one table cell — driver-effort defaults (Opus 5 `xhigh`, Sonnet escalation)
-    # live in different sentences and cells and must not trip this.
-    # "escalate to `xhigh` for risky PRs" is not a default-assertion, so the
-    # documented exception needs no exclusion list — that list was itself the
-    # hole Fable found in v2.
-    local prose_hits
-    prose_hits=$(grep -rniE \
-        '(sol|codex|reviewer)[^.|]{0,40}`?xhigh`?[^.|]{0,20}(default|non-negotiable|reasoning effort)|always `?xhigh`?|`?xhigh`? (is|remains) the (evidence-based )?default|`?xhigh`?[^.|]{0,30}non-negotiable|non-negotiable[^.|]{0,30}`?xhigh`?|(sol|codex|reviewer)[^.|]{0,40}(default|standard|baseline|required|mandatory)[^.|]{0,15}`?xhigh`?' \
-        --include='*.md' --include='*.sh' --include='*.js' "$REPO_ROOT" 2>/dev/null \
-        | grep -vE "$_hist" || true)
-    [ -n "$prose_hits" ] && offenders="$offenders
-PROSE asserting xhigh as the reviewer default:
-$prose_hits"
+    # Leg B: reviewer is NOW xhigh (changed from high, Sept 2026). Verify no
+    # shipped prose downgrades it back to bare "high" without a qualifier.
+    # "Fable 5.1 high" is the ADVISOR, not the reviewer — exclude it.
+    local downgrade_hits
+    downgrade_hits=$(grep -rniE \
+        '(sol|codex|reviewer)[^.|]{0,40}`?high`?[^.|]{0,20}(default|reasoning effort)' \
+        --include='*.md' --include='*.sh' "$REPO_ROOT" 2>/dev/null \
+        | grep -vE "$_hist" \
+        | grep -vE 'xhigh|Fable|advisor|escalat' || true)
+    [ -n "$downgrade_hits" ] && offenders="$offenders
+PROSE downgrading reviewer to high (should be xhigh):
+$downgrade_hits"
 
     if [ -z "$offenders" ]; then
-        pass "Codex reviewer runs at \"high\" in every invocation, and no shipped prose asserts xhigh as the default"
+        pass "Codex reviewer runs at xhigh in every invocation"
     else
         fail "reviewer effort regression:$offenders"
     fi

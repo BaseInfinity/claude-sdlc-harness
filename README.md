@@ -165,7 +165,7 @@ That's it. Codex picks up your OpenAI account's best available model automatical
 **How to use it:** when the change is high-stakes, write a one-file mission brief and run:
 
 ```bash
-codex exec -c 'model_reasoning_effort="high"' -s danger-full-access \
+codex exec -c 'model_reasoning_effort="xhigh"' -s danger-full-access \
   -o .reviews/latest-review.md \
   "Read .reviews/handoff.json and review per the checklist. Output findings + CERTIFIED or NOT CERTIFIED." \
   < /dev/null
@@ -173,7 +173,7 @@ codex exec -c 'model_reasoning_effort="high"' -s danger-full-access \
 
 **Always append `< /dev/null`** when running `codex exec` from a non-interactive parent (background, hooks, CI, Claude Code Bash tool). Without it, codex blocks on stdin reads even when the prompt is an argument — the process sits at S/0% CPU indefinitely with a 0-byte `-o` output file. Validated on codex-cli 0.130.0 / macOS 14, 2026-05-15.
 
-Reviewer effort is `high` (changed from `xhigh` 2026-08-01, for cost and review-noise — not capability); escalate to `xhigh` for unusually risky PRs. See [CLAUDE_CODE_SDLC_WIZARD.md](CLAUDE_CODE_SDLC_WIZARD.md#cross-model-review-loop-required-for-high-stakes) for the full protocol (handoff format, round-2 dialogue loop, preflight docs). Real-world: this catches P0/P1 issues in 2-3 out of 10 reviews that Claude's self-review rated as clean.
+Reviewer effort is `xhigh` (restored from `high` — the user's quality-first stance removes the cost constraint that motivated the downgrade on 2026-08-01). See [CLAUDE_CODE_SDLC_WIZARD.md](CLAUDE_CODE_SDLC_WIZARD.md#cross-model-review-loop-required-for-high-stakes) for the full protocol (handoff format, round-2 dialogue loop, preflight docs). Real-world: this catches P0/P1 issues in 2-3 out of 10 reviews that Claude's self-review rated as clean.
 
 ## Choosing Your Model
 

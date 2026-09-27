@@ -417,8 +417,8 @@ New built-in commands available to use alongside the wizard:
 
 | Method | Scope | Persists? |
 |--------|-------|-----------|
-| `"advisorModel": "fable"` in `.claude/settings.json` | Project | Yes (committed, shared with team) |
-| `/advisor fable` | User (global `~/.claude/settings.json`) | Yes (all projects) |
+| `"advisorModel": "claude-fable-5-1"` in `.claude/settings.json` | Project | Yes (committed, shared with team) |
+| `/advisor fable` | User (global `~/.claude/settings.json`) | Yes (all projects) — resolves to 5.1 on CC v2.1.257+; pin `"claude-fable-5-1"` on older versions |
 | `--advisor fable` CLI flag | Session | No |
 
 **Recommended pairings:**
@@ -2324,7 +2324,7 @@ cat << 'EOF'
 SDLC BASELINE:
 1. Task list FIRST (TodoWrite or TaskCreate) (plan tasks before coding)
 2. STATE CONFIDENCE: HIGH/MEDIUM/LOW
-3. LOW confidence or FAILED 2x? Ladder: Fable -> Codex high -> human LAST
+3. LOW confidence or FAILED 2x? Ladder: Fable -> Codex xhigh -> human LAST
 4. Never ask what a model can settle; confidence is not authorization
 5. 🛑 ALL TESTS MUST PASS BEFORE COMMIT - NO EXCEPTIONS
 
@@ -2447,7 +2447,7 @@ Low confidence does **not** mean "ask the user." It means "escalate," and the us
    **The loop, in order.** Fable decides the approach → Opus implements it → **Fable reviews the implementation** → only once that is clean, Codex runs as the final cross-model check. Fable appears twice on purpose: once as the brain before code exists, once as the reviewer of what got built. Codex is last and singular — it is the adversarial gate, not a second opinion to average with the first. Sending work to Codex before Fable has reviewed it wastes the expensive check on defects the cheaper one would have caught.
 
    **Open question, not yet settled:** this topology runs Opus as the driver calling out to Fable. The inverse — Fable as driver, delegating implementation to Opus subagents — has not been tested and may be better, since it puts the stronger reasoner in the seat that makes decisions continuously rather than on request. Do not assume the current arrangement is optimal; it is the one that has been used, not the one that has been measured.
-2. **Codex `high`** — when Fable can't close the gap, or when a second, adversarially-framed opinion is what's needed.
+2. **Codex `xhigh`** — when Fable can't close the gap, or when a second, adversarially-framed opinion is what's needed.
 3. **The human** — priority, risk appetite, scope, spend, or anything irreversible or outward-facing. A merge gate that demands explicit confirmation *is* this rung, invoked by design rather than by uncertainty.
 
 **A standing instruction stays in force until it is withdrawn.** Once the human has ruled — "fix findings yourself", "don't ask before X", "stop checking in each round" — re-asking is not caution. It hands back a decision they already made, and it costs them the same interruption twice. Treat "you may proceed without asking" as durable, not as permission for one turn.
@@ -2484,7 +2484,7 @@ not by hand-copying from this document (GH #513).
 
 **The default: explicit `gh pr merge --squash` always needs the user's confirmation, every PR.** `gh pr merge --auto` (GitHub's own auto-merge-on-green feature) stays permanently, unconditionally banned regardless of anything below — it fires before review feedback can even be read (PR #145 incident: auto-merged unreviewed, shipped a P1 bug).
 
-**A narrow, conditional exception (2026-07-21)** lets an agent skip that one confirmation click — never the ban above — ONLY if ALL hold: CI's `validate` check is green (verified, not inferred); Codex `high` reached CERTIFIED via a full adversarial dialogue (not a round-1 rubber stamp); a **fresh, diff-only reviewer subagent** (no prior session context) independently found **zero unresolved findings after at least one dialogue round**; and, where the PR touches the **merge-evidence chain** — CI/release workflows, hooks, agent-config directories, or the merge wrapper itself — the higher bar below is met. Those paths are singled out because a PR editing them defines its own CI check, runs its own gate, and posts its own review evidence, so every leg of the evidence stack becomes self-produced at once. Note branch protection matches a required check by NAME, so *any* new workflow file can mint a green one.
+**A narrow, conditional exception (2026-07-21)** lets an agent skip that one confirmation click — never the ban above — ONLY if ALL hold: CI's `validate` check is green (verified, not inferred); Codex `xhigh` reached CERTIFIED via a full adversarial dialogue (not a round-1 rubber stamp); a **fresh, diff-only reviewer subagent** (no prior session context) independently found **zero unresolved findings after at least one dialogue round**; and, where the PR touches the **merge-evidence chain** — CI/release workflows, hooks, agent-config directories, or the merge wrapper itself — the higher bar below is met. Those paths are singled out because a PR editing them defines its own CI check, runs its own gate, and posts its own review evidence, so every leg of the evidence stack becomes self-produced at once. Note branch protection matches a required check by NAME, so *any* new workflow file can mint a green one.
 
 **Dual cross-model certification IS merge authorization, including on the merge-evidence chain (2026-08-08).** Two models that did not write the code, run blind to each other, each able to refuse, is a different evidence class from self-review — so when both reviewers agree the merge proceeds, and the human is the **deadlock-breaker**, not the per-PR approver. This matters for the audit trail as much as for speed: where the only way to say yes was a human-override flag, every such merge recorded a per-PR human decision for what was really one standing policy decision, and an override record that misattributes its own authority is worse than no record. On the merge-evidence chain the bar adds two conditions: the gate that runs must be the **merged** one — byte-identical to the default branch, not this PR's edited copy, or the PR is judged by its own edits — and the review-dialogue evidence stays **required rather than waived**, so a round-1 rubber stamp does not clear it. Three things dual agreement never clears: a red CI check, net-removed test files, and a package-version bump (releases stay human). And state the residual plainly rather than implying it away: both clearances are typically posted by the same token, so this is **attested, not authenticated**, and a new workflow file minting a green required check is a hole nothing local can close — the compensating layer is that both reviewers read that file in the diff. Policy prose that steers behaviour but does not decide whether the current PR may merge (the SDLC policy document, the SDLC skill) may instead be cleared by posted, SHA-bound cross-model evidence. A package-version bump always needs confirmation. **This distinction is not a security boundary** — a local gate never is against a determined agent — it bounds the blast radius of an honest agent that has degraded: a bad docs merge ships one bad doc, a bad control-plane merge silently degrades every later merge's evidence, including the check that would have caught it. Even when it fires, the agent must tell the user immediately afterward what merged and why — this is "skip the click," never a silent merge.
 
@@ -2527,7 +2527,7 @@ Local tests pass -> Commit -> Push -> Watch CI
    - Read failure logs: `gh run view <RUN_ID> --log-failed`
    - Diagnose root cause (same philosophy as local test failures)
    - Fix and push again
-4. Max 2 fix attempts - if still failing, escalate (Fable → Codex `high`) before asking the user
+4. Max 2 fix attempts - if still failing, escalate (Fable → Codex `xhigh`) before asking the user
 5. **Read CI logs whether pass or fail — not just on failure.** A green checkmark hides warnings, skipped steps, and degraded scores (v1.24.0 shipped a degraded E2E score and a silently excluded test suite behind a passing check). Use `gh run view <RUN_ID> --log`, not just `--log-failed`.
 6. **Cross-model audit the CI logs** — same `codex exec` pattern as the Cross-Model Review Loop above. Prompt: *"Audit for silent failures, skipped tests, degraded metrics, warnings-that-should-be-errors."* Do this even when every check is green.
 7. Only after logs are read and audited — proceed to present final summary
@@ -2538,7 +2538,7 @@ Local tests pass -> Commit -> Push -> Watch CI
 - Your code broke it? Fix your code
 - CI config issue? Fix the config
 - Flaky? Investigate - flakiness is a bug
-- Stuck? Escalate — Fable, then Codex `high`; the user last
+- Stuck? Escalate — Fable, then Codex `xhigh`; the user last
 
 ### CI Review Feedback Loop — Local Shepherd (After CI Passes)
 
@@ -3413,7 +3413,7 @@ All checks passed! Setup complete.
 |-------|---------------|
 | HIGH (90%+) | Proceed after approval |
 | MEDIUM (60-89%) | Highlight uncertainties |
-| LOW (<60%) | **Escalation ladder** — Fable → Codex high → human last |
+| LOW (<60%) | **Escalation ladder** — Fable → Codex xhigh → human last |
 | FAILED 2x | **Escalation ladder** — human is the last rung, not the first |
 
 ### Hook Summary
@@ -4114,7 +4114,7 @@ The `mission/success/failure` fields give the reviewer context. Without them, yo
 
 ```bash
 codex exec \
-  -c 'model_reasoning_effort="high"' \
+  -c 'model_reasoning_effort="xhigh"' \
   -s danger-full-access \
   -o .reviews/latest-review.md \
   "You are an independent code reviewer. Read .reviews/handoff.json, \
@@ -4178,7 +4178,7 @@ Then update `handoff.json` to `"status": "PENDING_RECHECK"`, increment `round`, 
 
 ```bash
 codex exec \
-  -c 'model_reasoning_effort="high"' \
+  -c 'model_reasoning_effort="xhigh"' \
   -s danger-full-access \
   -o .reviews/latest-review.md \
   "You are doing a TARGETED RECHECK. First read .reviews/handoff.json \
@@ -4234,7 +4234,7 @@ Claude writes code → handoff.json (round 1)
 **Every CERTIFIED path above writes `"commit_sha": "<git rev-parse HEAD>"` into `handoff.json`** — `hooks/codex-gate-check.sh` (ROADMAP #437) treats a missing or mismatched SHA as a stale certification, so a bare `CERTIFIED` status string is never enough on its own.
 
 **Key flags:**
-- `-c 'model_reasoning_effort="high"'` — the reviewer effort default as of 2026-08-01, chosen for cost and review-noise rather than capability. Escalate to `xhigh` for unusually risky PRs. This flag previously defaulted to `xhigh` on the strength of a claim that "testing showed `xhigh` caught 3 findings that `high` missed" — written 2026-03-26 against GPT-5.4, with no measurement artifact. Neither setting has a controlled comparison in this repo; see the effort discussion in the Cross-Model Review section.
+- `-c 'model_reasoning_effort="xhigh"'` — the reviewer effort level, restored to `xhigh` on 2026-09-26 (quality-first). Previously `high` (2026-08-01, cost decision). Escalate to `max` or Pro mode for security-critical PRs.
 - `-s danger-full-access` — Full filesystem read/write so the reviewer can read your actual code.
 - `-o .reviews/latest-review.md` — Save the review output for Claude to read back.
 - **Claude Code sandbox bypass required:** Codex's Rust binary needs access to macOS system configuration APIs (`SCDynamicStore`) during initialization. Claude Code's sandbox blocks this, causing `codex exec` to crash with `panicked: Attempted to create a NULL object`. When running from within Claude Code, use `dangerouslyDisableSandbox: true` on the Bash tool call. This only bypasses CC's sandbox for the Codex process — Codex's own sandbox (`-s danger-full-access`) still applies. Known issue: [openai/codex#15640](https://github.com/openai/codex/issues/5914).
