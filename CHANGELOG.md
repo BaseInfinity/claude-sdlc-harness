@@ -4,6 +4,28 @@ All notable changes to the SDLC Wizard.
 
 > **Note:** This changelog is for humans to read. Don't manually apply these changes - just run the wizard ("Check for SDLC wizard updates") and it handles everything automatically.
 
+## [2.0.0] - 2026-09-27
+
+### Changed
+- **Two-lane era.** Reliable (`@latest`) and Frontier (`@frontier`) are now first-class lanes with distinct model pins, effort levels, and dist-tags.
+- **Reliable lane:** Opus 4.6[1m] `max` builder, GPT-5.6 Sol `xhigh` reviewer, Fable 5.1 `high` advisor. Field-proven, actively dogfooded.
+- **Frontier lane:** Opus 5.5 `xhigh` builder, GPT-5.6 Sol `xhigh` reviewer, Fable 5.1 `high` advisor. Experimental, newest models.
+- GPT-5.5 replaced by GPT-5.6 Sol as cross-model reviewer in both lanes (GPT-5.5 retires from Codex CLI 2026-10-14, #715).
+- Fable 5.0 dropped entirely — Fable 5.1 is cheaper and newer. `advisorModel` pin changed from `"fable"` to `"claude-fable-5-1"`.
+- Reviewer effort raised from `high` to `xhigh` — user decision, quality over savings.
+- Brain escalation ladder documented and tested: Opus builds → GPT-5.6 Sol `xhigh` (brain 1) → Fable 5.1 `high` (brain 2, only at <95% confidence).
+
+### Added
+- `scripts/derive-dist-tag.sh` — standalone version-to-dist-tag derivation for `release.yml`. Pure bash, no sed. 13-case behavioral test.
+- `tests/test-model-pins.sh` — 6 assertions verifying model pins across all shipped docs.
+- `tests/test-escalation-ladder.sh` — 8 E2E tests verifying the brain ladder (live Sol + advisor calls, isolated sessions).
+- `tests/run-local.sh` — local test runner for all suites. `RUN_LIVE=true` for API-calling tests.
+- `release.yml` detects prerelease versions and passes `--tag <label>` to `npm publish`, preventing frontier versions from stealing `@latest`.
+
+### Fixed
+- `release.yml` sed regex mishandled semver identifiers with digits/hyphens (Sol P1 finding).
+- macOS `grep -P` silently disabled Fable 5.0 detection in model-pin tests (Sol P1 finding).
+
 ## [1.100.0] - 2026-09-12
 
 ### Changed
