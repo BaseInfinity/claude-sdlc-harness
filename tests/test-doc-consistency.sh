@@ -1712,7 +1712,7 @@ test_readme_reviewer_is_gpt56() {
     # the same day by the stability-lanes banner and its review repairs —
     # a position pin, not content — see #659, which keeps accumulating
     # evidence.)
-    bad="$bad$(_check_line_has_and_lacks "$F" 163 "5\.6,Sol,Terra" "5\.5" "5\.4")"
+    bad="$bad$(_check_line_has_and_lacks "$F" 172 "5\.6,Sol,Terra" "5\.5" "5\.4")"
     # All lanes now use GPT-5.6 Sol as reviewer. No GPT-5.5 exceptions in live guidance.
     local stale
     stale="$(grep -n 'GPT-5\.' "$F" | grep -v 'GPT-5\.6' | grep -vi 'historical\|archive\|Vending-Bench\|citation\|was the\|retir' || true)"

@@ -36,8 +36,17 @@ npx -y agentic-sdlc-wizard@latest init
 The `@latest` pin forces npm to fetch the newest version. Without it, `npx` may serve a stale CLI from your local cache (#358); `init` also nudges if it detects a gap. Since v1.100.0, `@latest` is the **Reliable** lane (Opus 4.6[1m] + GPT-5.6 Sol + Fable 5.1).
 Then start (or restart) Claude Code — type `/exit` then `claude` to reload hooks. Setup is meant to auto-invoke on first prompt — Claude reads the wizard doc, scans your project, and generates bespoke CLAUDE.md, SDLC.md, TESTING.md, and ARCHITECTURE.md. **Known defect:** on a brand-new project the auto-invoke does not fire ([#698](https://github.com/BaseInfinity/claude-sdlc-harness/issues/698)) — run the setup skill manually: type `/` plus the skill name.
 
+**Claude Code plugin (skills + hooks, no npm needed):**
+```bash
+claude plugin install sdlc-wizard@sdlc-wizard-marketplace
+```
+Or from the repo directly:
+```bash
+claude --plugin https://github.com/BaseInfinity/claude-sdlc-harness
+```
+
 <details>
-<summary>Alternative install methods</summary>
+<summary>Other install methods</summary>
 
 **curl (no npm install needed):**
 ```bash
