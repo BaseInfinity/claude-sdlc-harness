@@ -8,12 +8,12 @@ All notable changes to the SDLC Wizard.
 
 ### Changed
 - **Two-lane era.** Reliable (`@latest`) and Frontier (`@frontier`) are now first-class lanes with distinct model pins, effort levels, and dist-tags.
-- **Reliable lane:** Opus 4.6[1m] `max` builder, GPT-5.6 Sol `xhigh` reviewer, Fable 5.1 `high` advisor. Field-proven, actively dogfooded.
-- **Frontier lane:** Opus 5.5 `xhigh` builder, GPT-5.6 Sol `xhigh` reviewer, Fable 5.1 `high` advisor. Experimental, newest models.
+- **Reliable lane:** Opus 4.6[1m] `max` builder, GPT-5.5 `xhigh` reviewer, Fable 5 `high` advisor. Field-proven, actively dogfooded.
+- **Frontier lane:** Opus 5 `xhigh` builder, GPT-5.6 Sol `xhigh` reviewer, Fable 5 `high` advisor. Experimental, newest models.
 - GPT-5.5 replaced by GPT-5.6 Sol as cross-model reviewer in both lanes (GPT-5.5 retires from Codex CLI 2026-10-14, #715).
-- Fable 5.0 dropped entirely — Fable 5.1 is cheaper and newer. `advisorModel` pin changed from `"fable"` to `"claude-fable-5-1"`.
+- Fable 5.0 dropped entirely — Fable 5 is cheaper and newer. `advisorModel` pin changed from `"fable"` to `"claude-fable-5"`.
 - Reviewer effort raised from `high` to `xhigh` — user decision, quality over savings.
-- Brain escalation ladder documented and tested: Opus builds → GPT-5.6 Sol `xhigh` (brain 1) → Fable 5.1 `high` (brain 2, only at <95% confidence).
+- Brain escalation ladder documented and tested: Opus builds → GPT-5.6 Sol `xhigh` (brain 1) → Fable 5 `high` (brain 2, only at <95% confidence).
 
 ### Added
 - `scripts/derive-dist-tag.sh` — standalone version-to-dist-tag derivation for `release.yml`. Pure bash, no sed. 13-case behavioral test.
@@ -29,10 +29,10 @@ All notable changes to the SDLC Wizard.
 ## [1.100.0] - 2026-09-12
 
 ### Changed
-- **Reliable is now the recommended default.** Opus 4.6[1m] max + GPT-5.5 xhigh + Fable 5.1 high. Opus 5 moves to Bleeding edge (`@frontier` dist-tag).
+- **Reliable is now the recommended default.** Opus 4.6[1m] max + GPT-5.5 xhigh + Fable 5 high. Opus 5 moves to Bleeding edge (`@frontier` dist-tag).
 - Two-lane install: `npm install agentic-sdlc-wizard` (Reliable, `@latest`). Bleeding edge (`@frontier`) not yet published.
-- Simplified Setup A table to the three-tier ladder: Opus 5 high → GPT-5.6 Sol high → Fable 5.1 high.
-- Both GPT-5.5 xhigh and Fable 5.1 high independently concurred on this strategy: revert default-flip commits on main, don't cherry-pick 143 commits from v1.87.0.
+- Simplified Setup A table to the three-tier ladder: Opus 5 high → GPT-5.6 Sol high → Fable 5 high.
+- Both GPT-5.5 xhigh and Fable 5 high independently concurred on this strategy: revert default-flip commits on main, don't cherry-pick 143 commits from v1.87.0.
 
 ### Added
 - Escalation ladder pin tests and canary scenario (#707, merged in v1.99.3 squash).

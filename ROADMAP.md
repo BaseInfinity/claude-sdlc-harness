@@ -30,8 +30,8 @@ Cold-open pointer: if you're picking this repo back up and don't know where to l
 > - **#725** — plugin parity (plugin install = npm install)
 > - **#726** — README install clarity
 > - **codex-sdlc-wizard #183** — port two-lane strategy
-> - Lane: Reliable (Opus 4.6[1m] max + GPT-5.6 Sol xhigh + Fable 5.1 high)
-> - Advisor: pinned to `claude-fable-5-1` in `~/.claude/settings.json`
+> - Lane: Reliable (Opus 4.6[1m] max + GPT-5.6 Sol xhigh + Fable 5 high)
+> - Advisor: pinned to `claude-fable-5` in `~/.claude/settings.json`
 > - Brain ladder: Opus builds → Sol first brain → Fable second brain at <95%
 >
 > ### Prior save point — 2026-08-22
