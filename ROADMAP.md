@@ -18,17 +18,27 @@ Cold-open pointer: if you're picking this repo back up and don't know where to l
 >
 > **v2.0.0's terminal gate is #545, not issue closure.** The major release is authorized when the maintainer has personally consumed the harness in another repo and it worked. Every other issue closing is necessary and not sufficient.
 >
-> ### Last save point — 2026-08-22
+> ### Last save point — 2026-09-27
+>
+> **v2.0.0 shipped.** Two-lane era — Reliable (`@latest`) + Frontier (`@frontier`).
+>
+> START HERE:
+> - `git branch --show-current` → should be `main`
+> - `npm view agentic-sdlc-wizard version` → should be `2.0.0`
+> - **#728** — backlog grooming (50+ open issues, triage and close stale)
+> - **#727** — memory audit (sort user/repo/skill/stale)
+> - **#725** — plugin parity (plugin install = npm install)
+> - **#726** — README install clarity
+> - **codex-sdlc-wizard #183** — port two-lane strategy
+> - Lane: Reliable (Opus 4.6[1m] max + GPT-5.6 Sol xhigh + Fable 5.1 high)
+> - Advisor: pinned to `claude-fable-5-1` in `~/.claude/settings.json`
+> - Brain ladder: Opus builds → Sol first brain → Fable second brain at <95%
+>
+> ### Prior save point — 2026-08-22
 >
 > **Shipped 2026-08-22:** #683 pinned the repository the merge gate talks to,
 > and #684 replaced `CLAUDE.md`'s false branch-protection claims with the live
-> settings. For what is open or in flight, read the tracker — this file does not
-> restate PR state (#482), and any count written here is wrong by the next merge.
->
-> **Standing: do not delete `docs/correct-branch-protection-claims`.** It merged
-> as a squash, so a block of ROADMAP text written on it and then deliberately
-> reverted exists only in its own commits. Delete it once nothing needs that
-> history.
+> settings.
 >
 > ### Prior save point — 2026-08-18, session handoff
 >
