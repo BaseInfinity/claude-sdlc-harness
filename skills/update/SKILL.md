@@ -226,7 +226,7 @@ If CC < v2.1.170: skip. Resolve the live driver from the `model` pin, or — unp
 
 1. **Live driver is Fable** (pin `"fable"`/`"claude-fable-5"`/`"claude-fable-5-1"`, or unpinned + live identity Fable) — fires even with `advisorModel` already set (`/setup` 9.5 never offers Fable as driver, always a misconfig). If `advisorModel` is `"claude-fable-5"` or `"fable"`, migrate to `"claude-fable-5-1"`. Show:
 
-> **Model Setup** — Fable-as-driver isn't recommended; it can trigger safeguard auto-switches on medical/legal/bio content mid-session. **Reliable:** Opus 4.6[1m] + GPT-5.6 Sol + Fable 5.1 (recommended default). **Frontier:** Opus 5.5 + GPT-5.6 Sol + Fable 5.1 (experimental). **Setup B:** Sonnet 5 driver + Fable 5.1 advisor (Simple/One-Off, generally lower quota than Opus 5.5, narrows at high effort). `[r/f/S]`?
+> **Model Setup** — Fable-as-driver isn't recommended; it can trigger safeguard auto-switches on medical/legal/bio content mid-session. **Reliable:** Opus 4.6[1m] + GPT-5.6 Sol + Fable 5.1 (recommended default). **Frontier:** Opus 5.5 + GPT-5.6 Sol + Fable 5.1 (experimental, unproven by field data). **Setup B:** Sonnet 5 driver + Fable 5.1 advisor (Simple/One-Off, generally lower quota than Opus 5.5, narrows at high effort). `[r/f/S]`?
 
 `[r]` writes `model: "claude-opus-4-6[1m]"`, `advisorModel: "claude-fable-5-1"` (no effortLevel — use `/effort max` per session). `[f]` writes `model: "claude-opus-5-5"`, `advisorModel: "claude-fable-5-1"`, `effortLevel: "xhigh"` (Frontier — experimental). `[S]` (default): no change.
 
