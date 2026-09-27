@@ -256,7 +256,7 @@ rm -f "$VERDICT"
 # Written for bash 3.2 — macOS ships nothing newer.
 set +e
 codex exec \
-    -m "${REVIEW_MODEL:-gpt-5.5}" \
+    -m "${REVIEW_MODEL:-gpt-5.6-sol}" \
     -c 'model_reasoning_effort="xhigh"' \
     -s danger-full-access \
     --output-schema "$SCHEMA" \

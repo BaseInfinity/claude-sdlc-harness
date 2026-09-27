@@ -9,21 +9,21 @@ npm install agentic-sdlc-wizard              # Reliable (@latest)
 
 This is **guidance, not a hard rule**. Maintainer override is always allowed.
 
-## Reliable — Opus 4.6[1m] + GPT-5.5 (Recommended default)
+## Reliable — Opus 4.6[1m] + GPT-5.6 Sol + Fable 5.1 (Recommended default)
 
 The maintainer's daily-driver pairing, field-proven with an SDLC harness. Optimized for reliability over capability. This is `@latest` on npm.
 
 | Role | Model | Effort |
 |------|-------|--------|
 | **Builder** | Opus 4.6 (`claude-opus-4-6[1m]`) | `max` (4.6's sweet spot — no `xhigh` on this model) |
-| **First brain / Reviewer** | GPT-5.5 via Codex CLI (repo-local `scripts/run-review-leg.sh`) | `xhigh` |
-| **Escalation brain** | Fable 5.1 via `advisor()` | `high` — **only when builder + first brain can't reach 95% confidence** |
+| **First brain / Reviewer** | GPT-5.6 Sol via Codex CLI (repo-local `scripts/run-review-leg.sh`) | `xhigh` |
+| **Escalation brain** | Fable 5.1 via `advisor()` (`advisorModel: "claude-fable-5-1"`) | `high` — **only when builder + first brain can't reach 95% confidence** |
 
 **The `[1m]` suffix is required.** Bare `claude-opus-4-6` pins a 200K context window. `claude-opus-4-6[1m]` gives 1M — confirmed by session header "Opus 4.6 (1M context)."
 
-**Escalation valve:** Default flow is Opus builds → GPT-5.5 reviews → ship. Call `advisor()` (Fable) only when the first two cannot resolve a design question or reach 95% confidence together. Fable sees the full conversation transcript on every call (not cached between calls), so it is the most expensive shape — spend it on design decisions, not on grading finished work.
+**Escalation valve:** Default flow is Opus builds → GPT-5.6 Sol reviews → ship. Call `advisor()` (Fable 5.1) only when the first two cannot resolve a design question or reach 95% confidence together. Fable 5.1 sees the full conversation transcript on every call (not cached between calls), so it is the most expensive shape — spend it on design decisions, not on grading finished work.
 
-**Seat provenance:** v1.87.0's shipped docs named **GPT-5.6** as the reviewer. The maintainer runs **GPT-5.5** at work and finds it the most reliable pairing. The Reliable lane reflects the owner's live config, not what v1.87.0 shipped.
+**Seat provenance:** The maintainer runs **GPT-5.6 Sol** as the cross-model reviewer. GPT-5.5 was the previous default and retires from Codex CLI on 2026-10-14 (#715).
 
 **Package:** `npm install agentic-sdlc-wizard` — this is `@latest`. The legacy `@opus-4.6` dist-tag still points at v1.87.0 (immutable, different reviewer defaults).
 
@@ -31,54 +31,54 @@ The maintainer's daily-driver pairing, field-proven with an SDLC harness. Optimi
 
 ---
 
-## Setup A — Opus 5 + Sol + Fable (Bleeding edge)
+## Frontier — Opus 5.5 + GPT-5.6 Sol + Fable 5.1 (Experimental)
 
-**Experimental. Tracks the latest models — higher capability ceiling, less field data.** Install via `npm install agentic-sdlc-wizard@frontier` (dist-tag not yet published). Requires Claude Code v2.1.219+ for the `opus` alias to resolve to Opus 5.
+**Experimental. Tracks the latest models — higher capability ceiling, less field data.** Install via `npm install agentic-sdlc-wizard@frontier`.
 
 | Role | Model | Effort |
 |------|-------|--------|
-| **Builder** | Opus 5 (`claude-opus-5`) | `high` |
-| **First brain / Reviewer** | GPT-5.6 Sol via Codex CLI (repo-local `scripts/run-review-leg.sh`) | `high` |
-| **Escalation brain** | Fable 5.1 via `advisor()` | `high` — only when builder + first brain can't reach 95% confidence |
+| **Builder** | Opus 5.5 (`claude-opus-5-5`) | `xhigh` |
+| **First brain / Reviewer** | GPT-5.6 Sol via Codex CLI (repo-local `scripts/run-review-leg.sh`) | `xhigh` |
+| **Escalation brain** | Fable 5.1 via `advisor()` (`advisorModel: "claude-fable-5-1"`) | `high` — only when builder + first brain can't reach 95% confidence |
 
-Same three-tier escalation ladder as Reliable, different models. The valve is identical: Fable fires only on escalation, not on every review.
+Same three-tier escalation ladder as Reliable, different builder model. The valve is identical: Fable 5.1 fires only on escalation, not on every review.
 
-Sonnet 5 medium remains a fine default for less complex repos — see Setup B below. It's demoted from Setup A's primary slot here specifically because the maintainer's own workload is dominated by complex, agentic-heavy repos where Opus 5's extra capability is worth the cost; that's a workload-specific call, not a universal verdict that Sonnet 5 medium is inferior.
+Sonnet 5 medium remains a fine default for less complex repos — see Setup B below. It's demoted from Frontier's primary slot here specifically because the maintainer's own workload is dominated by complex, agentic-heavy repos where Opus 5.5's extra capability is worth the cost; that's a workload-specific call, not a universal verdict that Sonnet 5 medium is inferior.
 
-**Advisor failure has a fallback, not a shrug.** `advisor()` is a server-side tool and can fail. When it errors, spawn a Fable subagent as the fallback reviewer — the same rule the `/sdlc` skill carries ("if down, spawn Fable subagent at `high`"). The advisor check is never skipped; only its transport changes. **This fallback is unverified: it has never been observed firing.** Availability has moved twice in three weeks (disabled 2026-07-24, working 2026-08-16), so treat any availability sentence in this file as a dated observation rather than current state — and settle it by calling the tool.
+**Advisor failure has a fallback, not a shrug.** `advisor()` is a server-side tool and can fail. When it errors, spawn a Fable 5.1 subagent as the fallback reviewer — the same rule the `/sdlc` skill carries ("if down, spawn Fable subagent at `high`"). The advisor check is never skipped; only its transport changes. **This fallback is unverified: it has never been observed firing.** Availability has moved twice in three weeks (disabled 2026-07-24, working 2026-08-16), so treat any availability sentence in this file as a dated observation rather than current state — and settle it by calling the tool.
 
-**Requires:** Claude Code v2.1.219+ (Opus 5 alias resolution), Fable 5 access for advisor/subagent fallback.
+**Requires:** Claude Code v2.1.257+ (Fable 5.1 alias resolution), or pin `advisorModel: "claude-fable-5-1"` explicitly on older versions.
 
 ## Setup B — Sonnet 5 Simple/One-Off (Legacy Flagship slot repurposed)
 
-**For one-off tasks, scripts, and less complex repos — not the main workflow.** Where Setup A (bleeding edge) targets genuine autonomous agentic work, Setup B is for lower-stakes, lower-complexity work where Sonnet 5's speed and cost outweigh Opus 5's extra capability.
+**For one-off tasks, scripts, and less complex repos — not the main workflow.** Where the Frontier lane targets genuine autonomous agentic work, Setup B is for lower-stakes, lower-complexity work where Sonnet 5's speed and cost outweigh Opus 5.5's extra capability.
 
 > **Setup B is unverified in this repo.** Every lane below rests on vendor material and general reasoning about cost and complexity, not on a measured run. The Reliable lane is what the maintainer dogfoods daily; Setup A (Bleeding edge) has cycle data from v1.88.0–v1.99.2. Neither Setup B nor C has been measured. Choose on scope and cost, not as a capability claim.
 
 | Role | Model | Effort |
 |------|-------|--------|
-| **Advisor** | Fable 5 (via `advisorModel: "fable"`) — same dated-availability caveat as Setup A; fall back to a Fable subagent at `high` on failure | `high` (server-side); subagent fallback explicit `high` |
+| **Advisor** | Fable 5.1 (via `advisorModel: "claude-fable-5-1"`) — same dated-availability caveat as Frontier; fall back to a Fable 5.1 subagent at `high` on failure | `high` (server-side); subagent fallback explicit `high` |
 | **Driver** | Sonnet 5 (`claude-sonnet-5`) | `medium` default, escalate `high` → `xhigh` for tasks that turn out harder than expected |
-| **Reviewer** | Codex (GPT-5.6 Sol) high | — |
+| **Reviewer** | Codex (GPT-5.6 Sol) xhigh | — |
 
 Choose this lane deliberately for scope, not by default — a one-off script, a small doc fix, a low-blast-radius repo. If a Setup B task turns out to need real agentic depth, swap to Setup A rather than cranking Sonnet 5's effort past `xhigh`; that's a model swap, not an effort-tier problem.
 
 **Effort escalation ladder:** Start at `medium` — CodeRabbit's testing found it captures most of Sonnet 5's upside at the lowest cost. Raise to `high` when medium struggles, `xhigh` for hard debugging, multi-file migrations, or long agent runs. `max` is rarely worth it — doubles cost for marginal gains per the same CodeRabbit testing.
 
-**Opus 4.6/4.8 remain reachable as the field-proven stability/escalation backstop** for installer, release, or other high-blast-radius work regardless of which lane you're in — months of field data, Active through at least Feb 2027. Pin `claude-opus-4-8` explicitly rather than relying on the `opus` alias, which now resolves to Opus 5. **Opus 4.6 is the only Opus where `max` effort works without overthinking** — community reports confirm this is the sweet spot specific to 4.6 (no xhigh support on 4.6 — only low/medium/high/max); pin `claude-opus-4-6` explicitly when you want that specific consistency profile over Opus 5 or 4.8.
+**Opus 4.6/4.8 remain reachable as the field-proven stability/escalation backstop** for installer, release, or other high-blast-radius work regardless of which lane you're in — months of field data, Active through at least Feb 2027. Pin `claude-opus-4-8` explicitly rather than relying on the `opus` alias, which now resolves to Opus 5.5. **Opus 4.6 is the only Opus where `max` effort works without overthinking** — community reports confirm this is the sweet spot specific to 4.6 (no xhigh support on 4.6 — only low/medium/high/max); pin `claude-opus-4-6` explicitly when you want that specific consistency profile over Opus 5.5 or 4.8.
 
 ## Setup C — OpusPlan Hybrid (Saver)
 
 | Role | Model | Effort |
 |------|-------|--------|
-| **Planner** | Opus 5 (via Plan Mode — Shift+Tab, follows the `opus` alias) | `xhigh` |
-| **Advisor** | Fable 5 or Opus 5 (via `advisorModel`) | — |
+| **Planner** | Opus 5.5 (via Plan Mode — Shift+Tab, follows the `opus` alias) | `xhigh` |
+| **Advisor** | Fable 5.1 (via `advisorModel: "claude-fable-5-1"`) | `high` |
 | **Driver** | Sonnet 5 (auto execute mode) | `medium`, escalate `high` for hard runs |
-| **Reviewer** | Codex (GPT-5.6 Sol) high | — |
+| **Reviewer** | Codex (GPT-5.6 Sol) xhigh | — |
 
-Cost-efficient hybrid using CC's native `opusplan` alias. `opusplan` follows the `opus` alias for its planning phase — currently Opus 5 — and executes with Sonnet. Max-bundled — no API credit drain. Pin `model: "opusplan"` + `advisorModel: "fable"` in project settings. Sonnet 5 now uses 1M context natively (no `[1m]` suffix needed). GPT-5.6 Sol high is the cross-model reviewer.
+Cost-efficient hybrid using CC's native `opusplan` alias. `opusplan` follows the `opus` alias for its planning phase — currently Opus 5.5 — and executes with Sonnet. Max-bundled — no API credit drain. Pin `model: "opusplan"` + `advisorModel: "claude-fable-5-1"` in project settings. Sonnet 5 now uses 1M context natively (no `[1m]` suffix needed). GPT-5.6 Sol xhigh is the cross-model reviewer.
 
-**Note:** Opus 4.6 cannot advise Sonnet 5 (rejected in the advisor pairing table). Use Fable 5 or Opus 5 as advisor for this lane. Pin `claude-opus-4-8` explicitly (not the `opus` alias) if you specifically want Opus 4.8's field-proven planning behavior instead of Opus 5's.
+**Note:** Opus 4.6 cannot advise Sonnet 5 (rejected in the advisor pairing table). Use Fable 5.1 or Opus 5.5 as advisor for this lane. Pin `claude-opus-4-8` explicitly (not the `opus` alias) if you specifically want Opus 4.8's field-proven planning behavior instead of Opus 5.5's.
 
 ## Setup D — Claude Lite
 
@@ -105,7 +105,7 @@ For work where you want the latest models and accept less field data. Install vi
 
 ## When to Use Setup B
 
-Reach for Setup B for one-off tasks, scripts, and lower-stakes/lower-complexity repos where Sonnet 5's speed and cost outweigh Opus 5's extra capability:
+Reach for Setup B for one-off tasks, scripts, and lower-stakes/lower-complexity repos where Sonnet 5's speed and cost outweigh Opus 5.5's extra capability:
 
 - Feature implementation on well-understood, routine work
 - Documentation and examples
@@ -113,7 +113,7 @@ Reach for Setup B for one-off tasks, scripts, and lower-stakes/lower-complexity 
 - Normal CLI changes
 - Mechanical refactors
 - Small, low-blast-radius scripts or one-off tasks
-- Anything where the task is clearly scoped and doesn't need Opus 5's deeper agentic reasoning
+- Anything where the task is clearly scoped and doesn't need Opus 5.5's deeper agentic reasoning
 
 If a Setup B task turns out to need more depth than expected, swap to Setup A rather than cranking Sonnet 5's effort past `xhigh` — that's a model swap, not an effort-tier problem.
 
@@ -154,7 +154,7 @@ Setup D is for work where SDLC discipline overhead exceeds the value:
 
 ## Final Review Policy
 
-**Setups A, B, and C end at GPT-5.6 Sol high as the cross-model reviewer.** Claude can't grade its own homework — the reviewer always belongs to a different lab with different blind spots. See [CLAUDE_CODE_SDLC_WIZARD.md → "Cross-Model Review (Codex)"](CLAUDE_CODE_SDLC_WIZARD.md) for the handoff protocol.
+**Setups A, B, and C end at GPT-5.6 Sol xhigh as the cross-model reviewer.** Claude can't grade its own homework — the reviewer always belongs to a different lab with different blind spots. See [CLAUDE_CODE_SDLC_WIZARD.md → "Cross-Model Review (Codex)"](CLAUDE_CODE_SDLC_WIZARD.md) for the handoff protocol.
 
 **Setup D has no reviewer** — the blast radius doesn't justify it. If you're unsure whether a task is truly Lite, it probably isn't. Escalate.
 
@@ -164,15 +164,15 @@ If GPT-5.6 Sol isn't available on your OpenAI account, Codex auto-falls back to 
 
 ## Version Requirement
 
-Opus 5 (Setup A's driver) requires **Claude Code v2.1.219+**. `advisorModel` in settings.json requires **v2.1.170+**. Check your version with `claude --version`. If below v2.1.219, update from inside a CC session:
+Opus 5.5 (Frontier's driver) requires **Claude Code v2.1.219+**. `advisorModel` in settings.json requires **v2.1.170+**. Check your version with `claude --version`. If below v2.1.219, update from inside a CC session:
 
 ```
 ! claude update
 ```
 
-The `!` prefix runs shell commands inside your CC session — no need to exit and re-enter. After updating, restart the session to pick up the new alias resolution. **Also check for a stale `ANTHROPIC_DEFAULT_OPUS_MODEL` env var** (e.g. in `~/.zshrc`) — if set to an older Opus version, it silently overrides `/model opus` picker choices and prevents Opus 5 from resolving even after updating.
+The `!` prefix runs shell commands inside your CC session — no need to exit and re-enter. After updating, restart the session to pick up the new alias resolution. **Also check for a stale `ANTHROPIC_DEFAULT_OPUS_MODEL` env var** (e.g. in `~/.zshrc`) — if set to an older Opus version, it silently overrides `/model opus` picker choices and prevents Opus 5.5 from resolving even after updating.
 
-Fable 5 as advisor also requires Fable 5 access for your organization/plan.
+Fable 5.1 as advisor also requires Fable access for your organization/plan.
 
 ## When the Advisor Is Unavailable
 
@@ -202,7 +202,7 @@ Whichever path you use, the cross-model PR review gate still applies.
 
 ## Credit-Spend Warning
 
-**Setup A (Opus 5 as driver) burns the 5-hour cap faster than Setup B** — Opus 5 driving implementation is the more expensive path (and more so if you escalate to `xhigh`); Sonnet 5 at `medium`/`high` (Setup B) generally uses less quota for comparable-scope work (the advantage narrows at `xhigh` — more turns per task plus tokenizer overhead). If you're hitting the cap mid-session on Setup A:
+**Setup A (Opus 5.5 as driver) burns the 5-hour cap faster than Setup B** — Opus 5.5 driving implementation is the more expensive path (and more so if you escalate to `xhigh`); Sonnet 5 at `medium`/`high` (Setup B) generally uses less quota for comparable-scope work (the advantage narrows at `xhigh` — more turns per task plus tokenizer overhead). If you're hitting the cap mid-session on Setup A:
 
 - Drop to Setup B (Sonnet 5) for the remainder of the day, or for the rest of a task that turns out simpler than expected
 - Or drop to Setup D for grunt work that doesn't need deep reasoning
@@ -210,7 +210,7 @@ Whichever path you use, the cross-model PR review gate still applies.
 
 **Setup D uses Sonnet** — same model as Setup B's driver, Max-bundled. One less model to manage if you're already reaching for Setup B for lighter work.
 
-The reviewer (GPT-5.6 Sol high) is billed against your OpenAI account, separately. Watch both bills.
+The reviewer (GPT-5.6 Sol xhigh) is billed against your OpenAI account, separately. Watch both bills.
 
 ## Autocompact Thresholds
 
@@ -248,11 +248,11 @@ Credit allocations: Pro $20/mo, Max 5x $100/mo, Max 20x $200/mo. **No rollover.*
 
 ### What this means for the lanes
 
-- **Setup A — Opus 5 + Fable advisor (fallback subagent):** Opus 5 driver on Max, 1M context included at standard rates (see above). Fable 5 advisor observed working 2026-08-16 — Fable subagent fallback also Max-bundled. claude.ai `/settings/usage` shows `All models` and `Fable` as separate meters, and on 2026-08-16 the advisor answered with the `Fable` meter at 100%; **which meter that call billed was not measured**, so do not budget against it. Advisor is the priciest call shape regardless — full conversation every call, no cache between calls. GPT-5.6 Sol high reviewer, separate. Higher Max quota consumption than Setup B — though the gap narrowed when Setup A's driver default moved to `high`/`medium` on 2026-08-02.
-- **Setup B — Sonnet 5 Simple/One-Off:** Sonnet 5's native 1M context — interactive session, Max-bundled, no `[1m]` suffix needed. Fable 5 advisor (fallback subagent) — also Max-bundled. GPT-5.6 Sol high reviewer on ChatGPT subscription. Generally lower Max quota consumption than Setup A at the `medium` default (savings shrink at higher effort).
-- **Setup C — OpusPlan Hybrid:** **fully Max-bundled.** `opusplan` uses Opus (plan mode, now Opus 5) + Sonnet (execute mode), both at their native context windows — no credit drain.
+- **Frontier — Opus 5.5 + Fable 5.1 advisor (fallback subagent):** Opus 5.5 driver on Max, 1M context included at standard rates (see above). Fable 5.1 advisor (`"claude-fable-5-1"`) observed working 2026-08-16 — Fable subagent fallback also Max-bundled. claude.ai `/settings/usage` shows `All models` and `Fable` as separate meters, and on 2026-08-16 the advisor answered with the `Fable` meter at 100%; **which meter that call billed was not measured**, so do not budget against it. Advisor is the priciest call shape regardless — full conversation every call, no cache between calls. GPT-5.6 Sol xhigh reviewer, separate. Higher Max quota consumption than Setup B — though the gap narrowed when Setup A's driver default moved to `high`/`medium` on 2026-08-02.
+- **Setup B — Sonnet 5 Simple/One-Off:** Sonnet 5's native 1M context — interactive session, Max-bundled, no `[1m]` suffix needed. Fable 5.1 advisor (fallback subagent) — also Max-bundled. GPT-5.6 Sol xhigh reviewer on ChatGPT subscription. Generally lower Max quota consumption than Setup A at the `medium` default (savings shrink at higher effort).
+- **Setup C — OpusPlan Hybrid:** **fully Max-bundled.** `opusplan` uses Opus (plan mode, now Opus 5.5) + Sonnet (execute mode), both at their native context windows — no credit drain.
   - **⚠️ Avoid `sonnet[1m]` as a manual pin outside Setup B/C:** if your provider or gateway doesn't resolve Sonnet 5 to its native 1M automatically, forcing a `[1m]`-suffixed pin on an older Sonnet can draw from your usage credits pool ($3/$15 per Mtok) instead of your Max subscription. The `/model` picker shows this explicitly — watch for "Draws from usage credits."
-- **Reviewer (GPT-5.6 Sol high) in all three triads:** billed against your OpenAI account, completely separate from Anthropic.
+- **Reviewer (GPT-5.6 Sol xhigh) in all three triads:** billed against your OpenAI account, completely separate from Anthropic.
 - **CI loops that use `claude -p` post-June-15:** these now bill against the separate Anthropic credit pool, not your Max subscription. The wizard's CI shepherd loops (E2E scoring, weekly-update jobs) are local-only on the maintainer's machine and stay on Max; consumer-repo CI integrations may need to budget the new credit pool.
 
 ### Bottom line
@@ -297,11 +297,11 @@ That research still stands as the reason **Sonnet 5 (not Opus 4.6, not Opus 4.8)
 
 ### Reading Setup A precisely
 
-Clarified 2026-07-13, updated 2026-07-24 for the Opus 5 swap — these exact points kept getting re-confused; each rule states its why:
+Clarified 2026-07-13, updated 2026-07-24 for the Opus 5.5 swap — these exact points kept getting re-confused; each rule states its why:
 
-- **Effort starts at `high`, not `xhigh`** (changed 2026-08-02). Opus 5's own documented default is `high` for general use. Anthropic recommends "extra" (`xhigh`) specifically for difficult and long-running asynchronous work — treat that as an escalation trigger, not the standing default, and drop to `medium` for routine web/CRUD.
+- **Effort starts at `high`, not `xhigh`** (changed 2026-08-02). Opus 5.5's own documented default is `high` for general use. Anthropic recommends "extra" (`xhigh`) specifically for difficult and long-running asynchronous work — treat that as an escalation trigger, not the standing default, and drop to `medium` for routine web/CRUD.
 - **Model escalation swaps the driver, not the tier.** After 2 failed attempts, LOW confidence, or on high-stakes changes with Setup A already exhausted, a pinned Opus 4.8 (`claude-opus-4-8`) takes over as driver for a genuinely independent second pass — Opus-5-driver plus an Opus-5 advisor fallback would otherwise be a same-family self-check. Why a swap and not more effort: the lane's policy treats repeated failure as a sign the *approach* needs different eyes, not deeper reasoning on the same track.
-- **Advisor failure has a fallback, not a shrug.** Fable 5 advises via `advisorModel: "fable"` — disabled by an Anthropic rollout on 2026-07-24, observed working again on 2026-08-16. Availability is a dated observation, so establish it by calling the tool. On a real failure, spawn a Fable subagent at `high` as the fallback reviewer immediately, exactly as the `/sdlc` skill prescribes. Why: the advisor's job is catching wrong approaches *before* they're built, so a transport failure changes how the advice is obtained — not whether the check happens.
+- **Advisor failure has a fallback, not a shrug.** Fable 5.1 advises via `advisorModel: "claude-fable-5-1"` — disabled by an Anthropic rollout on 2026-07-24, observed working again on 2026-08-16. Availability is a dated observation, so establish it by calling the tool. On a real failure, spawn a Fable 5.1 subagent at `high` as the fallback reviewer immediately, exactly as the `/sdlc` skill prescribes. Why: the advisor's job is catching wrong approaches *before* they're built, so a transport failure changes how the advice is obtained — not whether the check happens.
 
 ## See Also
 

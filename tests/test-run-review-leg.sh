@@ -505,7 +505,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# MODEL CONFIGURABILITY. The launcher defaults to gpt-5.5 but must accept
+# MODEL CONFIGURABILITY. The launcher defaults to gpt-5.6-sol but must accept
 # REVIEW_MODEL to run Sol or any other model without script copies.
 
 unset REVIEW_MODEL
@@ -517,10 +517,10 @@ STUB_MODEL_FILE="$modelfile" STUB_STDOUT='ok' STUB_EXIT=0 \
 rc=$?
 set -e
 check_rc "default model leg completes" 0 "$rc"
-if [ -s "$modelfile" ] && grep -qF 'gpt-5.5' "$modelfile"; then
-    pass "the default model is gpt-5.5"
+if [ -s "$modelfile" ] && grep -qF 'gpt-5.6-sol' "$modelfile"; then
+    pass "the default model is gpt-5.6-sol"
 else
-    fail "default model is not gpt-5.5 (got: $(cat "$modelfile" 2>/dev/null))"
+    fail "default model is not gpt-5.6-sol (got: $(cat "$modelfile" 2>/dev/null))"
 fi
 
 out=$(new_leg)

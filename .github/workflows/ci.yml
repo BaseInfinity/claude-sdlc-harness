@@ -139,6 +139,7 @@ jobs:
         run: ./tests/test-run-review-leg.sh
 
       # tests/test-escalation-ladder.sh — local-only (needs Max + OpenAI subs), runs via tests/run-local.sh
+      # tests/test-model-pins.sh — local-only (model pin assertions), runs via tests/run-local.sh
 
       - name: Run review-verdict schema tests (#617)
         run: ./tests/test-review-verdict-schema.sh
