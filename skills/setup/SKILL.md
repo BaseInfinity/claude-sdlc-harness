@@ -248,7 +248,7 @@ The output is JSON: `{ tier: "simple" | "complex", score, signals }`. Use the re
 > - **[r] Reliable — Opus 4.6[1m] + GPT-5.6 Sol + Fable 5.1** *(Recommended default):* Pins `model: "claude-opus-4-6[1m]"`, `advisorModel: "claude-fable-5-1"`. Proven stability. Effort: `max` per session via `/effort`. GPT-5.6 Sol xhigh as first brain, Fable 5.1 high as escalation.
 > - **[o] Opus 5.5 + Fable 5.1** *(Frontier — experimental):* Pins `model: "claude-opus-5-5"`, `advisorModel: "claude-fable-5-1"`. Effort: `xhigh`; GPT-5.6 Sol xhigh as reviewer.
 > - **[s] Sonnet 5 + Fable 5.1** *(Setup B — Simple/One-Off, lower cost):* Pins `model: "sonnet"`, `advisorModel: "claude-fable-5-1"`. Native 1M context, no `[1m]` suffix needed. Effort: `medium`, escalate `high` → `xhigh` for hard tasks.
-> - **[p] OpusPlan Hybrid** *(Setup C — cost-conscious, still want Opus reasoning):* Pins `model: "opusplan"`. Opus 5 plans (Shift+Tab), Sonnet 5 executes. Max-bundled. No API credit drain (#390).
+> - **[p] OpusPlan Hybrid** *(Setup C — cost-conscious, still want Opus reasoning):* Pins `model: "opusplan"`. Opus 5.5 plans (Shift+Tab), Sonnet 5 executes. Max-bundled. No API credit drain (#390).
 >
 > `[N/r/o/s/p]`
 
@@ -301,12 +301,12 @@ Tell the user: "Sonnet 5 + Fable (Setup B) — lower-stakes/simpler work. Effort
 }
 ```
 
-Tell the user: "Opus 5 plans (Shift+Tab), Sonnet 5 executes — both Max-bundled, no API drain (Setup C). Set effort per-session via `/effort`, not a shell-rc env var. Pin `ANTHROPIC_DEFAULT_OPUS_MODEL: \"claude-opus-4-8\"` if you want 4.8's field-proven planning instead of Opus 5's. Needs CC v2.1.170+."
+Tell the user: "Opus 5.5 plans (Shift+Tab), Sonnet 5 executes — both Max-bundled, no API drain (Setup C). Set effort per-session via `/effort`, not a shell-rc env var. Pin `ANTHROPIC_DEFAULT_OPUS_MODEL: \"claude-opus-4-8\"` if you want 4.8's field-proven planning instead of Opus 5.5's. Needs CC v2.1.170+."
 
 Mention the escape hatch in all three cases:
 - To opt out later: remove the `model` line (and optionally the `env`/`effortLevel` keys) from `.claude/settings.json`, or run `/model` and pick "Default (recommended)".
 - To switch tiers later: edit `.claude/settings.json` and replace the `model` value, or re-run `/claude-setup-wizard` Step 9.5.
-- To pin Opus 4.8 explicitly instead of Opus 5 (any lane), set `ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-opus-4-8"` or use the full model string `claude-opus-4-8` directly.
+- To pin Opus 4.8 explicitly instead of Opus 5.5 (any lane), set `ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-opus-4-8"` or use the full model string `claude-opus-4-8` directly.
 
 This is project-scoped and shared with the team via git.
 

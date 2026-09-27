@@ -22,7 +22,7 @@
 # WHY THERE IS NO WAITER HERE, AFTER TWO ATTEMPTS AT ONE
 #
 # The first attempt watched the output file and the process table from
-# outside. Sol (GPT-5.6 high) falsified every signal with running code: `-o`
+# outside. Sol (GPT-5.6 xhigh) falsified every signal with running code: `-o`
 # output carries no completion marker; `tokens used` appears in codex's echoed
 # prompt, so a crashed leg read as complete; an fd reported as PIPE may be at
 # EOF and healthy; the hang's byte signature differs per machine (39 here, 143

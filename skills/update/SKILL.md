@@ -164,7 +164,7 @@ Check user's `.claude/settings.json`:
 1. **`model: "opus[1m]"` AND `env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: "30"`** — likely the old wizard-installed pair, not an intentional choice. Ask:
    > Your `.claude/settings.json` pins `model: "opus[1m]"` with `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=30`. This pair was the wizard default in 1.31.0–1.33.x, but it disables Claude Code's auto-mode (issue #198).
    > - **Remove the pin** (recommended) — keeps auto-mode enabled
-   > - **Keep the pin** — guaranteed 1M on whichever Opus `opus[1m]` currently resolves to (now Opus 5, as of 2026-07-24 — swap to `claude-opus-4-6` or `claude-opus-4-8` if you want an earlier version specifically), OK with no auto-selection. Note: the paired `30%` override is **not** documented to take effect on a current-Opus local session (no Opus-5 proactive threshold is published) — see the wizard doc's Autocompact Tuning → "Opus 5 specifics". If you also set `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, the override *does* apply and the two compound (#207).
+   > - **Keep the pin** — guaranteed 1M on whichever Opus `opus[1m]` currently resolves to (now Opus 5.5, as of 2026-09-22 — swap to `claude-opus-4-6` or `claude-opus-4-8` if you want an earlier version specifically), OK with no auto-selection. Note: the paired `30%` override is **not** documented to take effect on a current-Opus local session (no Opus 5.5 proactive threshold is published) — see the wizard doc's Autocompact Tuning → "Opus 5.5 specifics". If you also set `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, the override *does* apply and the two compound (#207).
    > Remove, keep, or decide later? `[r/k/l]`
 
 2. **Only one of the two fields matches** — treat as intentional customization. Do not prompt.
