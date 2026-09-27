@@ -32,6 +32,7 @@ Thank you for your interest in improving the SDLC Harness!
    ./tests/test-cli.sh && ./tests/test-setup-path.sh && \
    ./tests/test-docs-usability.sh && ./tests/test-plugin.sh && \
    ./tests/test-install-script.sh && ./tests/test-release-workflow.sh && \
+   ./tests/test-derive-dist-tag.sh && \
    ./tests/test-release-dry-run-workflow.sh && \
    ./tests/test-cc-drift-check.sh && ./tests/test-cc-version-drift.sh && \
    ./tests/test-release-drift.sh && \
