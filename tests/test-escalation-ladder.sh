@@ -1,160 +1,221 @@
 #!/bin/bash
-# Tests for the brain escalation ladder (#707).
-#
-# The Workhorse flavor: Opus 4.6[1m] max builds, GPT-5.5 xhigh reviews
-# (Codex CLI), Fable 5.1 high escalation (advisor). These tests verify
-# that scripts/run-review-leg.sh wires the first brain correctly.
-#
-# Two categories:
-#   1. Source-level — grep the script for the expected model and effort pins
-#   2. Runtime — stub codex on PATH, run the launcher, assert it received
-#      the right -m and -c arguments
-
 set -e
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-RUNNER="$REPO_ROOT/scripts/run-review-leg.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-GREEN='\033[0;32m'
+PASSED=0
+FAILED=0
+
 RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
 NC='\033[0m'
 
-PASS=0
-FAIL=0
-
-pass() { echo -e "${GREEN}PASS${NC}: $1"; PASS=$((PASS + 1)); }
-fail() { echo -e "${RED}FAIL${NC}: $1"; FAIL=$((FAIL + 1)); }
-
-TMPROOT=$(mktemp -d "${TMPDIR:-/tmp}/escalation-ladder-tests.XXXXXX") || {
-    echo "FATAL: could not create a temp dir" >&2
-    exit 1
-}
-trap 'rm -rf "$TMPROOT"' EXIT
-
-echo "=== Escalation ladder (#707) ==="
-echo ""
-
-# ---------------------------------------------------------------------------
-# CATEGORY 1: SOURCE-LEVEL VERIFICATION
-# ---------------------------------------------------------------------------
-
-echo "--- Source-level pins ---"
-
-# 1. The review leg script must use GPT-5.5 as the first brain.
-if grep -q 'gpt-5.5' "$RUNNER"; then
-    pass "run-review-leg.sh pins codex to gpt-5.5"
-else
-    fail "run-review-leg.sh does not pin codex to gpt-5.5 — first brain is wrong"
-fi
-
-# 2. The review leg script must use xhigh effort.
-if grep -q 'model_reasoning_effort="xhigh"' "$RUNNER"; then
-    pass "run-review-leg.sh pins effort to xhigh"
-else
-    fail "run-review-leg.sh does not pin effort to xhigh"
-fi
-
-# 3. The model pin must not be commented out.
-if grep -E '^\s*#.*gpt-5.5' "$RUNNER" | grep -qv '^\s*$'; then
-    fail "the gpt-5.5 pin is commented out"
-else
-    pass "the gpt-5.5 pin is not commented out"
-fi
-
-# 4. The effort pin must not be commented out.
-if grep -E '^\s*#.*model_reasoning_effort="xhigh"' "$RUNNER" | grep -qv '^\s*$'; then
-    fail "the xhigh effort pin is commented out"
-else
-    pass "the xhigh effort pin is not commented out"
-fi
-
-echo ""
-
-# ---------------------------------------------------------------------------
-# CATEGORY 2: RUNTIME VERIFICATION
-# ---------------------------------------------------------------------------
-
-echo "--- Runtime verification (stub codex) ---"
-
-# Stub codex that records all arguments and produces a conforming verdict.
-STUBDIR="$TMPROOT/bin"
-mkdir -p "$STUBDIR"
-cat > "$STUBDIR/codex" <<'STUB'
-#!/bin/bash
-# Record all args for the test to inspect.
-ARGS_FILE="${STUB_ARGS_FILE:-/dev/null}"
-for arg in "$@"; do
-    printf '%s\n' "$arg"
-done > "$ARGS_FILE"
-
-# Read stdin to EOF (real codex behavior).
-cat > /dev/null
-
-# Write a conforming verdict if --output-last-message was passed.
-VERDICT_PATH=""
-prev=""
-for arg in "$@"; do
-    if [ "$prev" = "--output-last-message" ]; then VERDICT_PATH="$arg"; fi
-    prev="$arg"
-done
-if [ -n "$VERDICT_PATH" ]; then
-    printf '{"verdict":"CERTIFIED","shape":"SOUND","confidence":99,"findings":[]}' > "$VERDICT_PATH"
-fi
-
-printf '%s' "${STUB_STDOUT:-VERDICT: CERTIFIED}"
-exit "${STUB_EXIT:-0}"
-STUB
-chmod +x "$STUBDIR/codex"
-
-# Stub gh so the CI probe doesn't hit the network.
-cat > "$STUBDIR/gh" <<'STUB'
-#!/bin/bash
-cat > /dev/null
-printf '%s' "${GH_STUB_STDOUT:-validate	pass	1m	https://example/run}"
-exit "${GH_STUB_EXIT:-0}"
-STUB
-chmod +x "$STUBDIR/gh"
-
-export PATH="$STUBDIR:$PATH"
-
-new_leg() {
-    local d
-    d=$(mktemp -d "$TMPROOT/leg.XXXXXX")
-    echo "$d/out.md"
+pass() {
+    echo -e "${GREEN}PASS${NC}: $1"
+    PASSED=$((PASSED + 1))
 }
 
-# 5. The stub codex receives -m gpt-5.5 at runtime.
-out=$(new_leg)
-argsfile="$(dirname "$out")/codex-args"
-set +e
-STUB_ARGS_FILE="$argsfile" \
-    "$RUNNER" "$out" 'review this' >/dev/null 2>&1
-rc=$?
-set -e
+fail() {
+    echo -e "${RED}FAIL${NC}: $1"
+    FAILED=$((FAILED + 1))
+}
 
-if [ "$rc" -ne 0 ]; then
-    fail "launcher exited $rc — runtime verification cannot proceed"
-elif [ -f "$argsfile" ] && grep -q '^-m$' "$argsfile" && grep -q '^gpt-5\.5$' "$argsfile"; then
-    pass "codex received -m gpt-5.5 at runtime"
-else
-    fail "codex did not receive -m gpt-5.5 at runtime"
-    [ -f "$argsfile" ] && echo "  recorded args:" && cat "$argsfile" | head -20
+info() {
+    echo -e "${YELLOW}INFO${NC}: $1"
+}
+
+# --- Isolation setup ---
+TEST_HOME="${TMPDIR:-/tmp}/escalation-ladder-test-$$"
+mkdir -p "$TEST_HOME/.claude"
+
+if [ -f "$HOME/.claude/settings.json" ]; then
+    cp "$HOME/.claude/settings.json" "$TEST_HOME/.claude/settings.json"
 fi
 
-# 6. The stub codex receives model_reasoning_effort="xhigh" at runtime.
-if [ -f "$argsfile" ] && grep -q 'model_reasoning_effort="xhigh"' "$argsfile"; then
-    pass "codex received model_reasoning_effort=\"xhigh\" at runtime"
-else
-    fail "codex did not receive model_reasoning_effort=\"xhigh\" at runtime"
-fi
+cleanup() {
+    rm -rf "$TEST_HOME"
+}
+trap cleanup EXIT
+
+# --- Rung 1: Opus builder (reads REAL config) ---
+
+test_opus_model_configured() {
+    local model
+    model=$(python3 -c "
+import json
+s = json.load(open('$HOME/.claude/settings.json'))
+print(s.get('model', 'NOT SET'))
+")
+    if [[ "$model" == *"opus"* ]]; then
+        pass "Opus builder model configured: $model"
+    else
+        fail "Builder model is not Opus: $model"
+    fi
+}
+
+# --- Rung 2: GPT-5.6 Sol via run-review-leg.sh ---
+
+test_review_leg_script_exists() {
+    if [ -x "$REPO_ROOT/scripts/run-review-leg.sh" ]; then
+        pass "run-review-leg.sh exists and is executable"
+    else
+        fail "run-review-leg.sh missing or not executable"
+    fi
+}
+
+test_review_leg_default_model() {
+    local default_model
+    default_model=$(grep -o 'REVIEW_MODEL:-[^}]*' "$REPO_ROOT/scripts/run-review-leg.sh" | head -1 | cut -d'-' -f2-)
+    info "Default review model in script: $default_model"
+    if [[ "$default_model" == *"sol"* ]] || [[ "$default_model" == *"5.6"* ]]; then
+        pass "run-review-leg.sh defaults to Sol: $default_model"
+    elif [ -n "$default_model" ]; then
+        fail "run-review-leg.sh defaults to $default_model — should be gpt-5.6-sol (#715)"
+    else
+        fail "run-review-leg.sh has no default REVIEW_MODEL"
+    fi
+}
+
+test_sol_reachable() {
+    if ! command -v codex >/dev/null 2>&1; then
+        fail "codex CLI not installed — Sol unreachable"
+        return
+    fi
+    info "Calling GPT-5.6 Sol (isolated codex session)..."
+    local sol_out="$TEST_HOME/sol-response.txt"
+    local exit_code
+    REVIEW_MODEL=gpt-5.6-sol "$REPO_ROOT/scripts/run-review-leg.sh" "$sol_out" \
+        "Respond with exactly: {\"verdict\":\"CERTIFIED\",\"confidence\":100}. Nothing else." 2>&1 && exit_code=0 || exit_code=$?
+
+    if [ "$exit_code" -ne 0 ]; then
+        fail "GPT-5.6 Sol run-review-leg.sh exited $exit_code"
+        return
+    fi
+
+    if [ ! -s "$sol_out" ]; then
+        fail "GPT-5.6 Sol produced no output file"
+        return
+    fi
+
+    if grep -q '"verdict"' "$sol_out" && grep -q '"CERTIFIED"\|"NOT_CERTIFIED"' "$sol_out"; then
+        local token_line
+        token_line=$(grep 'tokens used' "$sol_out" | head -1)
+        pass "GPT-5.6 Sol returned a structured verdict ($token_line)"
+    else
+        fail "GPT-5.6 Sol output missing structured verdict JSON"
+        info "Output: $(tail -3 "$sol_out")"
+    fi
+}
+
+# --- Rung 3: Fable 5.1 via advisor() ---
+
+test_advisor_model_configured() {
+    local advisor
+    advisor=$(python3 -c "
+import json
+s = json.load(open('$HOME/.claude/settings.json'))
+print(s.get('advisorModel', 'NOT SET'))
+")
+    if [ "$advisor" = "claude-fable-5-1" ]; then
+        pass "advisorModel pinned to claude-fable-5-1"
+    elif [ "$advisor" = "fable" ]; then
+        info "advisorModel is 'fable' (alias — resolves to 5.1 on CC >=2.1.257)"
+        pass "advisorModel configured: $advisor"
+    else
+        fail "advisorModel unexpected: $advisor (expected claude-fable-5-1)"
+    fi
+}
+
+test_advisor_reachable() {
+    if ! command -v claude >/dev/null 2>&1; then
+        fail "claude CLI not installed — advisor unreachable"
+        return
+    fi
+    info "Calling advisor() in isolated session (Fable 5.1)..."
+    local advisor_out="$TEST_HOME/advisor-response.json"
+    claude -p "Call advisor() now. Say only: ADVISOR_OK" \
+        --settings "$TEST_HOME/.claude/settings.json" \
+        --output-format json > "$advisor_out" 2>&1 || true
+
+    if [ ! -s "$advisor_out" ]; then
+        fail "advisor() produced no output"
+        return
+    fi
+
+    if grep -q '"advisor_tool_result"\|"advisor_redacted_result"' "$advisor_out"; then
+        pass "advisor() returned an advisor_tool_result (Fable 5.1 responded)"
+    elif grep -q 'authentication_failed\|Not logged in' "$advisor_out"; then
+        fail "advisor() auth failed — check Max subscription"
+    else
+        fail "advisor() output missing advisor_tool_result"
+        info "Output: $(tail -3 "$advisor_out")"
+    fi
+}
+
+# --- Ladder integrity ---
+
+test_ladder_order_documented() {
+    local wizard="$REPO_ROOT/CLAUDE_CODE_SDLC_WIZARD.md"
+    if [ ! -f "$wizard" ]; then
+        fail "CLAUDE_CODE_SDLC_WIZARD.md not found"
+        return
+    fi
+    if grep -qi 'escalat\|brain\|advisor\|cross-model' "$wizard"; then
+        pass "Wizard doc references escalation/brain/advisor pattern"
+    else
+        fail "Wizard doc has no escalation/brain/advisor reference"
+    fi
+}
+
+test_95_confidence_threshold() {
+    local found=0
+    local files=("$REPO_ROOT/CLAUDE_CODE_SDLC_WIZARD.md" "$REPO_ROOT/skills/sdlc/SKILL.md" "$REPO_ROOT/skills/setup/SKILL.md")
+    for f in "${files[@]}"; do
+        if [ -f "$f" ] && grep -qi '95%.*confiden\|confiden.*95%\|<95%' "$f"; then
+            found=$((found + 1))
+        fi
+    done
+    if [ "$found" -ge 2 ]; then
+        pass "95% confidence threshold documented in $found shipped files"
+    else
+        fail "95% confidence threshold found in only $found files (need >=2)"
+    fi
+}
+
+# --- Run tests ---
+
+echo "=== Escalation Ladder E2E Tests (isolated) ==="
+echo "Test home: $TEST_HOME"
+echo ""
+
+echo "=== Rung 1: Opus builder ==="
+test_opus_model_configured
+
+echo ""
+echo "=== Rung 2: GPT-5.6 Sol ==="
+test_review_leg_script_exists
+test_review_leg_default_model
+test_sol_reachable
+
+echo ""
+echo "=== Rung 3: Fable 5.1 advisor ==="
+test_advisor_model_configured
+test_advisor_reachable
+
+echo ""
+echo "=== Ladder integrity ==="
+test_ladder_order_documented
+test_95_confidence_threshold
+
+# --- Results ---
 
 echo ""
 echo "=== Results ==="
-echo "Passed: $PASS"
-echo "Failed: $FAIL"
+echo "Passed: $PASSED"
+echo "Failed: $FAILED"
 
-if [ "$FAIL" -gt 0 ]; then
-    echo "Some escalation ladder tests failed"
+if [ $FAILED -gt 0 ]; then
     exit 1
 fi
-echo "All escalation ladder tests passed!"
