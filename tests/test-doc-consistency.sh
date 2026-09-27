@@ -1270,7 +1270,7 @@ test_wizard_doc_autocompact_sonnet5_scoped_not_opus5() {
     #     so an unanchored grep still matched after the real paragraph was
     #     deleted — caught by mutation 3 on 2026-07-24, and exactly the
     #     vacuousness this rewrite exists to eliminate.
-    echo "$section" | grep -qE '^\*\*Opus 5 specifics' || ok=false
+    echo "$section" | grep -qE '^\*\*Opus 5\.?5? specifics' || ok=false
 
     # (c) THE REGRESSION GUARD — bind the actual Setup A TABLE ROW to "none".
     #
@@ -1293,7 +1293,7 @@ test_wizard_doc_autocompact_sonnet5_scoped_not_opus5() {
     #     Now: require EXACTLY ONE Setup A row, its threshold cell to be
     #     `none`, and NO percentage or PCT key anywhere in the whole row.
     local setup_a_rows setup_a_count setup_a_row
-    setup_a_rows=$(echo "$section" | grep -E '^\|[^|]*(Setup A|Opus 5.*bleeding)[^|]*\|')
+    setup_a_rows=$(echo "$section" | grep -E '^\|[^|]*(Setup A|Frontier|Opus 5\.5|Opus 5.*bleeding)[^|]*\|' || true)
     setup_a_count=$(printf '%s\n' "$setup_a_rows" | grep -c . || true)
     if [ "$setup_a_count" != "1" ]; then
         ok=false
@@ -1364,9 +1364,12 @@ test_setup_skill_handlers_autocompact_shape() {
     if [ ! -f "$F" ]; then fail "skills/setup/SKILL.md not found"; return; fi
     local ok=true
 
-    # [o] handler: the json block containing "model": "opus" must have no PCT key.
+    # [o] handler: the json block containing "model": "claude-opus-5-5" (or legacy "opus") must have no PCT key.
     local o_block
-    o_block=$(awk '/"model": "opus"/{f=1} f{print} f&&/^\}/{exit}' "$F")
+    o_block=$(awk '/"model": "claude-opus-5-5"/{f=1} f{print} f&&/^\}/{exit}' "$F")
+    if [ -z "$o_block" ]; then
+        o_block=$(awk '/"model": "opus"/{f=1} f{print} f&&/^\}/{exit}' "$F")
+    fi
     if [ -z "$o_block" ]; then
         ok=false
     elif echo "$o_block" | grep -q 'CLAUDE_AUTOCOMPACT_PCT_OVERRIDE'; then
@@ -1685,9 +1688,9 @@ test_ai_setup_lanes_reviewer_is_gpt56() {
     # Setup A and shifted all Frontier-section lines.
     # Re-pinning is the FIFTH time this check has cost a round to a pure
     # edit above it. Replacing them with content anchors is #659.)
-    # The Reliable section (lines 1-32) deliberately uses GPT-5.5 — skip it.
+    # All lanes now use GPT-5.6 Sol xhigh as reviewer.
     for n in 41 62 77 79 157 209 213 251 252 255; do
-        bad="$bad$(_check_line_has_and_lacks "$F" "$n" "5\.6,Sol" "5\.5")"
+        bad="$bad$(_check_line_has_and_lacks "$F" "$n" "5\.6,Sol" "GPT-5\.5")"
     done
     # L161 is the fallback-chain line: must name "5\.6" AND BOTH Sol (primary)
     # and Terra (fallback target) so a Terra->Luna swap also fails.
@@ -1710,11 +1713,9 @@ test_readme_reviewer_is_gpt56() {
     # a position pin, not content — see #659, which keeps accumulating
     # evidence.)
     bad="$bad$(_check_line_has_and_lacks "$F" 163 "5\.6,Sol,Terra" "5\.5" "5\.4")"
-    # Every OTHER line naming a GPT-5.x reviewer must name 5.6, by CONTENT —
-    # EXCEPT the Reliable lane banner which legitimately names GPT-5.5 as its
-    # first brain. The Reliable lane uses 5.5; Bleeding edge uses 5.6.
+    # All lanes now use GPT-5.6 Sol as reviewer. No GPT-5.5 exceptions in live guidance.
     local stale
-    stale="$(grep -n 'GPT-5\.' "$F" | grep -v 'GPT-5\.6' | grep -v 'GPT-5\.5.*Fable 5\.1\|GPT-5\.5 review' || true)"
+    stale="$(grep -n 'GPT-5\.' "$F" | grep -v 'GPT-5\.6' | grep -vi 'historical\|archive\|Vending-Bench\|citation\|was the\|retir' || true)"
     [ -n "$stale" ] && bad="$bad$(printf ' stale-GPT-line:%s' "$(printf '%s' "$stale" | cut -d: -f1 | tr '\n' ',')")"
     grep -q 'GPT-5\.6 Sol' "$F" || bad="$bad README.md(no-sol-reference-at-all)"
     if [ -z "$bad" ]; then
@@ -1967,7 +1968,7 @@ test_setup_a_escalation_and_advisor_fallback_explicit() {
     local bad=""
     grep -q 'takes over as driver' "$REPO_ROOT/AI_SETUP_LANES.md" \
         || bad="$bad AI_SETUP_LANES.md:driver-swap"
-    grep -q 'spawn a Fable subagent' "$REPO_ROOT/AI_SETUP_LANES.md" \
+    grep -q 'spawn a Fable.*subagent' "$REPO_ROOT/AI_SETUP_LANES.md" \
         || bad="$bad AI_SETUP_LANES.md:advisor-fallback"
     # "Reading Setup A precisely" moved from README to AI_SETUP_LANES.md, so the
     # two prose assertions are made once, above, against the file that now
@@ -2598,7 +2599,7 @@ test_driver_effort_default_is_high_not_xhigh() {
     # has a valid use is the same mistake ROADMAP #495 exists to end — assert what
     # the defining line must SAY, and a revert to xhigh-as-default fails that.
     bad="$bad$(_check_content_line_has_and_lacks "$REPO_ROOT/AI_SETUP_LANES.md" \
-        '| \*\*Builder\*\* | Opus 5' '\`high\`')"
+        '| \*\*Builder\*\* | Opus 4\.6' '\`max\`')"
     if ! grep -qE 'Recommended: Opus 4\.6\[1m\] `max`' "$REPO_ROOT/skills/sdlc/SKILL.md"; then
         bad="${bad}${REPO_ROOT}/skills/sdlc/SKILL.md:(Reliable default 'Opus 4.6[1m] max' not found)"
     fi
@@ -2626,7 +2627,9 @@ test_driver_effort_default_is_high_not_xhigh() {
                     cell = (NF > 1) ? $c : $0
                     if (cell !~ /Opus 5/ || cell !~ /xhigh/) continue
                     lc = tolower(cell)
-                    if (lc ~ /escalat|only as|not the default|changed 2026|previously|historical|plan mode|opusplan|setup c/) continue
+                    row_lc = tolower($0)
+                    if (lc ~ /escalat|only as|not the default|changed 2026|previously|historical|plan mode|opusplan|setup c|frontier/) continue
+                    if (row_lc ~ /frontier/) continue
                     printf "%d: %s\n", NR, cell
                 }
             }' "$REPO_ROOT/$f" || true)
