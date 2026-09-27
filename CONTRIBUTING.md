@@ -18,7 +18,6 @@ Thank you for your interest in improving the SDLC Harness!
    ./tests/test-token-spike.sh && \
    ./tests/test-codex-progress-wrapper.sh && \
    ./tests/test-run-review-leg.sh && \
-   ./tests/test-escalation-ladder.sh && \
    ./tests/test-review-verdict-schema.sh && \
    ./tests/test-post-comment.sh && \
    ./tests/test-audit-session-load.sh && \
@@ -32,6 +31,7 @@ Thank you for your interest in improving the SDLC Harness!
    ./tests/test-cli.sh && ./tests/test-setup-path.sh && \
    ./tests/test-docs-usability.sh && ./tests/test-plugin.sh && \
    ./tests/test-install-script.sh && ./tests/test-release-workflow.sh && \
+   ./tests/test-derive-dist-tag.sh && \
    ./tests/test-release-dry-run-workflow.sh && \
    ./tests/test-cc-drift-check.sh && ./tests/test-cc-version-drift.sh && \
    ./tests/test-release-drift.sh && \
@@ -208,7 +208,6 @@ python3 -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"
 ./tests/test-token-spike.sh
 ./tests/test-codex-progress-wrapper.sh
 ./tests/test-run-review-leg.sh
-./tests/test-escalation-ladder.sh
 ./tests/test-review-verdict-schema.sh
 ./tests/test-post-comment.sh
 ./tests/test-audit-session-load.sh

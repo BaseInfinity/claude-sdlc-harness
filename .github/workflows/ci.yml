@@ -138,8 +138,7 @@ jobs:
       - name: Run review-leg launcher tests (#590)
         run: ./tests/test-run-review-leg.sh
 
-      - name: Run escalation ladder pin tests (#707)
-        run: ./tests/test-escalation-ladder.sh
+      # tests/test-escalation-ladder.sh — local-only (needs Max + OpenAI subs), runs via tests/run-local.sh
 
       - name: Run review-verdict schema tests (#617)
         run: ./tests/test-review-verdict-schema.sh
@@ -200,6 +199,9 @@ jobs:
 
       - name: Run release workflow tests
         run: ./tests/test-release-workflow.sh
+
+      - name: Run dist-tag derivation tests (#713)
+        run: ./tests/test-derive-dist-tag.sh
 
       - name: Run release-dry-run workflow tests
         run: ./tests/test-release-dry-run-workflow.sh
