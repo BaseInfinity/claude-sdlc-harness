@@ -1122,11 +1122,16 @@ test_setup_lanes_references_sonnet_5() {
 test_setup_lanes_has_model_aware_effort() {
     local LANES="$REPO_ROOT/AI_SETUP_LANES.md"
     if [ ! -f "$LANES" ]; then fail "AI_SETUP_LANES.md not found"; return; fi
-    if grep -qE 'xhigh.*Opus 4\.8|Opus 4\.8.*xhigh' "$LANES" \
-        && grep -qE 'high.*Sonnet 5|Sonnet 5.*high' "$LANES"; then
-        pass "AI_SETUP_LANES.md has model-aware effort (xhigh for Opus 4.8, high for Sonnet 5)"
+    local ok=true
+    # Each model's effort must appear as the specific substring — not just
+    # co-occurring on a long line (mutation-proven 2026-09-27, #730).
+    grep -qF 'Opus 4.8: `xhigh`' "$LANES" || ok=false
+    grep -qF 'Opus 4.6: `max`' "$LANES" || ok=false
+    grep -qE 'Sonnet 5.*`medium`' "$LANES" || ok=false
+    if [ "$ok" = true ]; then
+        pass "AI_SETUP_LANES.md has model-aware effort (xhigh/4.8, max/4.6, medium/Sonnet 5)"
     else
-        fail "AI_SETUP_LANES.md must recommend effort per model (xhigh for Opus 4.8, high for Sonnet 5)"
+        fail "AI_SETUP_LANES.md must recommend effort per model (Opus 4.8: xhigh, Opus 4.6: max, Sonnet 5: medium)"
     fi
 }
 
@@ -1150,10 +1155,36 @@ test_setup_lanes_effort_escalation_ladder() {
     fi
 }
 
+test_setup_lanes_exhaust_driver_before_escalating() {
+    local LANES="$REPO_ROOT/AI_SETUP_LANES.md"
+    if [ ! -f "$LANES" ]; then fail "AI_SETUP_LANES.md not found"; return; fi
+    if grep -qF 'exhausted' "$LANES" \
+        && grep -qE 'repeated failure.*different eyes|approach.*needs different' "$LANES"; then
+        pass "AI_SETUP_LANES.md documents exhaust-driver-before-escalating"
+    else
+        fail "AI_SETUP_LANES.md must document exhausting the driver before escalating (swap, not more effort)"
+    fi
+}
+
+test_sdlc_skill_exhaust_driver_before_escalating() {
+    local SKILL="$REPO_ROOT/skills/sdlc/SKILL.md"
+    if [ ! -f "$SKILL" ]; then fail "skills/sdlc/SKILL.md not found"; return; fi
+    local ok=true
+    grep -qiF 'Exhaust the driver before escalating' "$SKILL" || ok=false
+    grep -qiF 'pass forward' "$SKILL" || ok=false
+    if [ "$ok" = true ]; then
+        pass "skills/sdlc/SKILL.md has exhaust-driver-first language with pass-forward"
+    else
+        fail "skills/sdlc/SKILL.md must have 'Exhaust the driver before escalating' and 'pass forward'"
+    fi
+}
+
 test_setup_lanes_references_sonnet_5
 test_setup_lanes_has_model_aware_effort
 test_setup_lanes_no_blanket_max
 test_setup_lanes_effort_escalation_ladder
+test_setup_lanes_exhaust_driver_before_escalating
+test_sdlc_skill_exhaust_driver_before_escalating
 
 # The /sdlc skill's "Recommended Model" section is read on every /sdlc
 # invocation — it must not enshrine the same blanket-max bug the hook had.

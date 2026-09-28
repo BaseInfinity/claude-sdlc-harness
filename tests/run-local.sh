@@ -109,6 +109,10 @@ run_suite "$SCRIPT_DIR/test-self-pr-review-skip.sh"
 run_suite "$SCRIPT_DIR/test-post-comment.sh"
 
 echo ""
+echo "── Mutation tests (regression proof) ──"
+run_suite "$SCRIPT_DIR/test-mutation-guards.sh"
+
+echo ""
 echo "── Model config & autocompact ──"
 run_suite "$SCRIPT_DIR/test-model-config-batch.sh"
 run_suite "$SCRIPT_DIR/test-autocompact-methodology.sh"
