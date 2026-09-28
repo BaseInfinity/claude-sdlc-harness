@@ -182,3 +182,9 @@ echo "════════════════════════�
 if [ $SUITES_FAILED -gt 0 ]; then
     exit 1
 fi
+
+# #731: certify the index tree so codex-gate-check.sh accepts the commit.
+TREE_SHA=$(git write-tree 2>/dev/null) || true
+if [ -n "$TREE_SHA" ]; then
+    echo "$TREE_SHA PASS" > .local-test-result
+fi

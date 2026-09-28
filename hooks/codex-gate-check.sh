@@ -631,6 +631,15 @@ if ! printf '%s' "$MASKED_COMMAND" | grep -qE \
     exit 0
 fi
 
+# #731: a green local test suite is commit authorization for development.
+# run-local.sh writes "TREE_SHA PASS" on exit 0. Cross-model review is
+# still required before merge (PR-level gate in scripts/merge-pr.sh).
+LOCAL_RESULT="${SDLC_LOCAL_TEST_RESULT:-.local-test-result}"
+LOCAL_TREE=$(git write-tree 2>/dev/null) || LOCAL_TREE=""
+if [ -n "$LOCAL_TREE" ] && grep -q "^${LOCAL_TREE} PASS$" "$LOCAL_RESULT" 2>/dev/null; then
+    exit 0
+fi
+
 REVIEW_FILE=".reviews/handoff.json"
 
 if [ ! -f "$REVIEW_FILE" ]; then
