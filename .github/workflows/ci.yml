@@ -234,6 +234,9 @@ jobs:
       - name: Run doc consistency tests
         run: ./tests/test-doc-consistency.sh
 
+      - name: Run mutation guard tests (#730)
+        run: ./tests/test-mutation-guards.sh
+
       - name: Run usage diagnostics tests (v1.82.0)
         run: ./tests/test-usage-diagnostics.sh
 

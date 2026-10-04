@@ -31,19 +31,19 @@ REVIEW_SCRIPT="$REPO_ROOT/scripts/run-review-leg.sh"
 
 SHIPPED_DOCS=("$WIZARD" "$LANES" "$SDLC_SKILL" "$SETUP_SKILL" "$UPDATE_SKILL")
 
-# --- Frontier lane: Opus 5.5 must appear ---
+# --- Frontier lane: Opus 5 must appear ---
 
 test_frontier_opus_55() {
     local found=0
     for f in "${SHIPPED_DOCS[@]}"; do
-        if [ -f "$f" ] && grep -qi 'opus.5\.5\|claude-opus-5-5' "$f"; then
+        if [ -f "$f" ] && grep -qi 'opus.5\.5\|claude-opus-5' "$f"; then
             found=$((found + 1))
         fi
     done
     if [ "$found" -ge 2 ]; then
-        pass "Opus 5.5 referenced in $found shipped docs"
+        pass "Opus 5 referenced in $found shipped docs"
     else
-        fail "Opus 5.5 referenced in only $found shipped docs (need >=2)"
+        fail "Opus 5 referenced in only $found shipped docs (need >=2)"
     fi
 }
 
@@ -73,59 +73,56 @@ test_sol_is_review_default() {
     fi
 }
 
-# --- Advisor: Fable 5.1 must appear, Fable 5.0 must not ---
+# --- Advisor: Fable 5 must appear, Fable 5.0 must not ---
 
 test_fable_51_in_docs() {
     local found=0
     for f in "${SHIPPED_DOCS[@]}"; do
-        if [ -f "$f" ] && grep -qi 'Fable.5\.1\|claude-fable-5-1' "$f"; then
+        if [ -f "$f" ] && grep -qi 'Fable.5\.1\|claude-fable-5' "$f"; then
             found=$((found + 1))
         fi
     done
     if [ "$found" -ge 2 ]; then
-        pass "Fable 5.1 referenced in $found shipped docs"
+        pass "Fable 5 referenced in $found shipped docs"
     else
-        fail "Fable 5.1 referenced in only $found shipped docs (need >=2)"
+        fail "Fable 5 referenced in only $found shipped docs (need >=2)"
     fi
 }
 
 test_no_stale_fable_5() {
+    # claude-fable-5 IS the correct model ID (no point releases exist).
+    # Flag only stale claude-fable-5-1 references (the old wrong ID).
     local stale=0
     for f in "${SHIPPED_DOCS[@]}"; do
-        if [ -f "$f" ]; then
-            # Match "Fable 5" followed by space/comma/paren (not ".1")
-            # Two-step: find "Fable 5" lines, then exclude "Fable 5.1" lines
-            if grep -E 'Fable[[:space:]]+5[[:space:],)]' "$f" 2>/dev/null | grep -v 'Fable 5\.1\|historical\|archive\|Vending\|observed\|disabled on\|docs/en/advisor\|close to Fable\|migrate\|ruling\|Anthropic\|rollout\|launched' > /dev/null; then
-                stale=$((stale + 1))
-            fi
-            if grep 'claude-fable-5[^-]' "$f" 2>/dev/null | grep -v 'migrate\|detect\|pin.*fable.*5.*fable.*5-1' > /dev/null; then
-                stale=$((stale + 1))
-            fi
+        if [ -f "$f" ] && grep -q 'claude-fable-5-1' "$f" 2>/dev/null; then
+            stale=$((stale + 1))
         fi
     done
     if [ "$stale" -eq 0 ]; then
-        pass "No stale Fable 5.0 refs in shipped docs"
+        pass "No stale claude-fable-5-1 refs in shipped docs"
     else
-        fail "$stale shipped docs still reference Fable 5.0 (should be 5.1)"
+        fail "$stale shipped docs still reference claude-fable-5-1 (should be claude-fable-5)"
     fi
 }
 
 # --- No stale GPT-5.5 in live guidance (historical citations OK) ---
 
 test_no_stale_gpt55_guidance() {
+    # GPT-5.5 IS the Reliable lane's cross-model reviewer.
+    # Flag only GPT-5.5 refs that are NOT in a Reliable context.
+    # GPT-5.5 in Reliable guidance is correct; GPT-5.5 in Frontier/generic guidance is stale.
     local stale=0
     for f in "${SHIPPED_DOCS[@]}"; do
         if [ -f "$f" ]; then
-            # Match GPT-5.5 in guidance lines, skip historical/citation contexts
-            if grep -i 'GPT-5\.5' "$f" 2>/dev/null | grep -vi 'historical\|archive\|Vending-Bench\|citation\|was\|legacy\|retires\|retired\|previously' > /dev/null; then
+            if grep -i 'GPT-5\.5' "$f" 2>/dev/null | grep -vi 'historical\|archive\|Vending-Bench\|citation\|was\|legacy\|retires\|retired\|previously\|Reliable\|reliable\|Opus 4\.6\|provenance\|field-proven\|dogfooded\|First brain\|Codex CLI\|concurred\|design review\|Cross-model\|adopt\|Mixed-mode\|reviewing.*escalating' > /dev/null; then
                 stale=$((stale + 1))
             fi
         fi
     done
     if [ "$stale" -eq 0 ]; then
-        pass "No stale GPT-5.5 live guidance in shipped docs"
+        pass "No stale GPT-5.5 outside Reliable-lane context"
     else
-        fail "$stale shipped docs still have GPT-5.5 in live guidance"
+        fail "$stale shipped docs have GPT-5.5 outside Reliable-lane context"
     fi
 }
 
@@ -134,7 +131,7 @@ test_no_stale_gpt55_guidance() {
 echo "=== Model Pin Tests ==="
 
 echo ""
-echo "--- Frontier: Opus 5.5 ---"
+echo "--- Frontier: Opus 5 ---"
 test_frontier_opus_55
 
 echo ""
@@ -143,7 +140,7 @@ test_sol_in_docs
 test_sol_is_review_default
 
 echo ""
-echo "--- Advisor: Fable 5.1 ---"
+echo "--- Advisor: Fable 5 ---"
 test_fable_51_in_docs
 test_no_stale_fable_5
 

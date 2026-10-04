@@ -1122,11 +1122,16 @@ test_setup_lanes_references_sonnet_5() {
 test_setup_lanes_has_model_aware_effort() {
     local LANES="$REPO_ROOT/AI_SETUP_LANES.md"
     if [ ! -f "$LANES" ]; then fail "AI_SETUP_LANES.md not found"; return; fi
-    if grep -qE 'xhigh.*Opus 4\.8|Opus 4\.8.*xhigh' "$LANES" \
-        && grep -qE 'high.*Sonnet 5|Sonnet 5.*high' "$LANES"; then
-        pass "AI_SETUP_LANES.md has model-aware effort (xhigh for Opus 4.8, high for Sonnet 5)"
+    local ok=true
+    # Each model's effort must appear as the specific substring — not just
+    # co-occurring on a long line (mutation-proven 2026-09-27, #730).
+    grep -qF 'Opus 4.8: `xhigh`' "$LANES" || ok=false
+    grep -qF 'Opus 4.6: `max`' "$LANES" || ok=false
+    grep -qE 'Sonnet 5.*`medium`' "$LANES" || ok=false
+    if [ "$ok" = true ]; then
+        pass "AI_SETUP_LANES.md has model-aware effort (xhigh/4.8, max/4.6, medium/Sonnet 5)"
     else
-        fail "AI_SETUP_LANES.md must recommend effort per model (xhigh for Opus 4.8, high for Sonnet 5)"
+        fail "AI_SETUP_LANES.md must recommend effort per model (Opus 4.8: xhigh, Opus 4.6: max, Sonnet 5: medium)"
     fi
 }
 
@@ -1150,10 +1155,36 @@ test_setup_lanes_effort_escalation_ladder() {
     fi
 }
 
+test_setup_lanes_exhaust_driver_before_escalating() {
+    local LANES="$REPO_ROOT/AI_SETUP_LANES.md"
+    if [ ! -f "$LANES" ]; then fail "AI_SETUP_LANES.md not found"; return; fi
+    if grep -qF 'exhausted' "$LANES" \
+        && grep -qE 'repeated failure.*different eyes|approach.*needs different' "$LANES"; then
+        pass "AI_SETUP_LANES.md documents exhaust-driver-before-escalating"
+    else
+        fail "AI_SETUP_LANES.md must document exhausting the driver before escalating (swap, not more effort)"
+    fi
+}
+
+test_sdlc_skill_exhaust_driver_before_escalating() {
+    local SKILL="$REPO_ROOT/skills/sdlc/SKILL.md"
+    if [ ! -f "$SKILL" ]; then fail "skills/sdlc/SKILL.md not found"; return; fi
+    local ok=true
+    grep -qiF 'Exhaust the driver before escalating' "$SKILL" || ok=false
+    grep -qiF 'pass forward' "$SKILL" || ok=false
+    if [ "$ok" = true ]; then
+        pass "skills/sdlc/SKILL.md has exhaust-driver-first language with pass-forward"
+    else
+        fail "skills/sdlc/SKILL.md must have 'Exhaust the driver before escalating' and 'pass forward'"
+    fi
+}
+
 test_setup_lanes_references_sonnet_5
 test_setup_lanes_has_model_aware_effort
 test_setup_lanes_no_blanket_max
 test_setup_lanes_effort_escalation_ladder
+test_setup_lanes_exhaust_driver_before_escalating
+test_sdlc_skill_exhaust_driver_before_escalating
 
 # The /sdlc skill's "Recommended Model" section is read on every /sdlc
 # invocation — it must not enshrine the same blanket-max bug the hook had.
@@ -1364,9 +1395,9 @@ test_setup_skill_handlers_autocompact_shape() {
     if [ ! -f "$F" ]; then fail "skills/setup/SKILL.md not found"; return; fi
     local ok=true
 
-    # [o] handler: the json block containing "model": "claude-opus-5-5" (or legacy "opus") must have no PCT key.
+    # [o] handler: the json block containing "model": "claude-opus-5" (or legacy "opus") must have no PCT key.
     local o_block
-    o_block=$(awk '/"model": "claude-opus-5-5"/{f=1} f{print} f&&/^\}/{exit}' "$F")
+    o_block=$(awk '/"model": "claude-opus-5"/{f=1} f{print} f&&/^\}/{exit}' "$F")
     if [ -z "$o_block" ]; then
         o_block=$(awk '/"model": "opus"/{f=1} f{print} f&&/^\}/{exit}' "$F")
     fi
@@ -1678,27 +1709,30 @@ _check_content_line_has_and_lacks() {
     done
 }
 
-test_ai_setup_lanes_reviewer_is_gpt56() {
+test_ai_setup_lanes_reviewer_per_lane() {
     local F="$REPO_ROOT/AI_SETUP_LANES.md"
     if [ ! -f "$F" ]; then fail "AI_SETUP_LANES.md not found"; return; fi
     local bad=""
-    # "5\.6" AND "Sol" (not just one or the other) so a Sol->Terra swap, or a
-    # future GPT-5.7 Sol rename, both fail.
-    # (Line numbers re-pinned after the Reliable default-flip shortened
-    # Setup A and shifted all Frontier-section lines.
-    # Re-pinning is the FIFTH time this check has cost a round to a pure
-    # edit above it. Replacing them with content anchors is #659.)
-    # All lanes now use GPT-5.6 Sol xhigh as reviewer.
+
+    # --- Reliable lane: GPT-5.5 (NOT 5.6) ---
+    # Content-anchored: the Reliable table's reviewer row must say GPT-5.5
+    bad="$bad$(_check_content_line_has_and_lacks "$F" "Reliable.*GPT-5" "5\.5" "5\.6")"
+    # The Reliable table row itself (First brain line under Opus 4.6 builder)
+    bad="$bad$(_check_content_line_has_and_lacks "$F" "First brain.*Codex CLI.*run-review-leg" "5\.5")"
+
+    # --- Frontier/generic lines: GPT-5.6 Sol ---
+    # Frontier/generic lines must have GPT-5.6 Sol.
     for n in 41 62 77 79 157 209 213 251 252 255; do
-        bad="$bad$(_check_line_has_and_lacks "$F" "$n" "5\.6,Sol" "GPT-5\.5")"
+        bad="$bad$(_check_line_has_and_lacks "$F" "$n" "5\.6,Sol")"
     done
     # L161 is the fallback-chain line: must name "5\.6" AND BOTH Sol (primary)
     # and Terra (fallback target) so a Terra->Luna swap also fails.
-    bad="$bad$(_check_line_has_and_lacks "$F" 161 "5\.6,Sol,Terra" "5\.5" "5\.4")"
+    bad="$bad$(_check_line_has_and_lacks "$F" 161 "5\.6,Sol,Terra" "5\.4")"
+
     if [ -z "$bad" ]; then
-        pass "AI_SETUP_LANES.md: all reviewer-model lines reference GPT-5.6 Sol/Terra, none reference stale GPT-5.5/5.4"
+        pass "AI_SETUP_LANES.md: Reliable=GPT-5.5, Frontier/generic=GPT-5.6 Sol — both lanes correct"
     else
-        fail "AI_SETUP_LANES.md stale reviewer-model reference(s):$bad"
+        fail "AI_SETUP_LANES.md reviewer-model reference(s):$bad"
     fi
 }
 
@@ -1713,9 +1747,9 @@ test_readme_reviewer_is_gpt56() {
     # a position pin, not content — see #659, which keeps accumulating
     # evidence.)
     bad="$bad$(_check_line_has_and_lacks "$F" 172 "5\.6,Sol,Terra" "5\.5" "5\.4")"
-    # All lanes now use GPT-5.6 Sol as reviewer. No GPT-5.5 exceptions in live guidance.
+    # Reliable lane uses GPT-5.5; Frontier uses GPT-5.6 Sol. Allow GPT-5.5 in Reliable context.
     local stale
-    stale="$(grep -n 'GPT-5\.' "$F" | grep -v 'GPT-5\.6' | grep -vi 'historical\|archive\|Vending-Bench\|citation\|was the\|retir' || true)"
+    stale="$(grep -n 'GPT-5\.' "$F" | grep -v 'GPT-5\.6' | grep -vi 'historical\|archive\|Vending-Bench\|citation\|was the\|retir\|Reliable\|reliable\|Opus 4\.6\|field-proven\|provenance\|dogfooded\|driving.*reviewing' || true)"
     [ -n "$stale" ] && bad="$bad$(printf ' stale-GPT-line:%s' "$(printf '%s' "$stale" | cut -d: -f1 | tr '\n' ',')")"
     grep -q 'GPT-5\.6 Sol' "$F" || bad="$bad README.md(no-sol-reference-at-all)"
     if [ -z "$bad" ]; then
@@ -1805,10 +1839,10 @@ test_skill_files_reviewer_is_gpt56() {
     local bad=""
     # Content-anchored 2026-07-24 (FOURTH drift of a hardcoded line number
     # in this file — the escalation-ladder codification shifted it again).
-    bad="$bad$(_check_content_line_has_and_lacks "$REPO_ROOT/skills/sdlc/SKILL.md" "adversarial diversity" "5\.6,sol" "5\.5")"
-    bad="$bad$(_check_content_line_has_and_lacks "$REPO_ROOT/cowork/skills/sdlc/SKILL.md" "adversarial diversity" "5\.6,sol" "5\.5")"
+    bad="$bad$(_check_content_line_has_and_lacks "$REPO_ROOT/skills/sdlc/SKILL.md" "adversarial diversity" "5\.5,5\.6")"
+    bad="$bad$(_check_content_line_has_and_lacks "$REPO_ROOT/cowork/skills/sdlc/SKILL.md" "adversarial diversity" "5\.5,5\.6")"
     if [ -z "$bad" ]; then
-        pass "skills/sdlc/SKILL.md and cowork/skills/sdlc/SKILL.md both reference GPT-5.6 Sol reviewer"
+        pass "skills/sdlc/SKILL.md and cowork both reference GPT-5.5 (Reliable) and GPT-5.6 (Frontier) reviewers"
     else
         fail "skill file(s) stale reviewer-model reference(s):$bad"
     fi
@@ -1839,7 +1873,7 @@ test_claude_md_reviewer_is_gpt56() {
     fi
 }
 
-test_ai_setup_lanes_reviewer_is_gpt56
+test_ai_setup_lanes_reviewer_per_lane
 test_readme_reviewer_is_gpt56
 test_vending_bench_citation_untouched
 test_wizard_doc_reviewer_is_gpt56
@@ -2813,7 +2847,7 @@ $flag_hits"
 
     # Leg B: reviewer is NOW xhigh (changed from high, Sept 2026). Verify no
     # shipped prose downgrades it back to bare "high" without a qualifier.
-    # "Fable 5.1 high" is the ADVISOR, not the reviewer — exclude it.
+    # "Fable 5 high" is the ADVISOR, not the reviewer — exclude it.
     local downgrade_hits
     downgrade_hits=$(grep -rniE \
         '(sol|codex|reviewer)[^.|]{0,40}`?high`?[^.|]{0,20}(default|reasoning effort)' \

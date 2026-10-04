@@ -109,7 +109,7 @@ test_sol_reachable() {
     fi
 }
 
-# --- Rung 3: Fable 5.1 via advisor() ---
+# --- Rung 3: Fable 5 via advisor() ---
 
 test_advisor_model_configured() {
     local advisor
@@ -118,13 +118,13 @@ import json
 s = json.load(open('$HOME/.claude/settings.json'))
 print(s.get('advisorModel', 'NOT SET'))
 ")
-    if [ "$advisor" = "claude-fable-5-1" ]; then
-        pass "advisorModel pinned to claude-fable-5-1"
+    if [ "$advisor" = "claude-fable-5" ]; then
+        pass "advisorModel pinned to claude-fable-5"
     elif [ "$advisor" = "fable" ]; then
         info "advisorModel is 'fable' (alias — resolves to 5.1 on CC >=2.1.257)"
         pass "advisorModel configured: $advisor"
     else
-        fail "advisorModel unexpected: $advisor (expected claude-fable-5-1)"
+        fail "advisorModel unexpected: $advisor (expected claude-fable-5)"
     fi
 }
 
@@ -133,7 +133,7 @@ test_advisor_reachable() {
         fail "claude CLI not installed — advisor unreachable"
         return
     fi
-    info "Calling advisor() in isolated session (Fable 5.1)..."
+    info "Calling advisor() in isolated session (Fable 5)..."
     local advisor_out="$TEST_HOME/advisor-response.json"
     claude -p "Call advisor() now. Say only: ADVISOR_OK" \
         --settings "$TEST_HOME/.claude/settings.json" \
@@ -145,7 +145,7 @@ test_advisor_reachable() {
     fi
 
     if grep -q '"advisor_tool_result"\|"advisor_redacted_result"' "$advisor_out"; then
-        pass "advisor() returned an advisor_tool_result (Fable 5.1 responded)"
+        pass "advisor() returned an advisor_tool_result (Fable 5 responded)"
     elif grep -q 'authentication_failed\|Not logged in' "$advisor_out"; then
         fail "advisor() auth failed — check Max subscription"
     else
@@ -200,7 +200,7 @@ test_review_leg_default_model
 test_sol_reachable
 
 echo ""
-echo "=== Rung 3: Fable 5.1 advisor ==="
+echo "=== Rung 3: Fable 5 advisor ==="
 test_advisor_model_configured
 test_advisor_reachable
 

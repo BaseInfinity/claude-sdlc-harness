@@ -4501,6 +4501,58 @@ test_codex_gate_silent_on_multi_line_non_commit_command
 test_codex_gate_silent_when_multi_line_verb_is_inside_quotes
 test_codex_gate_blocks_in_flight_relocation_token_across_lines
 
+# ---- #731: local test suite as commit authorization ----
+
+test_codex_gate_allows_commit_with_green_local_tests() {
+    local tmpdir
+    tmpdir=$(mktemp -d)
+    (cd "$tmpdir" && git init -q && git commit -q --allow-empty -m init) > /dev/null 2>&1
+    local idx_tree
+    idx_tree=$(cd "$tmpdir" && git write-tree)
+    echo "$idx_tree PASS" > "$tmpdir/.local-test-result"
+    local out exit_code
+    out=$(printf '%s' '{"tool_input":{"command":"git commit -m \"test: something\""}}' | (cd "$tmpdir" && "$HOOKS_DIR/codex-gate-check.sh") 2>&1) && exit_code=0 || exit_code=$?
+    rm -rf "$tmpdir"
+    if [ "$exit_code" -eq 0 ]; then
+        pass "codex gate allows commit when .local-test-result has matching tree PASS (#731)"
+    else
+        fail "codex gate should allow commit with green local tests, got exit=$exit_code out: $out"
+    fi
+}
+
+test_codex_gate_blocks_commit_with_stale_local_tests() {
+    local tmpdir
+    tmpdir=$(mktemp -d)
+    (cd "$tmpdir" && git init -q && git commit -q --allow-empty -m init) > /dev/null 2>&1
+    echo "0000000000000000000000000000000000000000 PASS" > "$tmpdir/.local-test-result"
+    local out exit_code
+    out=$(printf '%s' '{"tool_input":{"command":"git commit -m \"test: something\""}}' | (cd "$tmpdir" && "$HOOKS_DIR/codex-gate-check.sh") 2>&1) && exit_code=0 || exit_code=$?
+    rm -rf "$tmpdir"
+    if [ "$exit_code" -eq 2 ]; then
+        pass "codex gate BLOCKS commit when .local-test-result tree doesn't match index (#731)"
+    else
+        fail "codex gate should block with stale local test result, got exit=$exit_code out: $out"
+    fi
+}
+
+test_codex_gate_blocks_commit_with_no_local_tests() {
+    local tmpdir
+    tmpdir=$(mktemp -d)
+    (cd "$tmpdir" && git init -q && git commit -q --allow-empty -m init) > /dev/null 2>&1
+    local out exit_code
+    out=$(printf '%s' '{"tool_input":{"command":"git commit -m \"test: something\""}}' | (cd "$tmpdir" && "$HOOKS_DIR/codex-gate-check.sh") 2>&1) && exit_code=0 || exit_code=$?
+    rm -rf "$tmpdir"
+    if [ "$exit_code" -eq 2 ]; then
+        pass "codex gate BLOCKS commit when no .local-test-result exists (#731)"
+    else
+        fail "codex gate should block without local test result, got exit=$exit_code out: $out"
+    fi
+}
+
+test_codex_gate_allows_commit_with_green_local_tests
+test_codex_gate_blocks_commit_with_stale_local_tests
+test_codex_gate_blocks_commit_with_no_local_tests
+
 # ---- codex-review-stop-check.sh tests ----
 # Fable self-enforcement audit finding: a full SDLC workflow can complete —
 # Claude presents "done, here's what I changed" — without ever running

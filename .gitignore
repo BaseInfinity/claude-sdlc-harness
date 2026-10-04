@@ -23,6 +23,9 @@ tests/fixtures/community-scanner/
 # Review artifacts (local Codex/cross-model reviews)
 .reviews/
 
+# Local test suite certification (#731)
+.local-test-result
+
 # Editor/OS
 .DS_Store
 *.swp

@@ -105,6 +105,7 @@ State your confidence before presenting an approach:
 
 **Confidence ramp:** Opus research → Fable batch review → 95% list → /goal TDD → Codex.
 
+**Exhaust the driver before escalating.** Sub-95% does NOT automatically mean escalate — it means try harder first. Do more research: web search, read more files, grep the codebase, check git history. Each rung costs more and is more effective when it knows what was already tried. When you do escalate, pass forward what you researched and what specific question remains — "I checked X, Y, Z and I'm stuck on this" is worth 10x more than "I'm not sure, please review."
 **Uncertainty ≠ a human question.** Use the model/tool evidence available before interrupting a human — escalate to Fable (`advisor()`; if down, a Fable subagent at `high`), then Codex `high`; reserve the user for priority/risk/scope/spend or irreversible calls. **Confidence is not authorization**: a high score never overrides approval, external-effect, production, release/merge or policy gates; merge protections are non-overridable. **Standing instructions stay in force** (wizard doc).
 
 ## Plan Mode
@@ -117,9 +118,9 @@ Native `/goal <condition>` (**v2.1.143+**). Haiku evaluator re-checks transcript
 
 ## Recommended Model
 
-**Recommended: Opus 4.6[1m] `max`** (Reliable default). **Opus 5.5 `xhigh`** for Frontier work. **Sonnet 5 `medium`** for simple work. Pin `claude-opus-4-8` for a same-family escape. **Effort is model-aware, not blanket `max`** — set via `/effort` per session, never a shell-rc env var (overrides post-switch). `/model` persists; picker `s` does not.
+**Recommended: Opus 4.6[1m] `max`** (Reliable default). **Opus 5 `xhigh`** for Frontier work. **Sonnet 5 `medium`** for simple work. Pin `claude-opus-4-8` for a same-family escape. **Effort is model-aware, not blanket `max`** — set via `/effort` per session, never a shell-rc env var (overrides post-switch). `/model` persists; picker `s` does not.
 
-**Autocompact: set neither override by default.** For a deliberately earlier boundary use `CLAUDE_CODE_AUTO_COMPACT_WINDOW` alone — a smaller window compacts sooner, and nothing in that range switches compaction off. On **current Opus** a percentage alone is inert unless the window is also set, and then the two multiply; on Sonnet 5 and on a 200K Opus 4.6 pin it is live, so size it against THAT window (#520). **Advisor (v2.1.170+):** `advisorModel: "claude-fable-5-1"` works with all drivers above; set in `/claude-setup-wizard` Step 9.5.
+**Autocompact: set neither override by default.** For a deliberately earlier boundary use `CLAUDE_CODE_AUTO_COMPACT_WINDOW` alone — a smaller window compacts sooner, and nothing in that range switches compaction off. On **current Opus** a percentage alone is inert unless the window is also set, and then the two multiply; on Sonnet 5 and on a 200K Opus 4.6 pin it is live, so size it against THAT window (#520). **Advisor (v2.1.170+):** `advisorModel: "claude-fable-5"` works with all drivers above; set in `/claude-setup-wizard` Step 9.5.
 
 ## The Review Contract (give BOTH reviewers this, verbatim)
 
@@ -146,7 +147,7 @@ Ship good code, not perfect code. No glaring issues, right shape. Otherwise you 
 
 ## Cross-Model Review (REQUIRED for High-Stakes)
 
-**When to run:** high-stakes changes (auth, payments, data), releases/publishes, complex refactors. **Skip (log justification):** trivial, hotfixes, risk < review cost. **Reviewer:** GPT-5.6 Sol (`gpt-5.6-sol`) `xhigh` — adversarial diversity. **Cadence:** Fable during design, Codex once per frozen scope; don't stack both unless the decision needs two independent reviewers.
+**When to run:** high-stakes changes (auth, payments, data), releases/publishes, complex refactors. **Skip (log justification):** trivial, hotfixes, risk < review cost. **Reviewer:** Reliable lane: GPT-5.5 `xhigh`; Frontier lane: GPT-5.6 Sol (`gpt-5.6-sol`) `xhigh` — adversarial diversity via a different model family. **Cadence:** Fable during design, Codex once per frozen scope; don't stack both unless the decision needs two independent reviewers.
 
 **Fable decides, Codex checks.** Fable rules on design, priority and sequencing *before* you commit to an approach — not a reviewer of work already done. A second repair to the same component in one cycle is a design question for Fable, not a third patch: review converges on a fix, never on the right design.
 
