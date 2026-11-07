@@ -301,6 +301,51 @@ print(m.main("/tmp", sys.argv[2], ["/nonexistent/codex-missing"]))
 ' "$CTP" "$TMPDIR_T/ct.txt" 2>&1 | tail -2 | tr '\n' ' ')
 case "$got" in "SERVER_START_FAILED"*" 2 ") pass "codex-thread.py exits 2 when codex cannot start" ;;
     *) fail "codex-thread.py exits 2 when codex cannot start (got: $got)" ;; esac
+# Older app-servers: answer only in item/completed, notifications before the RPC result,
+# a server request that must be declined, and a non-ASCII answer.
+FAKE_OLD="$TMPDIR_T/old.py"
+cat > "$FAKE_OLD" <<'EOF'
+import json, sys
+def out(o): sys.stdout.write(json.dumps(o, ensure_ascii=False) + "\n"); sys.stdout.flush()
+for line in sys.stdin:
+    m = json.loads(line); meth = m.get("method")
+    if meth == "thread/start":
+        out({"id": m["id"], "result": {"thread": {"id": "T1"}}})
+    elif meth == "turn/start":
+        out({"id": m["id"], "method": "item/tool/requestUserInput", "params": {"threadId": "T1"}})
+        r = json.loads(sys.stdin.readline())
+        if r.get("id") != m["id"] or "error" not in r:
+            out({"method": "turn/completed", "params": {"threadId": "T1", "turn": {"id": "U1", "status": "failed", "items": []}}})
+            continue
+        out({"method": "item/completed", "params": {"threadId": "T1", "turnId": "U1",
+             "item": {"type": "agentMessage", "text": "héllo ✓"}}})
+        out({"method": "turn/completed", "params": {"threadId": "T1", "turn": {"id": "U1", "status": "completed", "items": []}}})
+        out({"id": m["id"], "result": {"turn": {"id": "U1"}}})
+    elif "id" in m:
+        out({"id": m["id"], "result": {}})
+EOF
+got=$(LC_ALL=en_US.ISO8859-1 PYTHONUTF8=0 PYTHONIOENCODING=utf-8 python3 -c '
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("ct", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+print(m.main("/tmp", sys.argv[3], ["python3", sys.argv[2]], turn_timeout=10))
+' "$CTP" "$FAKE_OLD" "$TMPDIR_T/ct.txt" 2>&1 | tail -2 | tr '\n' '|')
+[ "$got" = "héllo ✓|0|" ] \
+    && pass "codex-thread.py declines server requests, keeps early item text, reads UTF-8" \
+    || fail "codex-thread.py declines server requests, keeps early item text, reads UTF-8 (got: $got)"
+got=$(LC_ALL=en_US.ISO8859-1 PYTHONUTF8=0 python3 -c '
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("ct", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+print(m.server_argv("nt", lambda n: "C:\\Program Files\\npm\\codex.cmd"))
+print(m.server_argv("nt", lambda n: "C:\\bin\\codex.exe"))
+print(m.server_argv("posix", lambda n: "/usr/local/bin/codex"))
+import locale; assert locale.getpreferredencoding(False) != "UTF-8"
+s = m.Server(["python3", "-c", "import sys; sys.stdin.read()"]); print(s.p.stdout.encoding.lower()); s.close()
+' "$CTP" 2>&1)
+want=$'cmd.exe /d /s /c ""C:\\Program Files\\npm\\codex.cmd" app-server --listen stdio://"\n[\'C:\\\\bin\\\\codex.exe\', \'app-server\', \'--listen\', \'stdio://\']\n[\'codex\', \'app-server\', \'--listen\', \'stdio://\']\nutf-8'
+[ "$got" = "$want" ] && pass "codex-thread.py launches a Windows npm .cmd shim via cmd.exe, UTF-8 pipes" \
+    || fail "codex-thread.py launches a Windows npm .cmd shim via cmd.exe, UTF-8 pipes (got: $got)"
 grep -qF 'scripts/codex-thread.py' "$SKILL" \
     && pass "SKILL.md points at codex-thread.py" || fail "SKILL.md points at codex-thread.py"
 grep -qF 'scripts/claude-desktop.sh' "$SKILL" \
