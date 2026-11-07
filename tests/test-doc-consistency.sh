@@ -261,7 +261,7 @@ test_init_js_skills_match_disk() {
     if [ ! -f "$INIT_JS" ]; then fail "cli/init.js not found"; return; fi
     local init_skills disk_skills
     # Extract skill paths from FILES array (lines with src: and dest:)
-    init_skills=$(grep "src:.*dest:" "$INIT_JS" | sed "s/.*src: *['\"]//;s/['\"].*//" | grep 'skills/' | sort)
+    init_skills=$(grep "src:.*dest:" "$INIT_JS" | sed "s/.*src: *['\"]//;s/['\"].*//" | grep 'skills/.*/SKILL\.md$' | sort)
     # Get skills from disk (repo root skills/, same path format as init.js)
     disk_skills=$(ls "$REPO_ROOT"/skills/*/SKILL.md 2>/dev/null | \
         sed "s|$REPO_ROOT/||" | sort)
@@ -1395,9 +1395,9 @@ test_setup_skill_handlers_autocompact_shape() {
     if [ ! -f "$F" ]; then fail "skills/setup/SKILL.md not found"; return; fi
     local ok=true
 
-    # [o] handler: the json block containing "model": "claude-opus-5" (or legacy "opus") must have no PCT key.
+    # [o] handler: the json block containing "model": "claude-opus-5-5" (or legacy "opus") must have no PCT key.
     local o_block
-    o_block=$(awk '/"model": "claude-opus-5"/{f=1} f{print} f&&/^\}/{exit}' "$F")
+    o_block=$(awk '/"model": "claude-opus-5-5"/{f=1} f{print} f&&/^\}/{exit}' "$F")
     if [ -z "$o_block" ]; then
         o_block=$(awk '/"model": "opus"/{f=1} f{print} f&&/^\}/{exit}' "$F")
     fi
@@ -1714,11 +1714,9 @@ test_ai_setup_lanes_reviewer_per_lane() {
     if [ ! -f "$F" ]; then fail "AI_SETUP_LANES.md not found"; return; fi
     local bad=""
 
-    # --- Reliable lane: GPT-5.5 (NOT 5.6) ---
-    # Content-anchored: the Reliable table's reviewer row must say GPT-5.5
-    bad="$bad$(_check_content_line_has_and_lacks "$F" "Reliable.*GPT-5" "5\.5" "5\.6")"
-    # The Reliable table row itself (First brain line under Opus 4.6 builder)
-    bad="$bad$(_check_content_line_has_and_lacks "$F" "First brain.*Codex CLI.*run-review-leg" "5\.5")"
+    # --- Reliable lane: GPT-5.6 Sol (GPT-5.5 retired from Codex CLI 2026-10-14, #715) ---
+    bad="$bad$(_check_content_line_has_and_lacks "$F" "Reliable.*GPT-5" "5\.6,Sol" "5\.5")"
+    bad="$bad$(_check_content_line_has_and_lacks "$F" "First brain.*Codex CLI.*run-review-leg" "5\.6,Sol" "5\.5")"
 
     # --- Frontier/generic lines: GPT-5.6 Sol ---
     # Frontier/generic lines must have GPT-5.6 Sol.
@@ -1730,7 +1728,7 @@ test_ai_setup_lanes_reviewer_per_lane() {
     bad="$bad$(_check_line_has_and_lacks "$F" 161 "5\.6,Sol,Terra" "5\.4")"
 
     if [ -z "$bad" ]; then
-        pass "AI_SETUP_LANES.md: Reliable=GPT-5.5, Frontier/generic=GPT-5.6 Sol — both lanes correct"
+        pass "AI_SETUP_LANES.md: both lanes and generic lines name GPT-5.6 Sol, no GPT-5.5"
     else
         fail "AI_SETUP_LANES.md reviewer-model reference(s):$bad"
     fi
@@ -1747,7 +1745,8 @@ test_readme_reviewer_is_gpt56() {
     # a position pin, not content — see #659, which keeps accumulating
     # evidence.)
     bad="$bad$(_check_line_has_and_lacks "$F" 172 "5\.6,Sol,Terra" "5\.5" "5\.4")"
-    # Reliable lane uses GPT-5.5; Frontier uses GPT-5.6 Sol. Allow GPT-5.5 in Reliable context.
+    # Both lanes use GPT-5.6 Sol (#715). GPT-5.5 survives only in retirement,
+    # provenance and historical lines, which the filter below excludes.
     local stale
     stale="$(grep -n 'GPT-5\.' "$F" | grep -v 'GPT-5\.6' | grep -vi 'historical\|archive\|Vending-Bench\|citation\|was the\|retir\|Reliable\|reliable\|Opus 4\.6\|field-proven\|provenance\|dogfooded\|driving.*reviewing' || true)"
     [ -n "$stale" ] && bad="$bad$(printf ' stale-GPT-line:%s' "$(printf '%s' "$stale" | cut -d: -f1 | tr '\n' ',')")"
@@ -1839,10 +1838,10 @@ test_skill_files_reviewer_is_gpt56() {
     local bad=""
     # Content-anchored 2026-07-24 (FOURTH drift of a hardcoded line number
     # in this file — the escalation-ladder codification shifted it again).
-    bad="$bad$(_check_content_line_has_and_lacks "$REPO_ROOT/skills/sdlc/SKILL.md" "adversarial diversity" "5\.5,5\.6")"
-    bad="$bad$(_check_content_line_has_and_lacks "$REPO_ROOT/cowork/skills/sdlc/SKILL.md" "adversarial diversity" "5\.5,5\.6")"
+    bad="$bad$(_check_content_line_has_and_lacks "$REPO_ROOT/skills/sdlc/SKILL.md" "adversarial diversity" "5\.6,Sol,both lanes" "5\.5")"
+    bad="$bad$(_check_content_line_has_and_lacks "$REPO_ROOT/cowork/skills/sdlc/SKILL.md" "adversarial diversity" "5\.6,Sol,both lanes" "5\.5")"
     if [ -z "$bad" ]; then
-        pass "skills/sdlc/SKILL.md and cowork both reference GPT-5.5 (Reliable) and GPT-5.6 (Frontier) reviewers"
+        pass "skills/sdlc/SKILL.md and cowork both reference GPT-5.6 Sol for both lanes, no GPT-5.5"
     else
         fail "skill file(s) stale reviewer-model reference(s):$bad"
     fi
@@ -3139,7 +3138,7 @@ test_review_prompts_do_not_suppress_findings
 # line's denial credit, while an unrelated systemd watchdog sentence was blocked.
 _doc_claim_report() {
     python3 - "$1" "$2" <<'PY'
-import re, sys
+import os, re, sys
 mode, path = sys.argv[1], sys.argv[2]
 text = open(path, encoding="utf-8").read()
 base = path.rsplit("/", 1)[-1]
@@ -3186,6 +3185,10 @@ elif mode == "scripts":
     for _line, unit in units(text):
         for ref in sorted(set(re.findall(r'\bscripts/[A-Za-z0-9_./-]+', unit))):
             ref = ref.rstrip('.,;:)')
+            # A skill's own bundled script ships inside its skills/<name>/ dir.
+            if (base == "SKILL.md" and "/skills/" in path and ".." not in ref
+                    and os.path.isfile(os.path.join(os.path.dirname(path), ref))):
+                continue
             problems.append(("OK", base, ref) if qualifier.search(unit)
                             else ("UNQUALIFIED", base, ref))
     problems = [f"{b} names {r} with no repo-local qualifier in its own clause — scripts/ is not packed, so consumers never receive it"
@@ -3271,7 +3274,12 @@ test_doc_script_references_exist() {
         # Phantom paths: judged per reference, anywhere in the file.
         while IFS= read -r ref; do
             [ -n "$ref" ] || continue
-            [ -e "$REPO_ROOT/$ref" ] || bad="$bad\n  $base names $ref — no such file anywhere"
+            [ -e "$REPO_ROOT/$ref" ] && continue
+            case "$doc:$ref" in
+                "$REPO_ROOT"/skills/*/SKILL.md:*..*) ;;
+                "$REPO_ROOT"/skills/*/SKILL.md:*) [ -f "$(dirname "$doc")/$ref" ] && continue ;;
+            esac
+            bad="$bad\n  $base names $ref — no such file anywhere"
         done <<< "$(grep -ohE '\bscripts/[A-Za-z0-9_./-]+' "$doc" 2>/dev/null | sed 's/[.,;:)]*$//' | sort -u)"
         # Availability qualifiers: judged per CLAUSE, so a maintainer-tooling
         # note before a semicolon cannot bless a consumer instruction after it.

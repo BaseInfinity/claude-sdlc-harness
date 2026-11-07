@@ -73,7 +73,7 @@ test_dry_run_no_files() {
     rm -rf "$d"
 }
 
-# Test 4: init creates all 12 expected files (hooks + helper + skills + settings + wizard doc)
+# Test 4: init creates all 15 expected files (hooks + helper + skills + settings + wizard doc)
 test_creates_all_files() {
     local d
     d=$(make_temp)
@@ -90,11 +90,14 @@ test_creates_all_files() {
     [ -f "$d/.claude/skills/setup/SKILL.md" ] && count=$((count + 1))
     [ -f "$d/.claude/skills/update/SKILL.md" ] && count=$((count + 1))
     [ -f "$d/.claude/skills/feedback/SKILL.md" ] && count=$((count + 1))
+    [ -f "$d/.claude/skills/conduct/SKILL.md" ] && count=$((count + 1))
+    [ -f "$d/.claude/skills/conduct/references/protocol.md" ] && count=$((count + 1))
+    [ -f "$d/.claude/skills/conduct/scripts/conduct.cjs" ] && count=$((count + 1))
     [ -f "$d/CLAUDE_CODE_SDLC_WIZARD.md" ] && count=$((count + 1))
-    if [ "$count" -eq 12 ]; then
-        pass "init creates all 12 expected files (#254 ships _find-sdlc-root.sh)"
+    if [ "$count" -eq 15 ]; then
+        pass "init creates all 15 expected files (#254 ships _find-sdlc-root.sh)"
     else
-        fail "init should create 12 files, found $count"
+        fail "init should create 15 files, found $count"
     fi
     rm -rf "$d"
 }

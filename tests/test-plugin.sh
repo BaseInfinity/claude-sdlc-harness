@@ -270,13 +270,13 @@ print(' '.join(sorted(scripts)))
 
 test_plugin_skills_exist() {
     local ok=true
-    for skill in sdlc setup update feedback; do
+    for skill in sdlc setup update feedback conduct; do
         [ -f "$REPO_ROOT/skills/$skill/SKILL.md" ] || ok=false
     done
     if [ "$ok" = true ]; then
-        pass "All 4 skill SKILL.md files exist at skills/"
+        pass "All 5 skill SKILL.md files exist at skills/"
     else
-        fail "skills/ should contain sdlc, setup, update, feedback SKILL.md files"
+        fail "skills/ should contain sdlc, setup, update, feedback, conduct SKILL.md files"
     fi
 }
 
@@ -310,7 +310,7 @@ test_plugin_hook_scripts_executable() {
 
 test_skill_parity() {
     local ok=true
-    for skill in sdlc setup update feedback; do
+    for skill in sdlc setup update feedback conduct; do
         local plugin_file="$REPO_ROOT/skills/$skill/SKILL.md"
         # CLI init copies from wherever init.js points. After refactor, CLI reads from skills/ too.
         # Verify content matches what CLI would install by running init and comparing.
@@ -331,9 +331,10 @@ test_cli_installs_from_plugin_source() {
     local CLI="$REPO_ROOT/cli/bin/sdlc-wizard.js"
     (cd "$d" && node "$CLI" init > /dev/null 2>&1)
     local ok=true
-    for skill in sdlc setup update feedback; do
-        local installed="$d/.claude/skills/$skill/SKILL.md"
-        local source="$REPO_ROOT/skills/$skill/SKILL.md"
+    for rel in sdlc/SKILL.md setup/SKILL.md update/SKILL.md feedback/SKILL.md \
+               conduct/SKILL.md conduct/references/protocol.md conduct/scripts/conduct.cjs; do
+        local installed="$d/.claude/skills/$rel"
+        local source="$REPO_ROOT/skills/$rel"
         [ -f "$installed" ] || { ok=false; continue; }
         [ -f "$source" ] || { ok=false; continue; }
         if ! diff -q "$installed" "$source" > /dev/null 2>&1; then

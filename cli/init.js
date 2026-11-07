@@ -36,6 +36,9 @@ const FILES = [
   { src: 'skills/setup/SKILL.md', dest: '.claude/skills/setup/SKILL.md', base: REPO_ROOT },
   { src: 'skills/update/SKILL.md', dest: '.claude/skills/update/SKILL.md', base: REPO_ROOT },
   { src: 'skills/feedback/SKILL.md', dest: '.claude/skills/feedback/SKILL.md', base: REPO_ROOT },
+  { src: 'skills/conduct/SKILL.md', dest: '.claude/skills/conduct/SKILL.md', base: REPO_ROOT },
+  { src: 'skills/conduct/references/protocol.md', dest: '.claude/skills/conduct/references/protocol.md', base: REPO_ROOT },
+  { src: 'skills/conduct/scripts/conduct.cjs', dest: '.claude/skills/conduct/scripts/conduct.cjs', base: REPO_ROOT },
 ];
 
 const WIZARD_HOOK_MARKERS = FILES
