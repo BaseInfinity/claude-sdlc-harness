@@ -172,7 +172,13 @@ exactly your prompt (a trailing newline aside), then presses the named "Send"
 button. It refuses on a wrong folder or prompt (exit 3) and stops if a
 control is missing or the script errors (exit 2). It prints `TRUSTED_SENT`
 when it pressed Trust. A caller that may not approve dialogs passes
-`--no-trust`: it never presses Trust and exits 4 if the folder needs it. The terminal needs the macOS Accessibility
+`--no-trust`: it never presses Trust and exits 4 if the folder needs it.
+
+To start a NEW Codex thread, which Codex Desktop lists under its folder, run
+`python3 scripts/codex-thread.py CWD PROMPT_FILE`. It prints `THREAD <id>`
+and the final answer, with a read-only sandbox and no approvals. Exit 0 means
+the turn completed. A Codex conductor that needs a new Claude Desktop session
+asks a Claude conductor to run `claude-desktop.sh`, through the ledger. The terminal needs the macOS Accessibility
 permission. `--dry-run` prints the link only. After the first turn, the session appears in
 `ListAgents` as a `Claude Desktop session`, and `SendMessage` reaches it.
 Verify by its transcript under `~/.claude/projects/` and its `ListAgents` row,

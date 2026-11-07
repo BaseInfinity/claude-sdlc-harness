@@ -217,6 +217,75 @@ drive_case "--no-trust presses nothing and exits 4" "NEEDS_TRUST 4 none" "[$T]" 
 drive_case "wrong prompt presses nothing and exits 3" "MISMATCH 3 none" \
     '[{"folderLabel":"Folder: ~/proj","composer":"bye","send":"S"}]' 1
 drive_case "a dialog that stays is TRUST_STUCK, exit 2" "TRUST_STUCK 2 T" "[$T,$T]" 1
+# codex-thread.py starts a new Codex thread (it appears in Codex Desktop).
+CTP="$SKILL_DIR/scripts/codex-thread.py"
+got=$(python3 -c '
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("ct", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+seq = m.handshake("/tmp/w")
+print(" ".join(x[0] for x in seq))
+ts = dict(seq)["thread/start"]
+print(ts["cwd"], ts["sandbox"], ts["approvalPolicy"])
+t = m.turn("T1", "hi")
+print(t["threadId"], t["input"][0]["type"], t["input"][0]["text"])
+' "$CTP" 2>&1)
+[ "$got" = $'initialize initialized thread/start\n/tmp/w read-only never\nT1 text hi' ] \
+    && pass "codex-thread.py builds initialize, thread/start, turn/start" \
+    || fail "codex-thread.py builds initialize, thread/start, turn/start (got: $got)"
+python3 "$CTP" rel/dir "$TMPDIR_T/p.txt" >/dev/null 2>&1; rc=$?
+[ "$rc" = 1 ] && pass "codex-thread.py refuses a relative cwd" \
+    || fail "codex-thread.py refuses a relative cwd (rc=$rc)"
+python3 "$CTP" /tmp "$TMPDIR_T/missing.txt" >/dev/null 2>&1; rc=$?
+[ "$rc" = 1 ] && pass "codex-thread.py refuses a missing prompt file" \
+    || fail "codex-thread.py refuses a missing prompt file (rc=$rc)"
+# A real pipe: two replies in one flush must both be readable (no select+readline stall).
+FAKE_TWO="$TMPDIR_T/two.py"
+cat > "$FAKE_TWO" <<'EOF'
+import sys, time
+sys.stdout.write('{"id":1,"result":{}}\n{"id":2,"result":{}}\n'); sys.stdout.flush()
+time.sleep(5)
+EOF
+got=$(python3 -c '
+import importlib.util, sys, time
+spec = importlib.util.spec_from_file_location("ct", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+s = m.Server(["python3", sys.argv[2]])
+a = s.wait(lambda x: x.get("id") == 1, 5)
+t = time.time(); b = s.wait(lambda x: x.get("id") == 2, 0.5)
+print(bool(a), bool(b), time.time() - t < 0.5); s.close()
+' "$CTP" "$FAKE_TWO" 2>&1)
+[ "$got" = "True True True" ] && pass "codex-thread.py reads two buffered replies at once" \
+    || fail "codex-thread.py reads two buffered replies at once (got: $got)"
+# A fake app-server whose turn fails: main must exit nonzero.
+FAKE_SRV="$TMPDIR_T/srv.py"
+cat > "$FAKE_SRV" <<'EOF'
+import json, sys, os
+status = os.environ["FAKE_STATUS"]
+for line in sys.stdin:
+    m = json.loads(line); meth = m.get("method")
+    if meth == "thread/start":
+        print(json.dumps({"id": m["id"], "result": {"thread": {"id": "T1"}}}), flush=True)
+    elif meth == "turn/start":
+        print(json.dumps({"id": m["id"], "result": {"turn": {"id": "U1"}}}), flush=True)
+        print(json.dumps({"method": "turn/completed", "params": {"threadId": "T1", "turn": {"id": "U1",
+            "status": status, "items": [{"type": "agentMessage", "text": "ACK"}]}}}), flush=True)
+    elif "id" in m:
+        print(json.dumps({"id": m["id"], "result": {}}), flush=True)
+EOF
+printf 'hi' > "$TMPDIR_T/ct.txt"
+for st in completed:0 failed:2 interrupted:2; do
+    rc=$(FAKE_STATUS="${st%%:*}" python3 -c '
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("ct", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+print(m.main("/tmp", sys.argv[3], ["python3", sys.argv[2]]))
+' "$CTP" "$FAKE_SRV" "$TMPDIR_T/ct.txt" 2>&1 | tail -1)
+    [ "$rc" = "${st##*:}" ] && pass "codex-thread.py turn ${st%%:*} -> exit ${st##*:}" \
+        || fail "codex-thread.py turn ${st%%:*} -> exit ${st##*:} (got: $rc)"
+done
+grep -qF 'scripts/codex-thread.py' "$SKILL" \
+    && pass "SKILL.md points at codex-thread.py" || fail "SKILL.md points at codex-thread.py"
 grep -qF 'scripts/claude-desktop.sh' "$SKILL" \
     && pass "SKILL.md points at claude-desktop.sh" || fail "SKILL.md points at claude-desktop.sh"
 grep -q '^## Reciprocal recovery' "$SKILL_DIR/references/protocol.md" \

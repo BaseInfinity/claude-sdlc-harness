@@ -332,7 +332,7 @@ test_cli_installs_from_plugin_source() {
     (cd "$d" && node "$CLI" init > /dev/null 2>&1)
     local ok=true
     for rel in sdlc/SKILL.md setup/SKILL.md update/SKILL.md feedback/SKILL.md \
-               conduct/SKILL.md conduct/references/protocol.md conduct/scripts/conduct.cjs conduct/scripts/claude-desktop.sh conduct/scripts/claude-desktop.py; do
+               conduct/SKILL.md conduct/references/protocol.md conduct/scripts/conduct.cjs conduct/scripts/claude-desktop.sh conduct/scripts/claude-desktop.py conduct/scripts/codex-thread.py; do
         local installed="$d/.claude/skills/$rel"
         local source="$REPO_ROOT/skills/$rel"
         [ -f "$installed" ] || { ok=false; continue; }
