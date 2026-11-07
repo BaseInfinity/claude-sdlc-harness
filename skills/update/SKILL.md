@@ -224,13 +224,13 @@ If `cli/init.js` later adds wizard marketplace names, append verbatim.
 
 If CC < v2.1.170: skip. Resolve the live driver from the `model` pin, or — unpinned — your self-reported model name (`/model` without saving persists nothing).
 
-1. **Live driver is Fable** (pin `"fable"`/`"claude-fable-5"`/`"claude-fable-5"`, or unpinned + live identity Fable) — fires even with `advisorModel` already set (`/setup` 9.5 never offers Fable as driver, always a misconfig). If `advisorModel` is `"claude-fable-5"` or `"fable"`, migrate to `"claude-fable-5"`. Show:
+1. **Live driver is Fable** (pin `"fable"`/`"claude-fable-5"`/`"claude-fable-5-1"`, or unpinned + live identity Fable) — fires even with `advisorModel` already set (`/setup` 9.5 never offers Fable as driver, always a misconfig). If `advisorModel` is `"claude-fable-5"` or `"fable"`, migrate to `"claude-fable-5-1"`. Show:
 
-> **Model Setup** — Fable-as-driver isn't recommended; it can trigger safeguard auto-switches on medical/legal/bio content mid-session. **Reliable:** Opus 4.6[1m] + GPT-5.5 + Fable 5 (recommended default). **Frontier:** Opus 5 + GPT-5.6 Sol + Fable 5 (experimental, unproven by field data). **Setup B:** Sonnet 5 driver + Fable 5 advisor (Simple/One-Off, generally lower quota than Opus 5, narrows at high effort). `[r/f/S]`?
+> **Model Setup** — Fable-as-driver isn't recommended; it can trigger safeguard auto-switches on medical/legal/bio content mid-session. **Reliable:** Opus 4.6[1m] + GPT-5.6 Sol + Fable 5.1 (recommended default). **Frontier:** Opus 5.5 + GPT-5.6 Sol + Fable 5.1 (experimental, unproven by field data). **Setup B:** Sonnet 5 driver + Fable 5.1 advisor (Simple/One-Off, generally lower quota than Opus 5.5, narrows at high effort). `[r/f/S]`?
 
-`[r]` writes `model: "claude-opus-4-6[1m]"`, `advisorModel: "claude-fable-5"` (no effortLevel — use `/effort max` per session). `[f]` writes `model: "claude-opus-5"`, `advisorModel: "claude-fable-5"`, `effortLevel: "xhigh"` (Frontier — experimental). `[S]` (default): no change.
+`[r]` writes `model: "claude-opus-4-6[1m]"`, `advisorModel: "claude-fable-5-1"` (no effortLevel — use `/effort max` per session). `[f]` writes `model: "claude-opus-5-5"`, `advisorModel: "claude-fable-5-1"`, `effortLevel: "high"` (Frontier — experimental). `[S]` (default): no change.
 
-2. **Pin exists (non-Fable), no `advisorModel`:** suggest per driver (`sonnet`/`opus`/`claude-opus-4-6`/`claude-opus-4-8` → `advisorModel: "claude-fable-5"`, `opusplan` → `"claude-fable-5"`). `[a/S]`; `[a]` writes **only** `advisorModel`, driver untouched.
+2. **Pin exists (non-Fable), no `advisorModel`:** suggest per driver (`sonnet`/`opus`/`claude-opus-4-6`/`claude-opus-4-8` → `advisorModel: "claude-fable-5-1"`, `opusplan` → `"claude-fable-5-1"`). `[a/S]`; `[a]` writes **only** `advisorModel`, driver untouched.
 3. **No pin, live driver not Fable, or `advisorModel` set:** skip.
 
 ### Step 7.9: Effort Configuration Check (#384)
