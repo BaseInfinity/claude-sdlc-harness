@@ -2,6 +2,7 @@
 name: conduct
 description: "Coordinate registered Claude and Codex sessions for bounded reviews, design questions, and task handoffs. One Conductor, one shared protocol and helper on both ends. Use when the user asks to consult, dispatch to, review with, or coordinate another Claude or Codex session (CLI now; desktop once an adapter exposes it)."
 argument-hint: "[list | send <target> <message> | reply <request-id>]"
+effort: medium
 ---
 # Conduct — Claude adapter
 
