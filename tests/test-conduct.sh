@@ -346,6 +346,40 @@ s = m.Server(["python3", "-c", "import sys; sys.stdin.read()"]); print(s.p.stdou
 want=$'cmd.exe /d /s /c ""C:\\Program Files\\npm\\codex.cmd" app-server --listen stdio://"\n[\'C:\\\\bin\\\\codex.exe\', \'app-server\', \'--listen\', \'stdio://\']\n[\'codex\', \'app-server\', \'--listen\', \'stdio://\']\nutf-8'
 [ "$got" = "$want" ] && pass "codex-thread.py launches a Windows npm .cmd shim via cmd.exe, UTF-8 pipes" \
     || fail "codex-thread.py launches a Windows npm .cmd shim via cmd.exe, UTF-8 pipes (got: $got)"
+# The real CLI, against a fake `codex` first on PATH.
+FAKE_BIN="$TMPDIR_T/fakebin"; mkdir -p "$FAKE_BIN"
+cat > "$FAKE_BIN/codex" <<'EOF'
+#!/usr/bin/env python3
+import json, os, sys, time
+sys.stdout.reconfigure(encoding="utf-8")  # the real server is not Python; ignore the test locale
+def out(o): sys.stdout.write(json.dumps(o, ensure_ascii=False) + "\n"); sys.stdout.flush()
+mode = os.environ.get("FAKE_MODE")
+for line in sys.stdin:
+    m = json.loads(line); meth = m.get("method")
+    if mode == "closed" and meth == "initialize":
+        os.close(0); out({"id": m["id"], "result": {}}); time.sleep(30); sys.exit(0)
+    if meth == "thread/start":
+        out({"id": m["id"], "result": {"thread": {"id": "T1"}}})
+    elif meth == "turn/start":
+        out({"id": m["id"], "result": {"turn": {"id": "U1"}}})
+        out({"method": "turn/completed", "params": {"threadId": "T1", "turn": {"id": "U1",
+             "status": "completed", "items": [{"type": "agentMessage", "text": "中文答案"}]}}})
+    elif "id" in m:
+        out({"id": m["id"], "result": {}})
+EOF
+chmod +x "$FAKE_BIN/codex"
+got=$(PATH="$FAKE_BIN:$PATH" PYTHONIOENCODING=cp1252 PYTHONUTF8=0 python3 "$CTP" /tmp "$TMPDIR_T/ct.txt" 2>&1; echo "rc=$?")
+[ "$got" = $'THREAD T1\n中文答案\nrc=0' ] \
+    && pass "codex-thread.py CLI prints the answer as UTF-8 on a cp1252 stdout" \
+    || fail "codex-thread.py CLI prints the answer as UTF-8 on a cp1252 stdout (got: $got)"
+start=$(date +%s)
+got=$(PATH="$FAKE_BIN:$PATH" FAKE_MODE=closed python3 "$CTP" /tmp "$TMPDIR_T/ct.txt" 2>&1; echo "rc=$?")
+took=$(( $(date +%s) - start ))
+case "$got" in
+    SERVER_IO_FAILED*rc=2) [ "$took" -lt 20 ] && pass "codex-thread.py exits 2 when the server closes its stdin" \
+        || fail "codex-thread.py exits 2 when the server closes its stdin (took ${took}s)" ;;
+    *) fail "codex-thread.py exits 2 when the server closes its stdin (got: $got)" ;;
+esac
 grep -qF 'scripts/codex-thread.py' "$SKILL" \
     && pass "SKILL.md points at codex-thread.py" || fail "SKILL.md points at codex-thread.py"
 grep -qF 'scripts/claude-desktop.sh' "$SKILL" \

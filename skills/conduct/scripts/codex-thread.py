@@ -10,7 +10,8 @@ notifications when the server leaves those items empty.
 
 Usage: python3 codex-thread.py CWD PROMPT_FILE
 Prints "THREAD <id>" then the final answer. Exit 0 when the turn completes,
-1 on bad arguments, 2 when the server fails or the turn is not "completed"
+1 on bad arguments, 2 when the server fails to start, its pipes break, or
+the turn is not "completed"
 (failed, interrupted, or no turn/completed within 300 s).
 Observed on codex-cli 0.167.0.
 """
@@ -123,6 +124,10 @@ lands before the reply it follows is not lost."""
             self.backlog.append(msg)
 
     def close(self):
+        try:
+            self.p.stdin.close()
+        except OSError:
+            pass
         self.p.terminate()
         try:
             self.p.wait(timeout=5)
@@ -173,6 +178,9 @@ def main(cwd, prompt_file, cmd=None, turn_timeout=300):
         texts = [i.get("text", "") for i in items if i.get("type") == "agentMessage"]
         print(texts[-1] if texts else "")
         return 0
+    except OSError as e:
+        print("SERVER_IO_FAILED %s" % (e.strerror or e))
+        return 2
     finally:
         srv.close()
 
@@ -181,4 +189,6 @@ if __name__ == "__main__":
     if len(sys.argv) != 3 or not valid_cwd(sys.argv[1]) or not os.path.isfile(sys.argv[2]):
         print("usage: codex-thread.py ABSOLUTE_CWD PROMPT_FILE", file=sys.stderr)
         sys.exit(1)
+    # Callers parse this output, so it is UTF-8 whatever the locale says.
+    sys.stdout.reconfigure(encoding="utf-8")
     sys.exit(main(sys.argv[1], sys.argv[2]))
