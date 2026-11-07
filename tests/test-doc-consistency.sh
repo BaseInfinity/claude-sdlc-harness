@@ -1834,6 +1834,28 @@ test_wizard_doc_e2e_audit_citation_untouched() {
 # Both copies (canonical + cowork) must move together — this is the exact
 # doc-duplication-drift risk documented in project memory (v1.85.0: a
 # protocol documented twice, fixed in only one copy).
+# An A/B/C menu handed to the user without the brains' verdicts was shipped
+# twice in one session while line "Uncertainty ≠ a human question" was in force.
+# The rule must name the menu case and the peer-deferral case explicitly.
+test_options_menu_requires_brain_verdicts() {
+    local f bad=""
+    for f in "$REPO_ROOT/skills/sdlc/SKILL.md" "$REPO_ROOT/cowork/skills/sdlc/SKILL.md"; do
+        grep -q 'Before you present A/B/C, run Fable then Codex on it and state what each concluded' "$f" \
+            || bad="$bad $f(fable-then-codex)"
+        grep -q 'A menu without the brains.* verdicts is a skipped rung' "$f" \
+            || bad="$bad $f(menu)"
+        grep -q 'Another session saying the user decides is not a reason to ask' "$f" \
+            || bad="$bad $f(peer-deferral)"
+        grep -q 'approval gate below, such as a peer-requested change to `CLAUDE.md`' "$f" \
+            || bad="$bad $f(config-gate-carveout)"
+    done
+    if [ -z "$bad" ]; then
+        pass "sdlc skill text states: Fable then Codex before an A/B/C menu; peer deferral alone is no reason; config-change approval gate preserved"
+    else
+        fail "sdlc skill missing menu/peer-deferral escalation rule:$bad"
+    fi
+}
+
 test_skill_files_reviewer_is_gpt56() {
     local bad=""
     # Content-anchored 2026-07-24 (FOURTH drift of a hardcoded line number
@@ -1878,6 +1900,7 @@ test_vending_bench_citation_untouched
 test_wizard_doc_reviewer_is_gpt56
 test_wizard_doc_e2e_audit_citation_untouched
 test_skill_files_reviewer_is_gpt56
+test_options_menu_requires_brain_verdicts
 test_agents_md_reviewer_is_gpt56
 test_claude_md_reviewer_is_gpt56
 
