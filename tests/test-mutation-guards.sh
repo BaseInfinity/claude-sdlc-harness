@@ -22,6 +22,9 @@ trap 'rm -rf "$BACKUP_DIR"' EXIT
 
 backup() { cp "$1" "$BACKUP_DIR/$(basename "$1").bak"; }
 restore() { cp "$BACKUP_DIR/$(basename "$1").bak" "$1"; }
+# In-place sed that works on GNU (CI) and BSD (macOS): the suffix must be
+# attached to -i, then the backup is removed. The file is the last argument.
+sedi() { local f="${*: -1}"; sed -i.mutbak "$@" && rm -f "$f.mutbak"; }
 
 echo "=== Mutation Tests for Regression Guards (#730) ==="
 echo ""
@@ -37,7 +40,7 @@ echo "── Effort per model ──"
 test_mutation_effort_opus48_wrong() {
     backup "$LANES"
     # Mutation: change "Opus 4.8: `xhigh`" to "Opus 4.8: `medium`"
-    sed -i '' 's/Opus 4\.8: `xhigh`/Opus 4.8: `medium`/' "$LANES"
+    sedi 's/Opus 4\.8: `xhigh`/Opus 4.8: `medium`/' "$LANES"
     local ok=true
     grep -qF 'Opus 4.8: `xhigh`' "$LANES" && ok=false  # should NOT find it
     restore "$LANES"
@@ -50,7 +53,7 @@ test_mutation_effort_opus48_wrong() {
 
 test_mutation_effort_opus46_wrong() {
     backup "$LANES"
-    sed -i '' 's/Opus 4\.6: `max`/Opus 4.6: `high`/' "$LANES"
+    sedi 's/Opus 4\.6: `max`/Opus 4.6: `high`/' "$LANES"
     local ok=true
     grep -qF 'Opus 4.6: `max`' "$LANES" && ok=false
     restore "$LANES"
@@ -64,7 +67,7 @@ test_mutation_effort_opus46_wrong() {
 test_mutation_effort_sonnet5_wrong() {
     backup "$LANES"
     # Mutation: change Sonnet 5's medium to max
-    sed -i '' '/Sonnet 5/s/`medium`/`max`/' "$LANES"
+    sedi '/Sonnet 5/s/`medium`/`max`/' "$LANES"
     local out
     out=$(grep -E 'Sonnet 5.*`medium`' "$LANES" || true)
     restore "$LANES"
@@ -108,7 +111,7 @@ echo "── TDD gate ──"
 test_mutation_tdd_gate_exit2_removed() {
     backup "$HOOK"
     # Mutation: comment out the exit 2 that blocks implementation-first edits
-    sed -i '' 's/exit 2$/# exit 2 MUTATED/' "$HOOK"
+    sedi 's/exit 2$/# exit 2 MUTATED/' "$HOOK"
     local cache="${TMPDIR:-/tmp}/sdlc-mutation-tdd-$$"
     mkdir -p "$cache"
     local payload='{"tool_input":{"file_path":"/proj/src/foo.ts"},"session_id":"mut-test-gate"}'
@@ -126,7 +129,7 @@ test_mutation_tdd_gate_exit2_removed() {
 test_mutation_tdd_nudge_removed() {
     backup "$HOOK"
     # Mutation: delete the TDD CHECK output line
-    sed -i '' '/TDD CHECK.*IMPLEMENTATION.*FAILING TEST/d' "$HOOK"
+    sedi '/TDD CHECK.*IMPLEMENTATION.*FAILING TEST/d' "$HOOK"
     local cache="${TMPDIR:-/tmp}/sdlc-mutation-tdd2-$$"
     mkdir -p "$cache"
     # Prime the test-touched sentinel
@@ -156,7 +159,7 @@ echo "── Exhaust-driver-first ──"
 test_mutation_exhaust_driver_skill() {
     backup "$SKILL"
     # Mutation: delete the exhaust-driver paragraph
-    sed -i '' '/\*\*Exhaust the driver before escalating/,/^$/d' "$SKILL"
+    sedi '/\*\*Exhaust the driver before escalating/,/^$/d' "$SKILL"
     local ok=true
     grep -qiF 'Exhaust the driver before escalating' "$SKILL" && ok=false
     restore "$SKILL"
@@ -170,7 +173,7 @@ test_mutation_exhaust_driver_skill() {
 test_mutation_exhaust_driver_skill_pass_forward() {
     backup "$SKILL"
     # Mutation: remove "pass forward" from the exhaust-driver paragraph
-    sed -i '' 's/pass forward/hand off/g' "$SKILL"
+    sedi 's/pass forward/hand off/g' "$SKILL"
     local found=false
     grep -qiF 'pass forward' "$SKILL" && found=true
     restore "$SKILL"
@@ -184,8 +187,8 @@ test_mutation_exhaust_driver_skill_pass_forward() {
 test_mutation_exhaust_driver_lanes() {
     backup "$LANES"
     # Mutation: remove the exhausted/swap escalation language
-    sed -i '' '/exhausted.*takes over/d' "$LANES"
-    sed -i '' '/repeated failure.*different eyes/d' "$LANES"
+    sedi '/exhausted.*takes over/d' "$LANES"
+    sedi '/repeated failure.*different eyes/d' "$LANES"
     local ok_exhaust=true ok_eyes=true
     grep -qF 'exhausted' "$LANES" && ok_exhaust=false
     grep -qE 'repeated failure.*different eyes' "$LANES" && ok_eyes=false
