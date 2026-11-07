@@ -284,6 +284,15 @@ print(m.main("/tmp", sys.argv[3], ["python3", sys.argv[2]]))
     [ "$rc" = "${st##*:}" ] && pass "codex-thread.py turn ${st%%:*} -> exit ${st##*:}" \
         || fail "codex-thread.py turn ${st%%:*} -> exit ${st##*:} (got: $rc)"
 done
+got=$(python3 -c '
+import importlib.util, ntpath, sys
+spec = importlib.util.spec_from_file_location("ct", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+print(m.valid_cwd("C:\\work", ntpath.isabs), m.valid_cwd("\\\\srv\\share\\w", ntpath.isabs),
+      m.valid_cwd("work", ntpath.isabs), m.valid_cwd("/tmp"), m.valid_cwd("rel"))
+' "$CTP" 2>&1)
+[ "$got" = "True True False True False" ] && pass "codex-thread.py accepts native absolute paths (POSIX, Windows, UNC)" \
+    || fail "codex-thread.py accepts native absolute paths (got: $got)"
 grep -qF 'scripts/codex-thread.py' "$SKILL" \
     && pass "SKILL.md points at codex-thread.py" || fail "SKILL.md points at codex-thread.py"
 grep -qF 'scripts/claude-desktop.sh' "$SKILL" \

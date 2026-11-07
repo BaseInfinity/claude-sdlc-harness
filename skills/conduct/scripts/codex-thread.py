@@ -19,6 +19,11 @@ import threading
 import time
 
 
+def valid_cwd(path, isabs=os.path.isabs):
+    """True for an absolute path on this platform (POSIX, C:\\ or UNC)."""
+    return isabs(path)
+
+
 def handshake(cwd):
     return [
         ("initialize", {"clientInfo": {"name": "conduct", "version": "1"}}),
@@ -123,7 +128,7 @@ def main(cwd, prompt_file, cmd=None):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3 or not sys.argv[1].startswith("/") or not os.path.isfile(sys.argv[2]):
+    if len(sys.argv) != 3 or not valid_cwd(sys.argv[1]) or not os.path.isfile(sys.argv[2]):
         print("usage: codex-thread.py ABSOLUTE_CWD PROMPT_FILE", file=sys.stderr)
         sys.exit(1)
     sys.exit(main(sys.argv[1], sys.argv[2]))
