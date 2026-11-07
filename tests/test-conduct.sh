@@ -146,6 +146,50 @@ for c in \
     grep -qF -- "$c" "$SKILL" && pass "Desktop route: ${c:0:45}" \
         || fail "Desktop route: ${c:0:45}"
 done
+# Claude Desktop driver: URL building and refusals are testable without a GUI.
+DESK="$SKILL_DIR/scripts/claude-desktop.sh"
+[ -x "$DESK" ] && pass "claude-desktop.sh ships executable" || fail "claude-desktop.sh ships executable"
+printf 'x & y?' > "$TMPDIR_T/p.txt"
+got=$("$DESK" --dry-run "/tmp/a b" "$TMPDIR_T/p.txt" 2>&1 || true)
+[ "$got" = 'claude://code/new?folder=%2Ftmp%2Fa%20b&q=x%20%26%20y%3F&source=services' ] \
+    && pass "claude-desktop.sh url-encodes folder and prompt" \
+    || fail "claude-desktop.sh url-encodes folder and prompt (got: $got)"
+"$DESK" --dry-run "rel/dir" "$TMPDIR_T/p.txt" >/dev/null 2>&1 \
+    && fail "claude-desktop.sh refuses a relative folder" \
+    || pass "claude-desktop.sh refuses a relative folder"
+"$DESK" --dry-run "/tmp" "$TMPDIR_T/missing.txt" >/dev/null 2>&1 \
+    && fail "claude-desktop.sh refuses a missing prompt file" \
+    || pass "claude-desktop.sh refuses a missing prompt file"
+# decide() is the whole send/refuse policy; run it with fake snapshots.
+DPY="$SKILL_DIR/scripts/claude-desktop.py"
+decide_case() { # name expected snapshot-json [prompt]
+    local got
+    got=$(python3 -c '
+import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location("cd", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+print(m.decide(json.loads(sys.argv[2]), "/Users/u/proj", "/Users/u", sys.argv[3]))
+' "$DPY" "$3" "${4:-hi there}" 2>&1)
+    [ "$got" = "$2" ] && pass "decide: $1" || fail "decide: $1 (want $2, got $got)"
+}
+OK='"folderLabel":"Folder: ~/proj","send":true'
+decide_case "sends the exact prompt in the right folder" SEND "{$OK,\"composer\":\"hi there\"}"
+decide_case "ignores only a trailing newline" SEND "{$OK,\"composer\":\"hi there\"}" $'hi there\n'
+decide_case "refuses a trimmed-equal prompt" MISMATCH "{$OK,\"composer\":\" hi there\"}"
+decide_case "refuses an empty composer" MISMATCH "{$OK,\"composer\":\"\"}"
+decide_case "stops without a composer" NO_COMPOSER "{$OK}"
+decide_case "stops without a Send button" NO_SEND \
+    '{"folderLabel":"Folder: ~/proj","composer":"hi there"}'
+decide_case "refuses another session's folder" WRONG_FOLDER \
+    '{"folderLabel":"Folder: ~/other","composer":"hi there","send":true}'
+decide_case "refuses a session with no folder label" WRONG_FOLDER \
+    '{"composer":"hi there","send":true}'
+decide_case "trusts only this folder" TRUST '{"trust":true,"trustPath":"/Users/u/proj"}'
+decide_case "refuses to trust another folder" WRONG_FOLDER \
+    '{"trust":true,"trustPath":"/Users/u/proj-evil"}'
+decide_case "refuses a trust dialog without a path" WRONG_FOLDER '{"trust":true}'
+grep -qF 'scripts/claude-desktop.sh' "$SKILL" \
+    && pass "SKILL.md points at claude-desktop.sh" || fail "SKILL.md points at claude-desktop.sh"
 grep -q '^## Reciprocal recovery' "$SKILL_DIR/references/protocol.md" \
     && pass "protocol.md carries Reciprocal recovery" \
     || fail "protocol.md carries Reciprocal recovery"

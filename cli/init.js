@@ -39,6 +39,8 @@ const FILES = [
   { src: 'skills/conduct/SKILL.md', dest: '.claude/skills/conduct/SKILL.md', base: REPO_ROOT },
   { src: 'skills/conduct/references/protocol.md', dest: '.claude/skills/conduct/references/protocol.md', base: REPO_ROOT },
   { src: 'skills/conduct/scripts/conduct.cjs', dest: '.claude/skills/conduct/scripts/conduct.cjs', base: REPO_ROOT },
+  { src: 'skills/conduct/scripts/claude-desktop.sh', dest: '.claude/skills/conduct/scripts/claude-desktop.sh', base: REPO_ROOT, executable: true },
+  { src: 'skills/conduct/scripts/claude-desktop.py', dest: '.claude/skills/conduct/scripts/claude-desktop.py', base: REPO_ROOT },
 ];
 
 const WIZARD_HOOK_MARKERS = FILES

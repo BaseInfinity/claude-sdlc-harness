@@ -162,8 +162,16 @@ The link opens a new Desktop Code session and pre-fills the prompt; it does not 
 Submitting needs Enter in Desktop, pressed by the user, or by an agent that
 can currently see that window through computer use the user has granted for Claude.
 Never press Enter blind: computer use served by Claude Desktop cannot capture
-Desktop's own window, so a Claude conductor hands this step to the user.
-That capture limit is not a hang. After the first turn, the session appears in
+Desktop's own window. That capture limit is not a hang.
+
+Instead, run `scripts/claude-desktop.sh FOLDER PROMPT_FILE` (write the prompt
+with the Write tool first). It opens the link, enables Electron accessibility,
+presses the named "Trust workspace" button only when that dialog names your
+folder, checks the session's "Folder:" label and that the "Prompt" box holds
+exactly your prompt (a trailing newline aside), then presses the named "Send"
+button. It refuses on a wrong folder or prompt (exit 3) and stops if a
+control is missing or the script errors (exit 2). The terminal needs the macOS Accessibility
+permission. `--dry-run` prints the link only. After the first turn, the session appears in
 `ListAgents` as a `Claude Desktop session`, and `SendMessage` reaches it.
 Verify by its transcript under `~/.claude/projects/` and its `ListAgents` row,
 not by a new socket: Desktop keeps pre-started standby processes.
