@@ -92,7 +92,11 @@ class Server:
 def main(cwd, prompt_file, cmd=None):
     with open(prompt_file, encoding="utf-8") as f:
         prompt = f.read().rstrip("\n")
-    srv = Server(cmd)
+    try:
+        srv = Server(cmd)
+    except OSError as e:
+        print("SERVER_START_FAILED %s" % e.strerror)
+        return 2
     try:
         reply = None
         for method, params in handshake(cwd):

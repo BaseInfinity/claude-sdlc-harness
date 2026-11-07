@@ -293,6 +293,14 @@ print(m.valid_cwd("C:\\work", ntpath.isabs), m.valid_cwd("\\\\srv\\share\\w", nt
 ' "$CTP" 2>&1)
 [ "$got" = "True True False True False" ] && pass "codex-thread.py accepts native absolute paths (POSIX, Windows, UNC)" \
     || fail "codex-thread.py accepts native absolute paths (got: $got)"
+got=$(python3 -c '
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("ct", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+print(m.main("/tmp", sys.argv[2], ["/nonexistent/codex-missing"]))
+' "$CTP" "$TMPDIR_T/ct.txt" 2>&1 | tail -2 | tr '\n' ' ')
+case "$got" in "SERVER_START_FAILED"*" 2 ") pass "codex-thread.py exits 2 when codex cannot start" ;;
+    *) fail "codex-thread.py exits 2 when codex cannot start (got: $got)" ;; esac
 grep -qF 'scripts/codex-thread.py' "$SKILL" \
     && pass "SKILL.md points at codex-thread.py" || fail "SKILL.md points at codex-thread.py"
 grep -qF 'scripts/claude-desktop.sh' "$SKILL" \
