@@ -136,6 +136,12 @@ lands before the reply it follows is not lost."""
             self.p.wait(timeout=5)
 
 
+def cli_stdout(stream):
+    """Callers parse CLI output byte for byte: UTF-8 whatever the locale says,
+    and no newline translation, so Windows never turns \n into \r\n."""
+    stream.reconfigure(encoding="utf-8", newline="\n")
+
+
 def main(cwd, prompt_file, cmd=None, turn_timeout=300):
     with open(prompt_file, encoding="utf-8") as f:
         prompt = f.read().rstrip("\n")
@@ -176,7 +182,8 @@ def main(cwd, prompt_file, cmd=None, turn_timeout=300):
             if m.get("method") == "item/completed"
             and m["params"].get("threadId") == tid and m["params"].get("turnId") == uid]
         texts = [i.get("text", "") for i in items if i.get("type") == "agentMessage"]
-        print(texts[-1] if texts else "")
+        answer = texts[-1] if texts else ""
+        sys.stdout.write(answer if answer.endswith("\n") else answer + "\n")
         return 0
     except OSError as e:
         print("SERVER_IO_FAILED %s" % (e.strerror or e))
@@ -189,6 +196,5 @@ if __name__ == "__main__":
     if len(sys.argv) != 3 or not valid_cwd(sys.argv[1]) or not os.path.isfile(sys.argv[2]):
         print("usage: codex-thread.py ABSOLUTE_CWD PROMPT_FILE", file=sys.stderr)
         sys.exit(1)
-    # Callers parse this output, so it is UTF-8 whatever the locale says.
-    sys.stdout.reconfigure(encoding="utf-8")
+    cli_stdout(sys.stdout)
     sys.exit(main(sys.argv[1], sys.argv[2]))

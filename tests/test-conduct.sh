@@ -363,7 +363,8 @@ for line in sys.stdin:
     elif meth == "turn/start":
         out({"id": m["id"], "result": {"turn": {"id": "U1"}}})
         out({"method": "turn/completed", "params": {"threadId": "T1", "turn": {"id": "U1",
-             "status": "completed", "items": [{"type": "agentMessage", "text": "中文答案"}]}}})
+             "status": "completed", "items": [{"type": "agentMessage",
+             "text": os.environ.get("FAKE_ANSWER", "中文答案")}]}}})
     elif "id" in m:
         out({"id": m["id"], "result": {}})
 EOF
@@ -380,6 +381,25 @@ case "$got" in
         || fail "codex-thread.py exits 2 when the server closes its stdin (took ${took}s)" ;;
     *) fail "codex-thread.py exits 2 when the server closes its stdin (got: $got)" ;;
 esac
+# The answer is printed as given, plus one newline only when it has none.
+for case in 'a|a\n' 'a\n|a\n' 'a\n\n|a\n\n' 'a\nb\n\n\n|a\nb\n\n\n'; do
+    ans=$(printf '%b' "${case%%|*}x"); ans=${ans%x}
+    want=$(printf 'THREAD T1\n%bx' "${case#*|}"); want=${want%x}
+    PATH="$FAKE_BIN:$PATH" FAKE_ANSWER="$ans" python3 "$CTP" /tmp "$TMPDIR_T/ct.txt" > "$TMPDIR_T/out.bin" 2>&1
+    printf '%s' "$want" > "$TMPDIR_T/want.bin"
+    cmp -s "$TMPDIR_T/out.bin" "$TMPDIR_T/want.bin" \
+        && pass "codex-thread.py frames answer '${case%%|*}' exactly" \
+        || fail "codex-thread.py frames answer '${case%%|*}' exactly (got: $(od -c "$TMPDIR_T/out.bin" | head -2 | tr '\n' ' '))"
+done
+got=$(python3 -c '
+import importlib.util, io, sys
+spec = importlib.util.spec_from_file_location("ct", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+buf = io.BytesIO(); w = io.TextIOWrapper(buf, encoding="cp1252", newline="\r\n")
+m.cli_stdout(w); w.write("中\n"); w.flush(); print(buf.getvalue() == "中\n".encode("utf-8"))
+' "$CTP" 2>&1)
+[ "$got" = "True" ] && pass "codex-thread.py CLI stdout is UTF-8 and never translates newlines" \
+    || fail "codex-thread.py CLI stdout is UTF-8 and never translates newlines (got: $got)"
 grep -qF 'scripts/codex-thread.py' "$SKILL" \
     && pass "SKILL.md points at codex-thread.py" || fail "SKILL.md points at codex-thread.py"
 grep -qF 'scripts/claude-desktop.sh' "$SKILL" \
