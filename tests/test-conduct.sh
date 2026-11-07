@@ -162,14 +162,14 @@ got=$("$DESK" --dry-run "/tmp/a b" "$TMPDIR_T/p.txt" 2>&1 || true)
     || pass "claude-desktop.sh refuses a missing prompt file"
 # decide() is the whole send/refuse policy; run it with fake snapshots.
 DPY="$SKILL_DIR/scripts/claude-desktop.py"
-decide_case() { # name expected snapshot-json [prompt]
+decide_case() { # name expected snapshot-json [prompt] [allow_trust]
     local got
     got=$(python3 -c '
 import importlib.util, json, sys
 spec = importlib.util.spec_from_file_location("cd", sys.argv[1])
 m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
-print(m.decide(json.loads(sys.argv[2]), "/Users/u/proj", "/Users/u", sys.argv[3]))
-' "$DPY" "$3" "${4:-hi there}" 2>&1)
+print(m.decide(json.loads(sys.argv[2]), "/Users/u/proj", "/Users/u", sys.argv[3], sys.argv[4] == "1"))
+' "$DPY" "$3" "${4:-hi there}" "${5:-1}" 2>&1)
     [ "$got" = "$2" ] && pass "decide: $1" || fail "decide: $1 (want $2, got $got)"
 }
 OK='"folderLabel":"Folder: ~/proj","send":true'
@@ -188,6 +188,35 @@ decide_case "trusts only this folder" TRUST '{"trust":true,"trustPath":"/Users/u
 decide_case "refuses to trust another folder" WRONG_FOLDER \
     '{"trust":true,"trustPath":"/Users/u/proj-evil"}'
 decide_case "refuses a trust dialog without a path" WRONG_FOLDER '{"trust":true}'
+decide_case "--no-trust stops at this folder's trust dialog" NEEDS_TRUST \
+    '{"trust":true,"trustPath":"/Users/u/proj"}' "hi there" 0
+decide_case "--no-trust still sends in a trusted folder" SEND "{$OK,\"composer\":\"hi there\"}" "hi there" 0
+got=$("$DESK" --no-trust --dry-run "/tmp/a b" "$TMPDIR_T/p.txt" 2>&1 || true)
+[ "$got" = 'claude://code/new?folder=%2Ftmp%2Fa%20b&q=x%20%26%20y%3F&source=services' ] \
+    && pass "claude-desktop.sh accepts --no-trust with --dry-run" \
+    || fail "claude-desktop.sh accepts --no-trust with --dry-run (got: $got)"
+# drive() is the press sequence; run it with scripted scans and record presses.
+drive_case() { # name expected scans-json allow_trust
+    local got
+    got=$(python3 -c '
+import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location("cd", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+scans, pressed = json.loads(sys.argv[2]), []
+def press(el): pressed.append(el); return True
+r = m.drive(lambda: scans.pop(0), press, "/Users/u/proj", "/Users/u", "hi", sys.argv[3] == "1", wait=lambda s: None)
+print(r, m.EXIT.get(r, 2), "+".join(pressed) or "none")
+' "$DPY" "$3" "$4" 2>&1)
+    [ "$got" = "$2" ] && pass "drive: $1" || fail "drive: $1 (want $2, got $got)"
+}
+T='{"trust":"T","trustPath":"/Users/u/proj"}'
+R='{"folderLabel":"Folder: ~/proj","composer":"hi","send":"S"}'
+drive_case "trusted folder sends once" "SENT 0 S" "[$R]" 1
+drive_case "presses Trust then Send and says so" "TRUSTED_SENT 0 T+S" "[$T,$R]" 1
+drive_case "--no-trust presses nothing and exits 4" "NEEDS_TRUST 4 none" "[$T]" 0
+drive_case "wrong prompt presses nothing and exits 3" "MISMATCH 3 none" \
+    '[{"folderLabel":"Folder: ~/proj","composer":"bye","send":"S"}]' 1
+drive_case "a dialog that stays is TRUST_STUCK, exit 2" "TRUST_STUCK 2 T" "[$T,$T]" 1
 grep -qF 'scripts/claude-desktop.sh' "$SKILL" \
     && pass "SKILL.md points at claude-desktop.sh" || fail "SKILL.md points at claude-desktop.sh"
 grep -q '^## Reciprocal recovery' "$SKILL_DIR/references/protocol.md" \

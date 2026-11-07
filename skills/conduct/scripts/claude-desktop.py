@@ -12,10 +12,12 @@ import sys
 import time
 
 
-def decide(s, folder, home, expect):
+def decide(s, folder, home, expect, allow_trust=True):
     shown = "~" + folder[len(home):] if folder.startswith(home + "/") else folder
     if s.get("trust"):
-        return "TRUST" if s.get("trustPath") == folder else "WRONG_FOLDER"
+        if s.get("trustPath") != folder:
+            return "WRONG_FOLDER"
+        return "TRUST" if allow_trust else "NEEDS_TRUST"
     if s.get("folderLabel") != "Folder: " + shown:
         return "WRONG_FOLDER"
     if s.get("composer") is None:
@@ -113,7 +115,7 @@ def scan(ax, win):
     return s
 
 
-def main(pid, folder, prompt_file):
+def main(pid, folder, prompt_file, allow_trust):
     with open(prompt_file, encoding="utf-8") as f:
         expect = f.read()
     home = os.path.expanduser("~")
@@ -127,20 +129,33 @@ def main(pid, folder, prompt_file):
     win = ax.get(app, "AXFocusedWindow") or ax.get(app, "AXMainWindow")
     if not win:
         return "NO_WINDOW"
-    s = scan(ax, win)
-    d = decide(s, folder, home, expect)
-    if d == "TRUST":
-        if not ax.press(s["trust"]):
+    return drive(lambda: scan(ax, win), ax.press, folder, home, expect, allow_trust)
+
+
+def drive(scan_fn, press, folder, home, expect, allow_trust, wait=time.sleep):
+    """Press Trust (if allowed) then Send, each only after decide() agrees."""
+    s = scan_fn()
+    d = decide(s, folder, home, expect, allow_trust)
+    trusted = d == "TRUST"
+    if trusted:
+        if not press(s["trust"]):
             return "PRESS_FAILED"
-        time.sleep(3)
-        s = scan(ax, win)
+        wait(3)
+        s = scan_fn()
         d = decide(s, folder, home, expect)
         if d == "TRUST":
             return "TRUST_STUCK"
     if d != "SEND":
         return d
-    return "SENT" if ax.press(s["send"]) else "PRESS_FAILED"
+    if not press(s["send"]):
+        return "PRESS_FAILED"
+    return "TRUSTED_SENT" if trusted else "SENT"
+
+
+EXIT = {"SENT": 0, "TRUSTED_SENT": 0, "MISMATCH": 3, "WRONG_FOLDER": 3, "NEEDS_TRUST": 4}
 
 
 if __name__ == "__main__":
-    print(main(int(sys.argv[1]), sys.argv[2], sys.argv[3]))
+    result = main(int(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4] == "1")
+    print(result)
+    sys.exit(EXIT.get(result, 2))

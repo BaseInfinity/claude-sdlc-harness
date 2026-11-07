@@ -170,7 +170,9 @@ presses the named "Trust workspace" button only when that dialog names your
 folder, checks the session's "Folder:" label and that the "Prompt" box holds
 exactly your prompt (a trailing newline aside), then presses the named "Send"
 button. It refuses on a wrong folder or prompt (exit 3) and stops if a
-control is missing or the script errors (exit 2). The terminal needs the macOS Accessibility
+control is missing or the script errors (exit 2). It prints `TRUSTED_SENT`
+when it pressed Trust. A caller that may not approve dialogs passes
+`--no-trust`: it never presses Trust and exits 4 if the folder needs it. The terminal needs the macOS Accessibility
 permission. `--dry-run` prints the link only. After the first turn, the session appears in
 `ListAgents` as a `Claude Desktop session`, and `SendMessage` reaches it.
 Verify by its transcript under `~/.claude/projects/` and its `ListAgents` row,
