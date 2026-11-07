@@ -136,6 +136,16 @@ for c in \
     grep -qF -- "$c" "$SKILL" && pass "reciprocal recovery: ${c:0:50}" \
         || fail "reciprocal recovery: ${c:0:50}"
 done
+for c in \
+    'open "claude://code/new?folder=<url-encoded absolute path>&q=<url-encoded prompt>&source=services"' \
+    'pre-fills the prompt; it does not submit it' \
+    'can currently see that window through computer use the user has granted for Claude' \
+    'Never press Enter blind' \
+    'Observed on Claude.app 4.23118.0, in its URL handler and one live run; recheck on other versions.' \
+    'not by a new socket'; do
+    grep -qF -- "$c" "$SKILL" && pass "Desktop route: ${c:0:45}" \
+        || fail "Desktop route: ${c:0:45}"
+done
 grep -q '^## Reciprocal recovery' "$SKILL_DIR/references/protocol.md" \
     && pass "protocol.md carries Reciprocal recovery" \
     || fail "protocol.md carries Reciprocal recovery"

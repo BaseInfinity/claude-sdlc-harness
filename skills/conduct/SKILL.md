@@ -150,6 +150,24 @@ record your result in the run and root its header names.
 | Claude Desktop | `SendMessage`, once `ListAgents` lists it | none |
 | Codex Desktop | Native thread adapter, once Codex exposes one | none |
 
+**Starting a Claude Desktop Code session from a terminal.**
+Observed on Claude.app 4.23118.0, in its URL handler and one live run; recheck on other versions.
+Desktop's own Finder service uses the same route without `q`:
+
+```bash
+open "claude://code/new?folder=<url-encoded absolute path>&q=<url-encoded prompt>&source=services"
+```
+
+The link opens a new Desktop Code session and pre-fills the prompt; it does not submit it.
+Submitting needs Enter in Desktop, pressed by the user, or by an agent that
+can currently see that window through computer use the user has granted for Claude.
+Never press Enter blind: computer use served by Claude Desktop cannot capture
+Desktop's own window, so a Claude conductor hands this step to the user.
+That capture limit is not a hang. After the first turn, the session appears in
+`ListAgents` as a `Claude Desktop session`, and `SendMessage` reaches it.
+Verify by its transcript under `~/.claude/projects/` and its `ListAgents` row,
+not by a new socket: Desktop keeps pre-started standby processes.
+
 `it2api` lives at `/Applications/iTerm.app/Contents/Resources/utilities/it2api`.
 **Send only to a pane that is at an agent input.** At a shell prompt the text
 would run as commands. Before every send, run `it2api get-buffer <id>`. Proceed
