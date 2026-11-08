@@ -42,10 +42,12 @@ fi
 URL=$(python3 - "$FOLDER" "$PROMPT_FILE" <<'PY'
 import sys, urllib.parse
 folder = sys.argv[1]
-prompt = open(sys.argv[2], encoding="utf-8").read().rstrip("\n")
+raw = open(sys.argv[2], encoding="utf-8").read()
+# Validate the raw text minus only its final line terminator.
+prompt = raw[:-1] if raw.endswith("\n") else raw
 if not prompt.strip():
     sys.exit("claude-desktop: PROMPT_FILE is empty")
-if any(not line.strip() for line in prompt.splitlines()):
+if any(not line.strip() for line in prompt.split("\n")):
     sys.exit("claude-desktop: PROMPT_FILE has a blank line; a live run with one failed the exact-prompt check")
 q = urllib.parse.quote
 print("claude://code/new?folder=" + q(folder, safe="") + "&q=" + q(prompt, safe="") + "&source=services")

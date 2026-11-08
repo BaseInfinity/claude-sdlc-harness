@@ -161,7 +161,7 @@ printf 'line one\n\nline three\n' > "$TMPDIR_T/blank.txt"
 "$DESK" --dry-run "/tmp" "$TMPDIR_T/blank.txt" >/dev/null 2>&1; rc=$?
 [ "$rc" = 1 ] && pass "claude-desktop.sh refuses a prompt with a blank line before opening Desktop" \
     || fail "claude-desktop.sh refuses a prompt with a blank line before opening Desktop (rc=$rc)"
-for bl in 'lead|\nline' 'crlf|a\r\n\r\nb' 'wsend|a\n   ' 'empty|' 'spaces|   '; do
+for bl in 'lead|\nline' 'crlf|a\r\n\r\nb' 'wsend|a\n   ' 'empty|' 'spaces|   ' 'trailing|line one\n\n'; do
     printf "${bl#*|}" > "$TMPDIR_T/bl.txt"
     "$DESK" --dry-run "/tmp" "$TMPDIR_T/bl.txt" >/dev/null 2>&1; rc=$?
     [ "$rc" = 1 ] && pass "claude-desktop.sh refuses a ${bl%%|*} blank prompt line" \
