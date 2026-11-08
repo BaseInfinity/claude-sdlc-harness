@@ -157,6 +157,20 @@ got=$("$DESK" --dry-run "/tmp/a b" "$TMPDIR_T/p.txt" 2>&1 || true)
 "$DESK" --dry-run "rel/dir" "$TMPDIR_T/p.txt" >/dev/null 2>&1 \
     && fail "claude-desktop.sh refuses a relative folder" \
     || pass "claude-desktop.sh refuses a relative folder"
+printf 'line one\n\nline three\n' > "$TMPDIR_T/blank.txt"
+"$DESK" --dry-run "/tmp" "$TMPDIR_T/blank.txt" >/dev/null 2>&1; rc=$?
+[ "$rc" = 1 ] && pass "claude-desktop.sh refuses a prompt with a blank line before opening Desktop" \
+    || fail "claude-desktop.sh refuses a prompt with a blank line before opening Desktop (rc=$rc)"
+for bl in 'lead|\nline' 'crlf|a\r\n\r\nb' 'wsend|a\n   ' 'empty|' 'spaces|   '; do
+    printf "${bl#*|}" > "$TMPDIR_T/bl.txt"
+    "$DESK" --dry-run "/tmp" "$TMPDIR_T/bl.txt" >/dev/null 2>&1; rc=$?
+    [ "$rc" = 1 ] && pass "claude-desktop.sh refuses a ${bl%%|*} blank prompt line" \
+        || fail "claude-desktop.sh refuses a ${bl%%|*} blank prompt line (rc=$rc)"
+done
+printf 'line one\nline two\n' > "$TMPDIR_T/multi.txt"
+"$DESK" --dry-run "/tmp" "$TMPDIR_T/multi.txt" >/dev/null 2>&1 \
+    && pass "claude-desktop.sh still accepts single newlines" \
+    || fail "claude-desktop.sh still accepts single newlines"
 "$DESK" --dry-run "/tmp" "$TMPDIR_T/missing.txt" >/dev/null 2>&1 \
     && fail "claude-desktop.sh refuses a missing prompt file" \
     || pass "claude-desktop.sh refuses a missing prompt file"
@@ -195,6 +209,22 @@ got=$("$DESK" --no-trust --dry-run "/tmp/a b" "$TMPDIR_T/p.txt" 2>&1 || true)
 [ "$got" = 'claude://code/new?folder=%2Ftmp%2Fa%20b&q=x%20%26%20y%3F&source=services' ] \
     && pass "claude-desktop.sh accepts --no-trust with --dry-run" \
     || fail "claude-desktop.sh accepts --no-trust with --dry-run (got: $got)"
+# scan() must keep an unreadable composer value distinct from an empty one,
+# or the post-send "composer emptied" proof is forged by a failed AX read.
+got=$(python3 -c '
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("cd", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+class FakeAX:
+    def text(self, el, attr): return el.get(attr)
+    def children(self, el): return el.get("kids", [])
+win = {"AXRole": "AXWindow", "kids": [
+    {"AXRole": "AXTextArea", "AXDescription": "Prompt"},
+    {"AXRole": "AXTextArea", "AXDescription": "Prompt", "AXValue": ""}]}
+print(repr(m.scan(FakeAX(), win)["composer"]))
+' "$DPY" 2>&1)
+[ "$got" != "''" ] && pass "scan: an unreadable composer is not an empty composer" \
+    || fail "scan: an unreadable composer is not an empty composer (got: $got)"
 # drive() is the press sequence; run it with scripted scans and record presses.
 drive_case() { # name expected scans-json allow_trust
     local got
@@ -211,8 +241,14 @@ print(r, m.EXIT.get(r, 2), "+".join(pressed) or "none")
 }
 T='{"trust":"T","trustPath":"/Users/u/proj"}'
 R='{"folderLabel":"Folder: ~/proj","composer":"hi","send":"S"}'
-drive_case "trusted folder sends once" "SENT 0 S" "[$R]" 1
-drive_case "presses Trust then Send and says so" "TRUSTED_SENT 0 T+S" "[$T,$R]" 1
+E='{"folderLabel":"Folder: ~/proj","composer":"","send":"S"}'
+drive_case "trusted folder sends once" "SENT 0 S" "[$R,$E]" 1
+drive_case "presses Trust then Send and says so" "TRUSTED_SENT 0 T+S" "[$T,$R,$E]" 1
+drive_case "SENT waits for the composer to empty" "SENT 0 S" "[$R,$R,$R,$E]" 1
+drive_case "a composer that keeps the prompt is SEND_UNCONFIRMED, exit 5" \
+    "SEND_UNCONFIRMED 5 S" "[$R,$R,$R,$R,$R,$R]" 1
+drive_case "a vanished composer is SEND_UNCONFIRMED, exit 5" \
+    "SEND_UNCONFIRMED 5 S" "[$R,{},{},{},{},{}]" 1
 drive_case "--no-trust presses nothing and exits 4" "NEEDS_TRUST 4 none" "[$T]" 0
 drive_case "wrong prompt presses nothing and exits 3" "MISMATCH 3 none" \
     '[{"folderLabel":"Folder: ~/proj","composer":"bye","send":"S"}]' 1

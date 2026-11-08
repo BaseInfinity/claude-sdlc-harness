@@ -183,6 +183,13 @@ button. It refuses on a wrong folder or prompt (exit 3) and stops if a
 control is missing or the script errors (exit 2). It prints `TRUSTED_SENT`
 when it pressed Trust. A caller that may not approve dialogs passes
 `--no-trust`: it never presses Trust and exits 4 if the folder needs it.
+It prints `SENT` only after the composer empties. If the composer still holds
+the prompt, or disappears, it prints `SEND_UNCONFIRMED` and exits 5. Check
+the transcript before you resend. A prompt with a blank line, or an empty one, is refused
+(exit 1) before Desktop opens: one live run with blank lines failed the
+exact-prompt check (exit 3).
+Exits 3 and 5 leave the new session's window open with its draft; the script
+never closes a window. Tell the user to discard it.
 
 To start a NEW Codex thread, which Codex Desktop lists under its folder, run
 `python3 scripts/codex-thread.py CWD PROMPT_FILE`. It prints `THREAD <id>`

@@ -12,8 +12,10 @@
 # Observed on Claude.app 4.23118.0. Requires the terminal to hold the macOS
 # Accessibility permission. Exit codes: 0 sent, 1 usage, 2 control not found
 # or script error, 3 wrong folder or composer does not hold this prompt
-# (refuses to send), 4 folder needs Trust and --no-trust was given. Prints
-# TRUSTED_SENT instead of SENT when it pressed Trust.
+# (refuses to send), 4 folder needs Trust and --no-trust was given, 5 Send
+# was pressed but the composer never emptied (not proven sent). Prints
+# TRUSTED_SENT instead of SENT when it pressed Trust. A prompt with a blank
+# line, or an empty prompt, is refused with exit 1 before Desktop opens.
 set -e
 
 DRY=0
@@ -41,6 +43,10 @@ URL=$(python3 - "$FOLDER" "$PROMPT_FILE" <<'PY'
 import sys, urllib.parse
 folder = sys.argv[1]
 prompt = open(sys.argv[2], encoding="utf-8").read().rstrip("\n")
+if not prompt.strip():
+    sys.exit("claude-desktop: PROMPT_FILE is empty")
+if any(not line.strip() for line in prompt.splitlines()):
+    sys.exit("claude-desktop: PROMPT_FILE has a blank line; a live run with one failed the exact-prompt check")
 q = urllib.parse.quote
 print("claude://code/new?folder=" + q(folder, safe="") + "&q=" + q(prompt, safe="") + "&source=services")
 PY
@@ -72,6 +78,6 @@ RESULT=$(python3 "$HERE/claude-desktop.py" "$PID" "$FOLDER" "$PROMPT_FILE" "$TRU
 
 echo "claude-desktop: ${RESULT:-ERROR}"
 case "$RC" in
-    0|3|4) exit "$RC" ;;
+    0|3|4|5) exit "$RC" ;;
     *) exit 2 ;;
 esac

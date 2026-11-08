@@ -87,6 +87,7 @@ class AX:
 
 def scan(ax, win):
     s = {"trust": None, "trustPath": None, "folderLabel": None, "composer": None, "send": None}
+    found = {"composer": False}
 
     def walk(el, depth, in_trust):
         if depth > 45:
@@ -104,8 +105,10 @@ def scan(ax, win):
                 s["trustPath"] = v
         if role == "AXPopUpButton" and desc.startswith("Folder: "):
             s["folderLabel"] = desc
-        if role == "AXTextArea" and desc == "Prompt" and s["composer"] is None:
-            s["composer"] = ax.text(el, "AXValue") or ""
+        if role == "AXTextArea" and desc == "Prompt" and not found["composer"]:
+            # An unreadable value stays None: "" must mean verified empty.
+            found["composer"] = True
+            s["composer"] = ax.text(el, "AXValue")
         if role == "AXButton" and "Send" in (title, desc) and not s["send"]:
             s["send"] = el
         for c in ax.children(el):
@@ -149,10 +152,18 @@ def drive(scan_fn, press, folder, home, expect, allow_trust, wait=time.sleep):
         return d
     if not press(s["send"]):
         return "PRESS_FAILED"
-    return "TRUSTED_SENT" if trusted else "SENT"
+    # An accepted press is not a submitted prompt: claim SENT only once the
+    # composer reads empty. A composer that still holds the prompt, or that
+    # vanished, is unconfirmed (observed: SENT printed, prompt left unsent).
+    for _ in range(5):
+        wait(1)
+        if scan_fn().get("composer") == "":
+            return "TRUSTED_SENT" if trusted else "SENT"
+    return "SEND_UNCONFIRMED"
 
 
-EXIT = {"SENT": 0, "TRUSTED_SENT": 0, "MISMATCH": 3, "WRONG_FOLDER": 3, "NEEDS_TRUST": 4}
+EXIT = {"SENT": 0, "TRUSTED_SENT": 0, "MISMATCH": 3, "WRONG_FOLDER": 3, "NEEDS_TRUST": 4,
+        "SEND_UNCONFIRMED": 5}
 
 
 if __name__ == "__main__":
