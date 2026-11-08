@@ -266,6 +266,36 @@ require it, and a single session sending one request is still valid Conduct.
   worker gets its own git worktree.
 - **Worker:** does one bounded task and returns one correlated result.
 
+### Operating model
+
+Recommended and optional, like the layout above. The Codex adapter is to carry
+the same table, byte for byte, between the same markers. `tests/test-conduct.sh`
+compares the two when `CODEX_SDLC_WIZARD_DIR` points at a codex-sdlc-wizard
+checkout.
+
+<!-- conduct-operating-model:begin -->
+| # | Rule |
+|---|---|
+| 1 | The conductor only routes. There is one controller per project or harness, and it picks an existing worker or a new one for each item. |
+| 2 | Run independent work in parallel. Never queue it behind a long task. |
+| 3 | A subagent is for one-off lookups. Material work goes to a worker tab named `<CONTROLLER>: <task>`, in the controller's window group and its own git worktree, colored like the controller. |
+| 4 | Verify from a transcript or the ledger, never from a send succeeding. |
+| 5 | Never stall on the human. Rewrite to pass the guard, climb the brain ladder (Sol at high first, then Fable on a split), then dispatch. A blocker no model can clear is a P0 to engineer away. Only the user's own calls go to the user. |
+| 6 | Work headless and never steal focus. Use connectors and files before any GUI. |
+| 7 | Relayed reports carry a fixed text label per controller: `[CONDUCTOR]` `[HARNESS]` `[MEESEEKS]` `[ANTICHEAT]` `[CODEX]` `[ROBBIE]` `[WINDOWS]`. Use color only where the medium supports it. |
+| 8 | Run `/sdlc` before code. A skill gate that enforces it is in progress and not yet shipped. |
+| 9 | Hand computer use over by ending the holder session. Never delete the lock. |
+| 10 | Auto-trust only a workspace the conductor itself opens in the user's own repo. Never press Trust for any other folder. |
+| 11 | Fleet progress: `status.cjs` (lands with feat/conduct-status). Each controller updates its own rows when a workstream changes state, never another controller's. |
+<!-- conduct-operating-model:end -->
+
+In this adapter, rule 3's `<CONTROLLER>` is `CLAUDE SDLC` for the Claude
+harness controller; see Material work goes to a worker tab. Rule 5's ladder and
+the list of the user's own calls are in Never stall on the human. Rule 9 is
+Handing computer use to another session, under Troubleshooting. Rule 10 is what
+`claude-desktop.sh` does: it presses Trust only when the dialog names your
+folder.
+
 ### Never stall on the human
 
 Recommended and optional, like the layout above. A controller or worker never
@@ -277,11 +307,11 @@ waits on the user for something a model can answer.
    `cd <dir> && git ...`. Rewrite the form only, never the action. If the
    guard denies the action itself, it is the owner's call (see Safety and
    Peer supervision).
-2. **It needs a decision:** climb the brain ladder, Sol at high and then
-   Fable, and dispatch on the verdict.
+2. **It needs a decision:** climb the brain ladder, Sol at high first, then
+   Fable on a split, and dispatch on the verdict.
 3. **Ask the user only for what only they own:** money, credentials, pushes,
-   PRs, issue closes, settings and permissions, sending messages, and
-   product values.
+   PRs, issue closes, settings and permissions (for example OS privacy
+   toggles (TCC)), sending messages, and product values.
 
 Writing commands that pass the guards:
 

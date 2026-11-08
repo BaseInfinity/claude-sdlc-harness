@@ -3,6 +3,25 @@
 # Codex adapter through the SAME helper. The helper and protocol are vendored
 # byte-identical from codex-sdlc-wizard; the pinned hashes are the parity record.
 # When Codex changes them, re-vendor and update the pins together.
+#
+# Operating model (SKILL.md, between the conduct-operating-model markers):
+# - Every rule has a wording assertion, and the never-stall human-only list
+#   is asserted whole.
+# - Codex parity: set CODEX_SDLC_WIZARD_DIR to a codex-sdlc-wizard checkout to
+#   compare the block byte for byte against its skill-sources/conduct copy.
+#   Unset, it prints SKIP. That is a documented limit, not a pass: CI here
+#   cannot read the other repo.
+# - Behavior: CONDUCT_LIVE=1 runs two `claude -p` legs (material work -> a
+#   worker tab; one-off lookup -> no tab) in a fresh copy, with a stub it2api
+#   that logs argv. They spend tokens, so CI never sets it. Each leg is
+#   bounded by --max-turns and a wall-clock deadline (perl alarm,
+#   CONDUCT_LIVE_DEADLINE seconds, default 900; a killed leg exits 142).
+#   Claude's output is in <leg>/out.txt; CONDUCT_LIVE_KEEP=1 keeps it.
+# - Documented limits, no behavioral test: rules 1, 2 and 4 (conductor
+#   routing, parallel dispatch, verify by transcript) beyond what the legs
+#   show; 5 (never stall); 6 (headless, no focus steal); 7 (report labels);
+#   9 (computer-use handoff); 10 (auto-trust scope). Each needs a real
+#   multi-session fleet, a GUI, or a human-only dialog to observe.
 
 set -u
 
@@ -542,6 +561,181 @@ for term in optional 'one-off' 'worker tab' 'CLAUDE SDLC: <task>' 'own git workt
     printf '%s' "$WT" | grep -qiF -- "$term" && pass "worker-tab names: $term" \
         || fail "worker-tab names: $term"
 done
+
+echo "=== operating model ==="
+OM_BEGIN='<!-- conduct-operating-model:begin -->'
+OM_END='<!-- conduct-operating-model:end -->'
+om_block() { awk -v b="$OM_BEGIN" -v e="$OM_END" '$0==b{f=1;next} $0==e{f=0} f' "$1"; }
+[ "$(grep -cxF -- "$OM_BEGIN" "$SKILL")" -eq 1 ] && [ "$(grep -cxF -- "$OM_END" "$SKILL")" -eq 1 ] \
+    && pass "operating model has one begin and one end marker" \
+    || fail "operating model has one begin and one end marker"
+awk '/^## Conductor, controllers and workers/{f=1;next} /^## /{f=0} f' "$SKILL" \
+    | grep -qxF -- "$OM_BEGIN" \
+    && pass "operating model sits in the roles section" \
+    || fail "operating model sits in the roles section"
+OM=$(om_block "$SKILL")
+[ "$(printf '%s\n' "$OM" | grep -cE '^\| (1[01]|[1-9]) \|')" -eq 11 ] \
+    && pass "operating model has exactly 11 rule rows" \
+    || fail "operating model has exactly 11 rule rows"
+om_row() { printf '%s\n' "$OM" | grep -E "^\| $1 \|" | tr -s ' '; }
+check_row() {
+    om_row "$1" | grep -qiF -- "$2" && pass "operating model rule $1 names: $2" \
+        || fail "operating model rule $1 names: $2"
+}
+check_row 1 'conductor only routes'
+check_row 1 'one controller per project or harness'
+check_row 2 'in parallel'
+check_row 3 'one-off lookups'
+check_row 3 'worker tab'
+check_row 3 '<CONTROLLER>: <task>'
+check_row 4 'transcript or the ledger'
+check_row 5 'never stall on the human'
+check_row 5 'Sol at high first, then Fable on a split'
+check_row 5 'P0'
+check_row 6 'never steal focus'
+for label in '[CONDUCTOR]' '[HARNESS]' '[MEESEEKS]' '[ANTICHEAT]' '[CODEX]' '[ROBBIE]' '[WINDOWS]'; do
+    check_row 7 "$label"
+done
+check_row 8 '/sdlc'
+check_row 9 'never delete the lock'
+check_row 10 'any other folder'
+check_row 11 'status.cjs'
+check_row 11 'feat/conduct-status'
+check_row 11 "Each controller updates its own rows when a workstream changes state, never another controller's."
+HUMAN_ONLY='money, credentials, pushes, PRs, issue closes, settings and permissions (for example OS privacy toggles (TCC)), sending messages, and product values'
+NS_SQ=$(printf '%s' "$NS" | tr -s ' ')
+printf '%s' "$NS_SQ" | grep -qF -- "$HUMAN_ONLY" \
+    && pass "never-stall keeps the full human-only list" \
+    || fail "never-stall keeps the full human-only list"
+printf '%s' "$NS_SQ" | grep -qF -- 'Sol at high first, then Fable on a split' \
+    && pass "never-stall ladder matches the operating model" \
+    || fail "never-stall ladder matches the operating model"
+
+# Parity: PASS, DRIFT or MISSING for one Codex copy.
+# Compares files with cmp, because $(...) would strip trailing newlines.
+om_block "$SKILL" > "$TMPDIR_T/om-ours.txt"
+om_parity() {
+    [ -f "$1" ] || { echo MISSING; return; }
+    om_block "$1" > "$TMPDIR_T/om-theirs.txt"
+    [ -s "$TMPDIR_T/om-ours.txt" ] && cmp -s "$TMPDIR_T/om-ours.txt" "$TMPDIR_T/om-theirs.txt" \
+        && echo PASS || echo DRIFT
+}
+cp "$SKILL" "$TMPDIR_T/om-same.md"
+sed 's/conductor only routes/conductor mostly routes/' "$SKILL" > "$TMPDIR_T/om-drift.md"
+# Byte drift that command substitution would hide: a blank line before :end.
+awk -v e="$OM_END" '$0==e{print ""} {print}' "$SKILL" > "$TMPDIR_T/om-blank.md"
+[ "$(om_parity "$TMPDIR_T/om-same.md")" = PASS ] && pass "parity check passes an identical copy" \
+    || fail "parity check passes an identical copy"
+[ "$(om_parity "$TMPDIR_T/om-drift.md")" = DRIFT ] && pass "parity check catches a drifted copy" \
+    || fail "parity check catches a drifted copy"
+[ "$(om_parity "$TMPDIR_T/om-blank.md")" = DRIFT ] && pass "parity check catches a trailing blank line" \
+    || fail "parity check catches a trailing blank line"
+[ "$(om_parity "$TMPDIR_T/om-absent.md")" = MISSING ] && pass "parity check reports a missing copy" \
+    || fail "parity check reports a missing copy"
+if [ -n "${CODEX_SDLC_WIZARD_DIR:-}" ]; then
+    CODEX_OM="$CODEX_SDLC_WIZARD_DIR/skill-sources/conduct/SKILL.template.md"
+    R=$(om_parity "$CODEX_OM")
+    [ "$R" = PASS ] && pass "operating model matches Codex copy byte for byte" \
+        || fail "operating model vs Codex copy: $R at $CODEX_OM"
+else
+    echo "  SKIP: Codex parity (CODEX_SDLC_WIZARD_DIR unset; documented limit, not a pass)"
+fi
+
+if [ "${CONDUCT_LIVE:-}" = 1 ]; then
+    echo "=== operating model, live legs ==="
+    # One leg: a fresh copy with its own git repo and a stub it2api first on
+    # PATH. Prints the copy dir; transcript.jsonl and it2api.log live there.
+    live_leg() {
+        local d sid slug rc
+        d=$(mktemp -d "$TMPDIR_T/live.XXXXXX") && d=$(cd "$d" && pwd -P)
+        cp -R "$REPO_ROOT" "$d/repo" && rm -rf "$d/repo/.git"
+        git -C "$d/repo" init -q && git -C "$d/repo" add -A \
+            && git -C "$d/repo" -c user.name=t -c user.email=t@t commit -qm base
+        mkdir "$d/bin"
+        {
+            echo '#!/bin/bash'
+            echo "echo \"\$*\" >> '$d/it2api.log'"
+            echo 'case "$1" in'
+            echo "    show-hierarchy) echo 'Window id=STUBWIN'; echo '  Tab id=1'; echo '    Session \"CLAUDE SDLC\" id=STUBCTL (158 x 53)' ;;"
+            echo "    create-tab) echo 'Session \" \" id=STUBTAB (158 x 53)' ;;"
+            echo "    get-buffer) echo 'user@host repo % ' ;;"
+            echo "    list-sessions) echo '\"CLAUDE SDLC\" id=STUBCTL' ;;"
+            echo 'esac'
+        } > "$d/bin/it2api"
+        chmod +x "$d/bin/it2api"
+        sid=$(uuidgen | tr 'A-Z' 'a-z')
+        echo "  running live leg; output: $d/out.txt" >&2
+        ( cd "$d/repo" && PATH="$d/bin:$PATH" perl -e 'alarm shift; exec @ARGV' \
+            "${CONDUCT_LIVE_DEADLINE:-900}" claude -p --session-id "$sid" --max-turns 15 \
+            --dangerously-skip-permissions --plugin-dir "$d/repo" "$1" \
+            < /dev/null > "$d/out.txt" 2>&1 )
+        rc=$?
+        echo "$rc" > "$d/rc"
+        slug=$(printf '%s' "$d/repo" | tr '/.' '--')
+        ln -s "$HOME/.claude/projects/$slug/$sid.jsonl" "$d/transcript.jsonl"
+        echo "$d"
+    }
+    # One JSON line per assistant tool_use: {"name", "input"}.
+    tool_uses() {
+        python3 -c '
+import json, sys
+for line in open(sys.argv[1]):
+    try: m = json.loads(line).get("message") or {}
+    except ValueError: continue
+    if m.get("role") != "assistant" or not isinstance(m.get("content"), list): continue
+    for c in m["content"]:
+        if c.get("type") == "tool_use":
+            print(json.dumps({"name": c["name"], "input": c.get("input", {})}))
+' "$1"
+    }
+    PREAMBLE='You are the Claude harness controller in the conduct layout. Your iTerm window holds your session and no worker tabs yet; it2api is on PATH. This is a test fixture: the sessions ListAgents shows are real, so never message them. A new item arrived; handle it the way the conduct skill recommends.'
+    L1=$(live_leg "$PREAMBLE Item: add a --quiet flag to the sdlc-wizard CLI that suppresses its banner, with a test.")
+    [ "$(cat "$L1/rc")" = 0 ] && pass "live material leg: claude exited 0" \
+        || fail "live material leg: claude exited $(cat "$L1/rc"); see $L1/out.txt"
+    if [ -f "$L1/transcript.jsonl" ]; then
+        T1=$(tool_uses "$L1/transcript.jsonl")
+        # Only edits inside the repo copy count: the controller seeds its
+        # conduct message file elsewhere, and that is not code.
+        printf '%s\n' "$T1" | python3 -c '
+import json, sys, os
+repo = os.path.realpath(sys.argv[1])
+seen = False
+for l in sys.stdin:
+    if not l.strip(): continue
+    t = json.loads(l)
+    skill = str(t["input"].get("skill", ""))
+    if t["name"] == "Skill" and skill.split(":")[-1] == "sdlc": seen = True
+    path = os.path.realpath(str(t["input"].get("file_path", t["input"].get("notebook_path", "/"))))
+    if t["name"] in ("Edit", "Write", "NotebookEdit") and path.startswith(repo + "/") and not seen: sys.exit(1)
+' "$L1/repo" && pass "live material leg: Skill(sdlc) before any edit" \
+          || fail "live material leg: Skill(sdlc) before any edit ($L1)"
+        printf '%s\n' "$T1" | python3 -c '
+import json, sys
+ts = [json.loads(l) for l in sys.stdin if l.strip()]
+sys.exit(0 if any(t["name"] == "Bash" and "it2api create-tab" in str(t["input"].get("command", "")) for t in ts) else 1)
+' && pass "live material leg: Bash calls it2api create-tab" \
+          || fail "live material leg: Bash calls it2api create-tab ($L1)"
+        printf '%s\n' "$T1" | python3 -c '
+import json, sys
+ts = [json.loads(l) for l in sys.stdin if l.strip()]
+sys.exit(1 if any(t["name"] in ("Agent", "Task") and "quiet" in json.dumps(t["input"]).lower() for t in ts) else 0)
+' && pass "live material leg: no Agent tool_use carries the work" \
+          || fail "live material leg: no Agent tool_use carries the work ($L1)"
+    else
+        fail "live material leg: transcript missing ($L1)"
+    fi
+    L2=$(live_leg "$PREAMBLE Item: one-off lookup. Which test file covers version comparison? Answer in one line.")
+    [ "$(cat "$L2/rc")" = 0 ] && pass "live lookup leg: claude exited 0" \
+        || fail "live lookup leg: claude exited $(cat "$L2/rc"); see $L2/out.txt"
+    if [ -f "$L2/transcript.jsonl" ]; then
+        tool_uses "$L2/transcript.jsonl" | grep -qF 'it2api create-tab' \
+            && fail "live lookup leg: no create-tab call ($L2)" \
+            || pass "live lookup leg: no create-tab call"
+    else
+        fail "live lookup leg: transcript missing ($L2)"
+    fi
+    [ "${CONDUCT_LIVE_KEEP:-}" = 1 ] && trap - EXIT && echo "  kept: $TMPDIR_T"
+fi
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
