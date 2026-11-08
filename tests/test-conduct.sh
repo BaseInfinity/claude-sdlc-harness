@@ -519,6 +519,17 @@ grep -q 'outbox/<req-id>.json' "$SKILL" && pass "SKILL.md transports the outbox 
 grep -qi 'agent input' "$SKILL" && pass "SKILL.md requires an agent input before it2api send" \
     || fail "SKILL.md requires an agent input before it2api send"
 
+NS=$(awk '/^### Never stall on the human/{f=1;next} /^##/{f=0} f' "$SKILL" | tr '\n' ' ')
+awk '/^## Conductor, controllers and workers/{f=1;next} /^## /{f=0} f' "$SKILL" \
+    | grep -q '^### Never stall on the human' \
+    && pass "roles section has the never-stall subsection" \
+    || fail "roles section has the never-stall subsection"
+for term in optional money credentials push settings permissions 'sending messages' \
+    'product values' 'git -C' '${VAR:?}' Sol Fable; do
+    printf '%s' "$NS" | grep -qiF -- "$term" && pass "never-stall names: $term" \
+        || fail "never-stall names: $term"
+done
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

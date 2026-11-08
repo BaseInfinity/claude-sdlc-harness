@@ -264,6 +264,33 @@ require it, and a single session sending one request is still valid Conduct.
   worker gets its own git worktree.
 - **Worker:** does one bounded task and returns one correlated result.
 
+### Never stall on the human
+
+Recommended and optional, like the layout above. A controller or worker never
+waits on the user for something a model can answer.
+
+1. **A command trips a permission or safety guard:** rewrite it into an
+   equivalent that doesn't, for example with literal paths, `${VAR:?}`, quoted
+   variables, one `rm` per call, or `git -C <dir>` in place of
+   `cd <dir> && git ...`. Rewrite the form only, never the action. If the
+   guard denies the action itself, it is the owner's call (see Safety and
+   Peer supervision).
+2. **It needs a decision:** climb the brain ladder, Sol at high and then
+   Fable, and dispatch on the verdict.
+3. **Ask the user only for what only they own:** money, credentials, pushes,
+   PRs and issue closes, settings and permissions, sending messages, and
+   product values.
+
+Writing commands that pass the guards:
+
+- Use absolute literal paths, not `cd` plus relative ones.
+- Guard every variable in a destructive command with `${VAR:?}`, and quote it.
+- Give `rm` one quoted target per call, never a glob or a `&&` chain.
+- Use `git -C <dir>`, not `cd <dir> && git ...`.
+- Keep message text out of command text: use seed, Read, Edit and `"$(cat FILE)"`.
+- Write temp files under `$TMPDIR`, which the sandbox allows.
+- Run one action per call, so a denial names exactly one thing.
+
 ## Peer supervision during active work
 
 This mirrors the Codex adapter's policy, so both ends supervise the same way.
