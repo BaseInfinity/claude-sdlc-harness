@@ -183,6 +183,8 @@ button. It refuses on a wrong folder or prompt (exit 3) and stops if a
 control is missing or the script errors (exit 2). It prints `TRUSTED_SENT`
 when it pressed Trust. A caller that may not approve dialogs passes
 `--no-trust`: it never presses Trust and exits 4 if the folder needs it.
+Trust is not remembered per folder: a folder trusted at 13:39 asked again at
+13:46 (2026-11-08), so expect the dialog on every launch.
 It prints `SENT` only when a transcript created after launch, under
 `~/.claude/projects/<folder with / and . as ->/`, holds the prompt in a user
 message. The composer is no proof, because it kept the prompt after a real
