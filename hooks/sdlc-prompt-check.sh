@@ -113,7 +113,7 @@ if [ "$SHOULD_EMIT_BASELINE" -eq 1 ]; then
 SDLC BASELINE:
 1. Task list FIRST (TodoWrite or TaskCreate) (plan tasks before coding)
 2. STATE CONFIDENCE: HIGH/MEDIUM/LOW
-3. LOW confidence or FAILED 2x? Ladder: Fable -> Codex high -> human LAST
+3. LOW confidence or FAILED 2x? Ladder: Sol (Codex) -> Fable only if you and Sol cannot reconcile -> human LAST (sequential)
 4. Never ask what a model can settle; confidence is not authorization
 5. ALL TESTS MUST PASS BEFORE COMMIT - NO EXCEPTIONS
 
