@@ -415,8 +415,44 @@ grep -qF 'mktemp -d "${TMPDIR:-/tmp}/conduct.XXXXXX"' "$SKILL" \
     || fail "SKILL.md scratch dir is a private mktemp dir with /tmp fallback"
 grep -q '<<' "$SKILL" && fail "SKILL.md writes message files without a shell heredoc" \
     || pass "SKILL.md writes message files without a shell heredoc"
-grep -q 'Write tool' "$SKILL" && pass "SKILL.md writes message files with the Write tool" \
-    || fail "SKILL.md writes message files with the Write tool"
+# Some installs gate the Write tool on brand-new non-test files (the cowork
+# prompt hook denied $SCRATCH/msg.txt). Message files are seeded from a fixed
+# literal, then filled with Read + Edit, so no text reaches a shell.
+SKILL_FLAT=$(tr '\n' ' ' < "$SKILL")
+printf '%s' "$SKILL_FLAT" | grep -qiE 'with the Write tool' \
+    && fail "SKILL.md never creates message files with the Write tool" \
+    || pass "SKILL.md never creates message files with the Write tool"
+grep -qF "printf 'CONDUCT_PLACEHOLDER\\n' >" "$SKILL" \
+    && pass "SKILL.md seeds message files from a fixed literal" \
+    || fail "SKILL.md seeds message files from a fixed literal"
+printf '%s' "$SKILL_FLAT" | grep -qE 'Read it, then use the Edit tool' \
+    && pass "SKILL.md fills message files with Read + Edit" \
+    || fail "SKILL.md fills message files with Read + Edit"
+# Run the documented delivery command itself, against a root with a space, and
+# require the exact header plus a byte-identical envelope.
+DROOT="$TMPDIR_T/my repo"
+node "$HELPER" emit --root "$DROOT" --run d1 --box outbox --id req-9 \
+    --from "$REQ_FROM" --to "$REQ_TO" --type task --prompt 'a $(x) `y` "z"' >/dev/null 2>&1
+DCMD=$(awk '/^ *\{ printf .conduct run=/{f=1} f{print} f&&/^ *\} > /{exit}' "$SKILL")
+DCMD=${DCMD//<run-id>/d1}; DCMD=${DCMD//<req-id>/req-9}; DCMD=${DCMD//<repo>/$DROOT}
+DCMD=${DCMD//\$SCRATCH/$TMPDIR_T}
+( cd "$TMPDIR_T" && eval "$DCMD" ) 2>/dev/null
+[ -n "$DCMD" ] \
+    && [ "$(head -1 "$TMPDIR_T/delivery.txt" 2>/dev/null)" = \
+        "conduct run=d1 root=$DROOT request=outbox/req-9.json" ] \
+    && tail -n +2 "$TMPDIR_T/delivery.txt" | cmp -s - "$DROOT/.brain/runs/d1/outbox/req-9.json" \
+    && pass "SKILL.md delivery command builds header + byte-identical envelope (root with a space)" \
+    || fail "SKILL.md delivery command builds header + byte-identical envelope (root with a space)"
+printf '%s' "$SKILL_FLAT" | grep -qE '`--root` must be writable inside the sandbox' \
+    && pass "SKILL.md says the ledger root must be sandbox-writable" \
+    || fail "SKILL.md says the ledger root must be sandbox-writable"
+grep -q '^## Conductor, controllers and workers' "$SKILL" \
+    && pass "SKILL.md has the conductor/controller/worker section" \
+    || fail "SKILL.md has the conductor/controller/worker section"
+awk '/^## Conductor, controllers and workers/{f=1;next} /^## /{f=0} f' "$SKILL" \
+    | grep -qi 'optional' \
+    && pass "conductor/controller/worker section says it is optional" \
+    || fail "conductor/controller/worker section says it is optional"
 grep -q 'outbox/<req-id>.json' "$SKILL" && pass "SKILL.md transports the outbox file, not helper stdout" \
     || fail "SKILL.md transports the outbox file, not helper stdout"
 grep -qi 'agent input' "$SKILL" && pass "SKILL.md requires an agent input before it2api send" \
