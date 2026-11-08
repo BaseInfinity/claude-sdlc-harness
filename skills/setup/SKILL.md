@@ -245,8 +245,8 @@ The output is JSON: `{ tier: "simple" | "complex", score, signals }`. Use the re
 > How do you want to configure the model for this repo?
 >
 > - **[N] No pin (default):** Auto-mode. CC picks model per turn. Simplest, no advisor.
-> - **[r] Reliable — Opus 4.6[1m] + GPT-5.6 Sol + Fable 5.1** *(Recommended default):* Pins `model: "claude-opus-4-6[1m]"`, `advisorModel: "claude-fable-5-1"`. Proven stability. Effort: `max` per session via `/effort`. GPT-5.6 Sol xhigh as first brain, Fable 5.1 high as escalation.
-> - **[o] Opus 5.5 + Fable 5.1** *(Frontier — experimental):* Pins `model: "claude-opus-5-5"`, `advisorModel: "claude-fable-5-1"`. Effort: `high`; GPT-5.6 Sol xhigh as reviewer.
+> - **[r] Reliable — Opus 4.6[1m] + GPT-5.6 Sol + Fable 5.1** *(Recommended default):* Pins `model: "claude-opus-4-6[1m]"`, `advisorModel: "claude-fable-5-1"`. Proven stability. Effort: `max` per session via `/effort`. GPT-5.6 Sol high as first brain, Fable 5.1 high as escalation.
+> - **[o] Opus 5.5 + Fable 5.1** *(Frontier — experimental):* Pins `model: "claude-opus-5-5"`, `advisorModel: "claude-fable-5-1"`. Effort: `high`; GPT-5.6 Sol high as reviewer.
 > - **[s] Sonnet 5 + Fable 5.1** *(Setup B — Simple/One-Off, lower cost):* Pins `model: "sonnet"`, `advisorModel: "claude-fable-5-1"`. Native 1M context, no `[1m]` suffix needed. Effort: `medium`, escalate `high` → `xhigh` for hard tasks.
 > - **[p] OpusPlan Hybrid** *(Setup C — cost-conscious, still want Opus reasoning):* Pins `model: "opusplan"`. Opus 5 plans (Shift+Tab), Sonnet 5 executes. Max-bundled. No API credit drain (#390).
 >
@@ -263,7 +263,7 @@ The output is JSON: `{ tier: "simple" | "complex", score, signals }`. Use the re
 }
 ```
 
-No `effortLevel` in settings — use `/effort max` per session. Tell the user: "Reliable lane (Opus 4.6[1m] + GPT-5.6 Sol + Fable 5.1). Use GPT-5.6 Sol xhigh as first brain for reviews, Fable 5.1 high as escalation brain at <95% confidence. See AI_SETUP_LANES.md for the full brain ladder."
+No `effortLevel` in settings — use `/effort max` per session. Tell the user: "Reliable lane (Opus 4.6[1m] + GPT-5.6 Sol + Fable 5.1). Use GPT-5.6 Sol high as first brain for reviews, Fable 5.1 high as escalation brain at <95% confidence. See AI_SETUP_LANES.md for the full brain ladder."
 
 **If the user answers `o` (Frontier — Opus 5.5 + Fable 5.1):** Edit `.claude/settings.json` and add:
 
@@ -275,7 +275,7 @@ No `effortLevel` in settings — use `/effort max` per session. Tell the user: "
 }
 ```
 
-Tell the user: "Frontier lane (Opus 5.5 + GPT-5.6 Sol + Fable 5.1). Effort `high`. GPT-5.6 Sol xhigh as cross-model reviewer via Codex CLI. Check shell rc for a stale `ANTHROPIC_DEFAULT_OPUS_MODEL` — it silently overrides this pin."
+Tell the user: "Frontier lane (Opus 5.5 + GPT-5.6 Sol + Fable 5.1). Effort `high`. GPT-5.6 Sol high as cross-model reviewer via Codex CLI. Check shell rc for a stale `ANTHROPIC_DEFAULT_OPUS_MODEL` — it silently overrides this pin."
 
 **If the user answers `s` (Sonnet 5 + Fable 5.1):** Edit `.claude/settings.json` and add:
 

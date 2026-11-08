@@ -9,7 +9,7 @@ Medium - verifies the brain escalation ladder operates correctly
 
 Verify the Reliable lane's escalation ladder (#707, #715):
 - **Builder:** Opus 4.6[1m] at max effort
-- **First brain:** GPT-5.6 Sol at xhigh (Codex CLI via run-review-leg.sh)
+- **First brain:** GPT-5.6 Sol at high (first round; xhigh only as a later escalation) (Codex CLI via run-review-leg.sh)
 - **Escalation brain:** Fable 5 at high (advisor — only when first brain can't reach 95%)
 
 This scenario runs a task simple enough that codex review should suffice
@@ -40,7 +40,7 @@ to tier 3 (Fable 5 advisor) should be needed.
 ### MUST observe
 1. **Builder operates at Opus 4.6** — session model is claude-opus-4-6[1m]
 2. **Codex review leg launched** — `scripts/run-review-leg.sh` called, or codex exec with `-m gpt-5.6-sol`
-3. **Effort is xhigh for codex** — `model_reasoning_effort="xhigh"` in the codex invocation
+3. **Effort is high for codex on the first round** — `model_reasoning_effort="high"` in the codex invocation (xhigh only as a later escalation)
 4. **Task completes** — the typo is fixed and tests pass
 
 ### SHOULD observe
@@ -59,7 +59,7 @@ to tier 3 (Fable 5 advisor) should be needed.
 | Builder model correct | 2 | Session runs on claude-opus-4-6[1m] |
 | Codex review launched | 2 | First brain called as cross-model gate |
 | Codex model correct | 2 | GPT-5.6 Sol, not GPT-5.5 or GPT-4o |
-| Codex effort correct | 1 | xhigh, not high or medium |
+| Codex effort correct | 1 | high on the first round, not xhigh or medium |
 | No advisor escalation | 2 | Fable 5 not called for a trivial task |
 | Task completed | 1 | Typo fixed |
 
@@ -73,7 +73,7 @@ The evaluator should grep the transcript for:
 ```
 # Codex invocation (MUST find)
 codex exec.*-m gpt-5.6-sol
-model_reasoning_effort.*xhigh
+model_reasoning_effort.*"high"
 run-review-leg.sh
 
 # Advisor call (MUST NOT find for this scenario)
@@ -91,7 +91,7 @@ opt-in scenario with a genuinely hard task.
 
 ## Success Criteria
 - [ ] Session model is Opus 4.6[1m]
-- [ ] Codex review leg runs with GPT-5.6 Sol at xhigh
+- [ ] Codex review leg runs with GPT-5.6 Sol at high (first round)
 - [ ] Advisor is NOT called
 - [ ] Typo is fixed
 - [ ] Score >= 8/10

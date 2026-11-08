@@ -2868,32 +2868,41 @@ test_codex_reviewer_effort_is_high() {
     # them would falsify the record. Same principle as the GPT-5.4 citations.
     local _hist='/ROADMAP.md:|/ROADMAP_ARCHIVE.md:|/CHANGELOG.md:|/.reviews/|/tests/'
 
-    # Leg A: the executable truth. Any invocation, any file type, live surfaces only.
+    # Leg A: the executable truth. Every invocation on a live surface runs the
+    # FIRST round at `high`. xhigh is a later escalation the driver chooses, so
+    # no shipped invocation or launcher hardcodes it (2026-11-08 policy).
     local flag_hits
     flag_hits=$(grep -rn 'model_reasoning_effort=' \
                     --include='*.md' --include='*.sh' --include='*.json' --include='*.yml' --include='*.yaml' --include='*.js' \
                     "$REPO_ROOT" 2>/dev/null \
                 | grep -vE "$_hist" \
-                | grep -v 'model_reasoning_effort="\?\(x\)\?high"\?' || true)
+                | grep -v 'model_reasoning_effort="\?high"\?' || true)
     [ -n "$flag_hits" ] && offenders="$offenders
-INVOCATION at non-high effort:
+INVOCATION not at first-round high:
 $flag_hits"
 
-    # Leg B: reviewer is NOW xhigh (changed from high, Sept 2026). Verify no
-    # shipped prose downgrades it back to bare "high" without a qualifier.
-    # "Fable 5 high" is the ADVISOR, not the reviewer — exclude it.
-    local downgrade_hits
-    downgrade_hits=$(grep -rniE \
-        '(sol|codex|reviewer)[^.|]{0,40}`?high`?[^.|]{0,20}(default|reasoning effort)' \
-        --include='*.md' --include='*.sh' "$REPO_ROOT" 2>/dev/null \
-        | grep -vE "$_hist" \
-        | grep -vE 'xhigh|Fable|advisor|escalat' || true)
-    [ -n "$downgrade_hits" ] && offenders="$offenders
-PROSE downgrading reviewer to high (should be xhigh):
-$downgrade_hits"
+    # Leg B: POSITIVE anchors on the lines that DEFINE reviewer effort (#495 —
+    # assert what the defining line says, never denylist a token with a valid
+    # use). Each must name `high` and keep xhigh as an escalation.
+    local leg_b=""
+    leg_b="$leg_b$(_check_content_line_has_and_lacks "$REPO_ROOT/skills/sdlc/SKILL.md" \
+        '\*\*Reviewer:\*\* GPT-5.6 Sol' '\`high\`,xhigh,escalat')"
+    leg_b="$leg_b$(_check_content_line_has_and_lacks "$REPO_ROOT/skills/sdlc/SKILL.md" \
+        'Run reviewer through a launcher' 'model_reasoning_effort="high"' 'Always \`xhigh\`')"
+    leg_b="$leg_b$(_check_content_line_has_and_lacks "$REPO_ROOT/AI_SETUP_LANES.md" \
+        '\*\*Reviewer effort is' '\`high\`,xhigh,escalat')"
+    leg_b="$leg_b$(_check_content_line_has_and_lacks "$REPO_ROOT/CLAUDE_CODE_SDLC_WIZARD.md" \
+        '\*\*Effort default:' '\`high\`,xhigh,escalat')"
+    leg_b="$leg_b$(_check_content_line_has_and_lacks "$REPO_ROOT/CLAUDE_CODE_SDLC_WIZARD.md" \
+        'the reviewer effort level' '\`high\`,xhigh,escalat')"
+    leg_b="$leg_b$(_check_content_line_has_and_lacks "$REPO_ROOT/README.md" \
+        'Reviewer effort is' '\`high\`,xhigh,escalat')"
+    [ -n "$leg_b" ] && offenders="$offenders
+DEFINING LINE does not say first-round high / xhigh escalation:
+$leg_b"
 
     if [ -z "$offenders" ]; then
-        pass "Codex reviewer runs at xhigh in every invocation"
+        pass "Codex reviewer runs first rounds at high; xhigh is escalation only"
     else
         fail "reviewer effort regression:$offenders"
     fi

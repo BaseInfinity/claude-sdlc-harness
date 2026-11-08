@@ -273,7 +273,7 @@ Claude Code's **effort level** controls how much thinking the model does before 
 | Opus 4.8 (escalation, pinned) | `xhigh` | `max` triggers excessive reasoning on 4.7/4.8 — documented 40-60x cache-token jump vs `high` (see "Opus 4.6" row below) |
 | Fable 5.1 (advisor / subagent fallback) | `high` everywhere — driver, subagent fallback, and `advisor()` (which exposes no effort parameter at all) | Adaptive thinking always on; pin `advisorModel: "claude-fable-5-1"` — see "Advisor Model" below |
 | Opus 4.6 (pinned, stability profile) | `max` | The one model where `max` doesn't overthink — no `xhigh` support at all (only low/medium/high/max) |
-| OpenAI/Codex (cross-model reviewer) | `high` default (maintainer decision 2026-08-01 — cost and review-noise, not capability); escalate to `xhigh` for unusually risky PRs | Lower reasoning misses subtle bugs the reviewer exists to catch; see `AI_SETUP_LANES.md`'s Final Review Policy for when to escalate |
+| OpenAI/Codex (cross-model reviewer) | `high` for the first round (maintainer policy 2026-11-08, applies to every brain); escalate to `xhigh` only later — a recheck that fails to reconcile, or a second repair | Lower reasoning misses subtle bugs the reviewer exists to catch; see `AI_SETUP_LANES.md`'s Final Review Policy for when to escalate |
 
 **Strict effort behavior (Opus 4.7+, carried forward in 4.8):**
 - **`xhigh` was introduced in 4.7** — sits between `high` and `max`, designed for coding and agentic work (30+ minute tasks with token budgets in the millions)
@@ -425,8 +425,8 @@ New built-in commands available to use alongside the wizard:
 
 | Driver | Advisor | Lane |
 |--------|---------|------|
-| Opus 4.6[1m] (`claude-opus-4-6[1m]`) | GPT-5.6 Sol xhigh + Fable 5.1 (`"claude-fable-5-1"`) | **Reliable — recommended default** |
-| Opus 5.5 (`claude-opus-5-5`) | GPT-5.6 Sol xhigh + Fable 5.1 (`"claude-fable-5-1"`) | Frontier — experimental |
+| Opus 4.6[1m] (`claude-opus-4-6[1m]`) | GPT-5.6 Sol high + Fable 5.1 (`"claude-fable-5-1"`) | **Reliable — recommended default** |
+| Opus 5.5 (`claude-opus-5-5`) | GPT-5.6 Sol high + Fable 5.1 (`"claude-fable-5-1"`) | Frontier — experimental |
 | Sonnet 5 (`sonnet`) | Fable 5.1 (`"claude-fable-5-1"`) | Setup B — Simple/One-Off |
 | Sonnet via opusplan | Opus 5 (`"claude-opus-5"`) | Setup C — OpusPlan Hybrid |
 | Opus 4.8 (`claude-opus-4-8`, pinned) | Fable 5.1 (`"claude-fable-5-1"`) | Escalation tier |
@@ -1192,7 +1192,7 @@ This is **Setup C (OpusPlan Hybrid/Saver)** in `AI_SETUP_LANES.md`. CC's native 
 |-------|--------------------|---------------------------|----------------------------|
 | Planner | Opus 5 `xhigh` (Plan Mode) | Opus 5 `high` (`medium` routine) | Sonnet 5 `medium`→`high`→`xhigh` |
 | Driver | Sonnet 5 `medium` (execute mode) | Opus 5 `high` (`medium` routine) | Sonnet 5 `medium`→`high`→`xhigh` |
-| Reviewer | GPT-5.6 Sol xhigh | GPT-5.6 Sol xhigh | GPT-5.6 Sol xhigh |
+| Reviewer | GPT-5.6 Sol high | GPT-5.6 Sol high | GPT-5.6 Sol high |
 
 **How to opt in:**
 ```json
@@ -2444,7 +2444,7 @@ Low confidence does **not** mean "ask the user." It means "escalate," and the us
 
 The ladder is **sequential**. One brain at a time, and never Sol and Fable on the same question at once.
 
-1. **Sol (GPT-5.6 Sol via Codex CLI, `xhigh`) — the first brain.** Design calls, reviews, options menus, and anything you could not get to 95% after exhausting your own research. It is a different model family, so it does not share your blind spots. You fix what it finds and it rechecks: a dialogue, never a unilateral dismissal.
+1. **Sol (GPT-5.6 Sol via Codex CLI, `high`; `xhigh` only as a later escalation) — the first brain.** Design calls, reviews, options menus, and anything you could not get to 95% after exhausting your own research. It is a different model family, so it does not share your blind spots. You fix what it finds and it rechecks: a dialogue, never a unilateral dismissal.
 2. **Fable (`advisor()`; if down, a Fable subagent at `high`) — only when you and Sol cannot reconcile.** That means a disagreement that survives the recheck round, a second repair to the same component in one cycle (a design question, not a third patch: review converges on a fix, never on the right design), or a `WRONG_SHAPE` verdict. Present both positions to Fable verbatim, never a summary; Fable's ruling settles it. Expect this on about 5% of questions — much more means you are escalating instead of reconciling. Fable finds different things than Sol, which is why it is the tie-break rung and not a second reviewer run every time.
 3. **The human** — priority, risk appetite, scope, spend, or anything irreversible or outward-facing. A merge gate that demands explicit confirmation *is* this rung, invoked by design rather than by uncertainty.
 
@@ -2525,7 +2525,7 @@ Local tests pass -> Commit -> Push -> Watch CI
    - Read failure logs: `gh run view <RUN_ID> --log-failed`
    - Diagnose root cause (same philosophy as local test failures)
    - Fix and push again
-4. Max 2 fix attempts - if still failing, escalate (Sol via Codex `xhigh`; Fable only if you and Sol cannot reconcile) before asking the user
+4. Max 2 fix attempts - if still failing, escalate (Sol via Codex `xhigh` — two failed repairs is the later escalation; Fable only if you and Sol cannot reconcile) before asking the user
 5. **Read CI logs whether pass or fail — not just on failure.** A green checkmark hides warnings, skipped steps, and degraded scores (v1.24.0 shipped a degraded E2E score and a silently excluded test suite behind a passing check). Use `gh run view <RUN_ID> --log`, not just `--log-failed`.
 6. **Cross-model audit the CI logs** — same `codex exec` pattern as the Cross-Model Review Loop above. Prompt: *"Audit for silent failures, skipped tests, degraded metrics, warnings-that-should-be-errors."* Do this even when every check is green.
 7. Only after logs are read and audited — proceed to present final summary
@@ -2536,7 +2536,7 @@ Local tests pass -> Commit -> Push -> Watch CI
 - Your code broke it? Fix your code
 - CI config issue? Fix the config
 - Flaky? Investigate - flakiness is a bug
-- Stuck? Escalate — Sol (Codex `xhigh`), then Fable only if unreconciled; the user last
+- Stuck? Escalate — Sol (Codex `xhigh` after failed repairs), then Fable only if unreconciled; the user last
 
 ### CI Review Feedback Loop — Local Shepherd (After CI Passes)
 
@@ -3411,7 +3411,7 @@ All checks passed! Setup complete.
 |-------|---------------|
 | HIGH (90%+) | Proceed after approval |
 | MEDIUM (60-89%) | Highlight uncertainties |
-| LOW (<60%) | **Escalation ladder** — Sol (Codex xhigh) → Fable only if unreconciled → human last |
+| LOW (<60%) | **Escalation ladder** — Sol (Codex high) → Fable only if unreconciled → human last |
 | FAILED 2x | **Escalation ladder** — human is the last rung, not the first |
 
 ### Hook Summary
@@ -3844,7 +3844,7 @@ Use an independent AI model from a different company as a code reviewer. The aut
 
 **Use the best model, at an effort you can afford to run every time.** This is your quality gate — don't economize on the *model*. Always use the latest, most capable one available (**GPT-5.6 Sol if you have access**, otherwise Terra). Cheaper/faster models miss things; the whole point is catching what the authoring model couldn't.
 
-**Effort default: `high`** (changed from `xhigh` 2026-08-01). The reasoning is cost and review-noise, not capability: a reviewer you skip because it takes 30 minutes catches nothing, and a long tail of cosmetic findings crowds out the real ones. Escalate to `xhigh` for unusually risky PRs — auth, payments, data migrations, anything touching a merge or release gate — and to `max`/Pro above that; see `AI_SETUP_LANES.md`'s Final Review Policy.
+**Effort default: `high` for the first round, for every brain** (maintainer policy 2026-11-08; first set 2026-08-01, reverted to `xhigh` 2026-09-26). The reasoning is cost and review-noise, not capability: a reviewer you skip because it takes 30 minutes catches nothing, and a long tail of cosmetic findings crowds out the real ones. Escalate to `xhigh` only later — when a recheck fails to reconcile, or on a second repair to the same component — and to `max`/Pro above that; see `AI_SETUP_LANES.md`'s Final Review Policy.
 
 **Be honest about the evidence here, because we weren't.** This document previously asserted that "testing showed `xhigh` caught 3 findings that `high` missed on the same content", and framed that setting as beyond question. That line was written 2026-03-26 against **GPT-5.4** — two reviewer generations before GPT-5.6 Sol — with no measurement artifact behind it, and it survived unchallenged for four months. Neither the old default nor the new one rests on a controlled comparison in this repo. If you want the real answer, run both efforts on the same diff and count P0/P1 findings, not total findings.
 
@@ -4112,7 +4112,7 @@ The `mission/success/failure` fields give the reviewer context. Without them, yo
 
 ```bash
 codex exec \
-  -c 'model_reasoning_effort="xhigh"' \
+  -c 'model_reasoning_effort="high"' \
   -s danger-full-access \
   -o .reviews/latest-review.md \
   "You are an independent code reviewer. Read .reviews/handoff.json, \
@@ -4176,7 +4176,7 @@ Then update `handoff.json` to `"status": "PENDING_RECHECK"`, increment `round`, 
 
 ```bash
 codex exec \
-  -c 'model_reasoning_effort="xhigh"' \
+  -c 'model_reasoning_effort="high"' \
   -s danger-full-access \
   -o .reviews/latest-review.md \
   "You are doing a TARGETED RECHECK. First read .reviews/handoff.json \
@@ -4232,7 +4232,7 @@ Claude writes code → handoff.json (round 1)
 **Every CERTIFIED path above writes `"commit_sha": "<git rev-parse HEAD>"` into `handoff.json`** — `hooks/codex-gate-check.sh` (ROADMAP #437) treats a missing or mismatched SHA as a stale certification, so a bare `CERTIFIED` status string is never enough on its own.
 
 **Key flags:**
-- `-c 'model_reasoning_effort="xhigh"'` — the reviewer effort level, restored to `xhigh` on 2026-09-26 (quality-first). Previously `high` (2026-08-01, cost decision). Escalate to `max` or Pro mode for security-critical PRs.
+- `-c 'model_reasoning_effort="high"'` — the reviewer effort level: `high` for the first round (policy 2026-11-08; it was `xhigh` from 2026-09-26). Escalate to `xhigh` only when a recheck fails to reconcile or on a second repair, and to `max` or Pro mode for security-critical PRs.
 - `-s danger-full-access` — Full filesystem read/write so the reviewer can read your actual code.
 - `-o .reviews/latest-review.md` — Save the review output for Claude to read back.
 - **Claude Code sandbox bypass required:** Codex's Rust binary needs access to macOS system configuration APIs (`SCDynamicStore`) during initialization. Claude Code's sandbox blocks this, causing `codex exec` to crash with `panicked: Attempted to create a NULL object`. When running from within Claude Code, use `dangerouslyDisableSandbox: true` on the Bash tool call. This only bypasses CC's sandbox for the Codex process — Codex's own sandbox (`-s danger-full-access`) still applies. Known issue: [openai/codex#15640](https://github.com/openai/codex/issues/5914).

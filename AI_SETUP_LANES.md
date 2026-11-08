@@ -16,7 +16,7 @@ The maintainer's daily-driver pairing, field-proven with an SDLC harness. Optimi
 | Role | Model | Effort |
 |------|-------|--------|
 | **Builder** | Opus 4.6 (`claude-opus-4-6[1m]`) | `max` (4.6's sweet spot — no `xhigh` on this model) |
-| **First brain / Reviewer** | GPT-5.6 Sol via Codex CLI (repo-local `scripts/run-review-leg.sh`) | `xhigh` |
+| **First brain / Reviewer** | GPT-5.6 Sol via Codex CLI (repo-local `scripts/run-review-leg.sh`) | `high` first round; `xhigh` only as a later escalation |
 | **Escalation brain** | Fable 5.1 via `advisor()` (`advisorModel: "claude-fable-5-1"`) | `high` — **only when builder + first brain can't reach 95% confidence** |
 
 **The `[1m]` suffix is required.** Bare `claude-opus-4-6` pins a 200K context window. `claude-opus-4-6[1m]` gives 1M — confirmed by session header "Opus 4.6 (1M context)."
@@ -38,7 +38,7 @@ The maintainer's daily-driver pairing, field-proven with an SDLC harness. Optimi
 | Role | Model | Effort |
 |------|-------|--------|
 | **Builder** | Opus 5.5 (`claude-opus-5-5`) | `high` |
-| **First brain / Reviewer** | GPT-5.6 Sol via Codex CLI (repo-local `scripts/run-review-leg.sh`) | `xhigh` |
+| **First brain / Reviewer** | GPT-5.6 Sol via Codex CLI (repo-local `scripts/run-review-leg.sh`) | `high` first round; `xhigh` only as a later escalation |
 | **Escalation brain** | Fable 5.1 via `advisor()` (`advisorModel: "claude-fable-5-1"`) | `high` — only when builder + first brain can't reach 95% confidence |
 
 Same three-tier escalation ladder as Reliable, different builder model. The valve is identical: Fable 5.1 fires only on escalation, not on every review.
@@ -59,7 +59,7 @@ Sonnet 5 medium remains a fine default for less complex repos — see Setup B be
 |------|-------|--------|
 | **Advisor** | Fable 5.1 (via `advisorModel: "claude-fable-5-1"`) — same dated-availability caveat as Frontier; fall back to a Fable 5.1 subagent at `high` on failure | `high` (server-side); subagent fallback explicit `high` |
 | **Driver** | Sonnet 5 (`claude-sonnet-5`) | `medium` default, escalate `high` → `xhigh` for tasks that turn out harder than expected |
-| **Reviewer** | Codex (GPT-5.6 Sol) xhigh | — |
+| **Reviewer** | Codex (GPT-5.6 Sol) high | — |
 
 Choose this lane deliberately for scope, not by default — a one-off script, a small doc fix, a low-blast-radius repo. If a Setup B task turns out to need real agentic depth, swap to Setup A rather than cranking Sonnet 5's effort past `xhigh`; that's a model swap, not an effort-tier problem.
 
@@ -74,9 +74,9 @@ Choose this lane deliberately for scope, not by default — a one-off script, a 
 | **Planner** | Opus 5 (via Plan Mode — Shift+Tab, follows the `opus` alias) | `xhigh` |
 | **Advisor** | Fable 5.1 (via `advisorModel: "claude-fable-5-1"`) | `high` |
 | **Driver** | Sonnet 5 (auto execute mode) | `medium`, escalate `high` for hard runs |
-| **Reviewer** | Codex (GPT-5.6 Sol) xhigh | — |
+| **Reviewer** | Codex (GPT-5.6 Sol) high | — |
 
-Cost-efficient hybrid using CC's native `opusplan` alias. `opusplan` follows the `opus` alias for its planning phase — currently Opus 5 — and executes with Sonnet. Max-bundled — no API credit drain. Pin `model: "opusplan"` + `advisorModel: "claude-fable-5-1"` in project settings. Sonnet 5 now uses 1M context natively (no `[1m]` suffix needed). GPT-5.6 Sol xhigh is the cross-model reviewer.
+Cost-efficient hybrid using CC's native `opusplan` alias. `opusplan` follows the `opus` alias for its planning phase — currently Opus 5 — and executes with Sonnet. Max-bundled — no API credit drain. Pin `model: "opusplan"` + `advisorModel: "claude-fable-5-1"` in project settings. Sonnet 5 now uses 1M context natively (no `[1m]` suffix needed). GPT-5.6 Sol (first round `high`) is the cross-model reviewer.
 
 **Note:** Opus 4.6 cannot advise Sonnet 5 (rejected in the advisor pairing table). Use Fable 5.1 or Opus 5 as advisor for this lane. Pin `claude-opus-4-8` explicitly (not the `opus` alias) if you specifically want Opus 4.8's field-proven planning behavior instead of Opus 5's.
 
@@ -154,13 +154,13 @@ Setup D is for work where SDLC discipline overhead exceeds the value:
 
 ## Final Review Policy
 
-**Setups A, B, and C end at GPT-5.6 Sol xhigh as the cross-model reviewer.** Claude can't grade its own homework — the reviewer always belongs to a different lab with different blind spots. See [CLAUDE_CODE_SDLC_WIZARD.md → "Cross-Model Review (Codex)"](CLAUDE_CODE_SDLC_WIZARD.md) for the handoff protocol.
+**Setups A, B, and C end at GPT-5.6 Sol (first round `high`) as the cross-model reviewer.** Claude can't grade its own homework — the reviewer always belongs to a different lab with different blind spots. See [CLAUDE_CODE_SDLC_WIZARD.md → "Cross-Model Review (Codex)"](CLAUDE_CODE_SDLC_WIZARD.md) for the handoff protocol.
 
 **Setup D has no reviewer** — the blast radius doesn't justify it. If you're unsure whether a task is truly Lite, it probably isn't. Escalate.
 
-If GPT-5.6 Sol isn't available on your OpenAI account, Codex auto-falls back to Terra — still keep `model_reasoning_effort="xhigh"`. Lower reasoning misses subtle bugs that the reviewer is the last gate to catch.
+If GPT-5.6 Sol isn't available on your OpenAI account, Codex auto-falls back to Terra — still keep `model_reasoning_effort="high"` for the first round. Dropping below `high` misses subtle bugs that the reviewer is the last gate to catch.
 
-**Reviewer effort is `xhigh`** — restored from `high` (2026-09-26). The 2026-08-01 downgrade to `high` was a cost decision; the maintainer's quality-first stance removes that constraint. For PRs you'd genuinely lose sleep over (security-sensitive, high blast radius, touches the installer), escalate to `max` or Pro mode.
+**Reviewer effort is `high` for the first round, for every brain** (Sol, Fable, any API leg — maintainer policy 2026-11-08; it was `xhigh` from 2026-09-26). Escalate to `xhigh` only later: when a recheck fails to reconcile, or on a second repair to the same component. For PRs you'd genuinely lose sleep over (security-sensitive, high blast radius, touches the installer), escalate to `max` or Pro mode.
 
 ## Version Requirement
 
@@ -192,7 +192,7 @@ Either way it is not free. Advisor usage counts toward your plan's limits, it fo
 
 **Step 2 — on a real failure, go straight to the subagent.** Spawn a Fable subagent as the fallback reviewer, explicit `effort: "high"` (per this repo's own `/sdlc` skill: "if down, spawn Fable subagent at `high`"). No restart, no retry, no wait — a rollout gate is not transient, and a retry loop against one wastes a cycle. Batch your open questions into one consult at each point where you'd have called `advisor()`. Runs interactively on your Max subscription like any other agent. **Unverified:** this path has never been observed firing. During the 2026-07-24 outage the driver used it, but no receipt or transcript of a fallback-triggered leg was kept, so its behavior under a real failure is described, not measured.
 
-**Step 3 — keep driving with your lane's model.** `/model opus` for Setup A, `/model sonnet` for Setup B. The subagent replaces the advisor's transport; the Codex xhigh PR gate remains the separate final backstop, not a substitute for the advisor check.
+**Step 3 — keep driving with your lane's model.** `/model opus` for Setup A, `/model sonnet` for Setup B. The subagent replaces the advisor's transport; the Codex PR gate remains the separate final backstop, not a substitute for the advisor check.
 
 **Step 4 (last resort, scripted/CI only):**
 
@@ -210,7 +210,7 @@ Whichever path you use, the cross-model PR review gate still applies.
 
 **Setup D uses Sonnet** — same model as Setup B's driver, Max-bundled. One less model to manage if you're already reaching for Setup B for lighter work.
 
-The reviewer (GPT-5.6 Sol xhigh) is billed against your OpenAI account, separately. Watch both bills.
+The reviewer (GPT-5.6 Sol) is billed against your OpenAI account, separately. Watch both bills.
 
 ## Autocompact Thresholds
 
@@ -248,11 +248,11 @@ Credit allocations: Pro $20/mo, Max 5x $100/mo, Max 20x $200/mo. **No rollover.*
 
 ### What this means for the lanes
 
-- **Frontier — Opus 5.5 + Fable 5.1 advisor (fallback subagent):** Opus 5.5 driver on Max, 1M context included at standard rates (see above). Fable 5.1 advisor (`"claude-fable-5-1"`) observed working 2026-08-16 — Fable subagent fallback also Max-bundled. claude.ai `/settings/usage` shows `All models` and `Fable` as separate meters, and on 2026-08-16 the advisor answered with the `Fable` meter at 100%; **which meter that call billed was not measured**, so do not budget against it. Advisor is the priciest call shape regardless — full conversation every call, no cache between calls. GPT-5.6 Sol xhigh reviewer, separate.
-- **Setup B — Sonnet 5 Simple/One-Off:** Sonnet 5's native 1M context — interactive session, Max-bundled, no `[1m]` suffix needed. Fable 5.1 advisor (fallback subagent) — also Max-bundled. GPT-5.6 Sol xhigh reviewer on ChatGPT subscription. Generally lower Max quota consumption than Setup A at the `medium` default (savings shrink at higher effort).
+- **Frontier — Opus 5.5 + Fable 5.1 advisor (fallback subagent):** Opus 5.5 driver on Max, 1M context included at standard rates (see above). Fable 5.1 advisor (`"claude-fable-5-1"`) observed working 2026-08-16 — Fable subagent fallback also Max-bundled. claude.ai `/settings/usage` shows `All models` and `Fable` as separate meters, and on 2026-08-16 the advisor answered with the `Fable` meter at 100%; **which meter that call billed was not measured**, so do not budget against it. Advisor is the priciest call shape regardless — full conversation every call, no cache between calls. GPT-5.6 Sol high reviewer, separate.
+- **Setup B — Sonnet 5 Simple/One-Off:** Sonnet 5's native 1M context — interactive session, Max-bundled, no `[1m]` suffix needed. Fable 5.1 advisor (fallback subagent) — also Max-bundled. GPT-5.6 Sol high reviewer on ChatGPT subscription. Generally lower Max quota consumption than Setup A at the `medium` default (savings shrink at higher effort).
 - **Setup C — OpusPlan Hybrid:** **fully Max-bundled.** `opusplan` uses Opus (plan mode, now Opus 5) + Sonnet (execute mode), both at their native context windows — no credit drain.
   - **⚠️ Avoid `sonnet[1m]` as a manual pin outside Setup B/C:** if your provider or gateway doesn't resolve Sonnet 5 to its native 1M automatically, forcing a `[1m]`-suffixed pin on an older Sonnet can draw from your usage credits pool ($3/$15 per Mtok) instead of your Max subscription. The `/model` picker shows this explicitly — watch for "Draws from usage credits."
-- **Reviewer (GPT-5.6 Sol xhigh) in all three triads:** billed against your OpenAI account, completely separate from Anthropic.
+- **Reviewer (GPT-5.6 Sol) in all three triads:** billed against your OpenAI account, completely separate from Anthropic.
 - **CI loops that use `claude -p` post-June-15:** these now bill against the separate Anthropic credit pool, not your Max subscription. The wizard's CI shepherd loops (E2E scoring, weekly-update jobs) are local-only on the maintainer's machine and stay on Max; consumer-repo CI integrations may need to budget the new credit pool.
 
 ### Bottom line
@@ -293,7 +293,7 @@ That research still stands as the reason **Sonnet 5 (not Opus 4.6, not Opus 4.8)
 
 4.6 remains Anthropic-supported until **≥ Feb 5, 2027** per the [official deprecation page](https://platform.claude.com/docs/en/about-claude/model-deprecations).
 
-**Effort is model-aware, not blanket `max`.** Opus 5 (Frontier): `xhigh` (quality-first, cost constraint removed 2026-09-26). Sonnet 5: `medium` default (CodeRabbit-tested), escalate `/effort high` → `xhigh` for hard tasks. Opus 4.8: `xhigh` (its own `max` overthinks). Opus 4.6: `max` (its one `xhigh`-less sweet spot). Set per-session with `/effort`, not a shell-rc or settings env var — persisting effort that way silently overrides a later `/effort` change after you switch models (see `SDLC.md`'s Lessons Learned for a real incident this caused). Also check for a stale `ANTHROPIC_DEFAULT_OPUS_MODEL` env var in your shell rc files — it silently overrides `/model opus` picker choices. OpenAI/Codex reviewer: GPT-5.6 Sol `xhigh` (both lanes) (restored from `high` 2026-09-26 — quality-first). Escalate to `max`/Pro for security-critical PRs.
+**Effort is model-aware, not blanket `max`.** Opus 5 (Frontier): `xhigh` (quality-first, cost constraint removed 2026-09-26). Sonnet 5: `medium` default (CodeRabbit-tested), escalate `/effort high` → `xhigh` for hard tasks. Opus 4.8: `xhigh` (its own `max` overthinks). Opus 4.6: `max` (its one `xhigh`-less sweet spot). Set per-session with `/effort`, not a shell-rc or settings env var — persisting effort that way silently overrides a later `/effort` change after you switch models (see `SDLC.md`'s Lessons Learned for a real incident this caused). Also check for a stale `ANTHROPIC_DEFAULT_OPUS_MODEL` env var in your shell rc files — it silently overrides `/model opus` picker choices. OpenAI/Codex reviewer: GPT-5.6 Sol `high` for the first round (both lanes, policy 2026-11-08); `xhigh` only as a later escalation, `max`/Pro for security-critical PRs.
 
 ### Reading Setup A precisely
 

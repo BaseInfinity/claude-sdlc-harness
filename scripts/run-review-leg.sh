@@ -257,7 +257,7 @@ rm -f "$VERDICT"
 set +e
 codex exec \
     -m "${REVIEW_MODEL:-gpt-5.6-sol}" \
-    -c 'model_reasoning_effort="xhigh"' \
+    -c 'model_reasoning_effort="high"' \
     -s danger-full-access \
     --output-schema "$SCHEMA" \
     --output-last-message "$VERDICT" \
