@@ -132,7 +132,8 @@ function set(args) {
 }
 
 function bar(percent) {
-  const cells = Math.round(percent / 10);
+  // Floor, so only 100 fills the bar; any nonzero percent shows one cell.
+  const cells = percent === 0 ? 0 : Math.max(1, Math.floor(percent / 10));
   return "█".repeat(cells) + "░".repeat(10 - cells);
 }
 

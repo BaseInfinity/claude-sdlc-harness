@@ -477,7 +477,8 @@ node "$STATUS" set --root "$LROOT" --controller HARNESS --workstream w --percent
 [ ! -e "$OUTSIDE/fleet.json" ] && pass "symlinked .brain target stays untouched" \
     || fail "symlinked .brain target stays untouched"
 
-for case in "0|░░░░░░░░░░   0%" "5|█░░░░░░░░░   5%" "50|█████░░░░░  50%" "100|██████████ 100%"; do
+for case in "0|░░░░░░░░░░   0%" "5|█░░░░░░░░░   5%" "50|█████░░░░░  50%" "95|█████████░  95%" "99|█████████░  99%" \
+    "100|██████████ 100%"; do
     sset --controller WINDOWS --workstream "bar" --percent "${case%%|*}" --state in_flight
     sview --controller WINDOWS | grep -qF "${case#*|} bar" \
         && pass "bar renders ${case%%|*}%" || fail "bar renders ${case%%|*}% (got: $(sview --controller WINDOWS))"
