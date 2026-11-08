@@ -278,7 +278,7 @@ waits on the user for something a model can answer.
 2. **It needs a decision:** climb the brain ladder, Sol at high and then
    Fable, and dispatch on the verdict.
 3. **Ask the user only for what only they own:** money, credentials, pushes,
-   PRs and issue closes, settings and permissions, sending messages, and
+   PRs, issue closes, settings and permissions, sending messages, and
    product values.
 
 Writing commands that pass the guards:

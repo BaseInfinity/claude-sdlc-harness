@@ -524,7 +524,7 @@ awk '/^## Conductor, controllers and workers/{f=1;next} /^## /{f=0} f' "$SKILL" 
     | grep -q '^### Never stall on the human' \
     && pass "roles section has the never-stall subsection" \
     || fail "roles section has the never-stall subsection"
-for term in optional money credentials push settings permissions 'sending messages' \
+for term in optional money credentials push PRs 'issue closes' settings permissions 'sending messages' \
     'product values' 'git -C' '${VAR:?}' Sol Fable; do
     printf '%s' "$NS" | grep -qiF -- "$term" && pass "never-stall names: $term" \
         || fail "never-stall names: $term"
