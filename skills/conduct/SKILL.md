@@ -212,7 +212,9 @@ only if the last lines show an idle Claude or Codex input box. If they show a
 shell prompt, a running command or a permission dialog, stop and tell the user.
 Then send with `it2api send-text <id> "$(cat "$ENV")"`, and submit with a
 separate `it2api send-text <id> $'\r'`. Read buffers only for the session in
-the current handoff.
+the current handoff. The one exception to this rule is the first launch of a
+new worker tab: that send goes to a shell prompt and carries the launcher line,
+never an envelope (see Material work goes to a worker tab).
 
 **A queued message is accepted, not executed.** `codex queue` returning
 `Queued message <id>` proves acceptance only. An inactive Codex session needs
@@ -291,6 +293,64 @@ Writing commands that pass the guards:
 - Write temp files under `$TMPDIR`, which the sandbox allows.
 - Run one action per call, so a denial names exactly one thing.
 
+### Material work goes to a worker tab
+
+Recommended and optional, like the layout above. Use a subagent (the Agent
+tool) only for one-off lookups and checks. Send material work to a worker tab:
+code, a build, a design, or anything else with a deliverable that should go
+through `/sdlc` and review. A worker tab is a real `claude` session in the
+controller's iTerm window. It runs in its own git worktree, is named
+`CLAUDE SDLC: <task>`, and carries the controller's tab color.
+
+1. **Reuse first.** Give the work to an idle worker tab before you open a new
+   one.
+2. **Never kill work mid-flight.** Move a running material subagent to a worker
+   tab only at a natural boundary, such as a finished step.
+3. **Verify from the transcript.** The launch is proven only when the worker's
+   transcript under `~/.claude/projects/<worktree slug>/` holds the prompt.
+   Never trust the composer.
+
+The controller launched a worker tab this way on 2026-11-08. The window id comes
+from `it2api show-hierarchy`.
+
+```bash
+it2api create-tab --window <controller window id>
+# printed: Session " " id=665541BE-8E62-4C34-9A68-3400AC1F4B9E (158 x 53)
+```
+
+The tab opened in the controller's window at a `-zsh` prompt. This is the one
+send that goes to a shell prompt: check that `it2api get-buffer <id>` shows only
+the new tab's shell prompt, then send the launcher line and the Return key as
+two separate calls. Use literal values with no `$` or backticks, because the
+double quotes let your shell expand them:
+
+```bash
+it2api send-text <id> "<scratchpad>/launch-worker-tab.sh <worktree> '<task>' <prompt file>"
+it2api send-text <id> $'\r'
+```
+
+`launch-worker-tab.sh` was a three-line script in the controller's scratchpad.
+Its OSC 6 escapes set the tab color before `claude` starts. Put your own
+controller's profile `tab_color` in the three brightness values; the
+controller's was 245,205,60:
+
+```bash
+#!/bin/bash
+set -e; printf '\033]6;1;bg;red;brightness;245\a\033]6;1;bg;green;brightness;205\a\033]6;1;bg;blue;brightness;60\a'; cd "$1"; exec claude --dangerously-skip-permissions --plugin-dir <plugin dir> -n "CLAUDE SDLC: $2" "$(cat "$3")"
+```
+
+`--dangerously-skip-permissions` is how this user runs their own sessions. It
+is the user's choice, not a default; drop it unless the user runs that way.
+After the launch, `it2api list-sessions` showed
+`"◑ CLAUDE SDLC: conduct worker tabs (node)"`, and the worker's transcript held
+the prompt.
+
+Use `it2api send-text` only for that first launch. After it, send follow-ups
+with `SendMessage` to the tab's `ListAgents` name. A peer observed on
+2026-11-08 that `send-text` into a busy Claude TUI types the text but does not
+submit it. Every follow-up the controller sent this worker by `SendMessage`
+that day was delivered.
+
 ## Peer supervision during active work
 
 This mirrors the Codex adapter's policy, so both ends supervise the same way.
@@ -362,6 +422,17 @@ progress.
 left its lock behind. Read `.write-lock/owner.json` for the writer's PID and
 start time, and check whether that process is alive. Remove the lock only when
 you have verified it is stale. Never remove it because of elapsed time alone.
+
+**Handing computer use to another session.** One Claude Code session at a
+time holds computer use, recorded in `~/.claude/computer-use.lock` (session id
+and pid). The lock is advisory: it holds no capture stream. It frees in two
+ways only: the holder session exits, or the next `request_access` finds the
+holder's pid dead. There is no live handoff, so end the holder session; do not
+delete the file. On 2026-11-08 the file was deleted while its holder lived. The
+next session acquired the lock, but every screenshot returned nil, even with
+the desktop in view, while `screencapture -x` worked. Neither Screen Recording
+nor the window's sharing state explained it (iTerm2 allowed, sharingState 1).
+The cause is unproven, and no fix has been observed yet.
 
 ## Receiver policy
 

@@ -530,6 +530,19 @@ for term in optional money credentials push PRs 'issue closes' settings permissi
         || fail "never-stall names: $term"
 done
 
+WT=$(awk '/^### Material work goes to a worker tab/{f=1;next} /^##/{f=0} f' "$SKILL" | tr '\n' ' ')
+awk '/^## Conductor, controllers and workers/{f=1;next} /^## /{f=0} f' "$SKILL" \
+    | grep -q '^### Material work goes to a worker tab' \
+    && pass "roles section has the worker-tab subsection" \
+    || fail "roles section has the worker-tab subsection"
+for term in optional 'one-off' 'worker tab' 'CLAUDE SDLC: <task>' 'own git worktree' 'tab color' \
+    idle '~/.claude/projects/' composer 'natural boundary' 'mid-flight' \
+    'it2api create-tab' 'it2api send-text' 'OSC 6' '--dangerously-skip-permissions' \
+    'launch-worker-tab.sh' SendMessage 'ListAgents'; do
+    printf '%s' "$WT" | grep -qiF -- "$term" && pass "worker-tab names: $term" \
+        || fail "worker-tab names: $term"
+done
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
