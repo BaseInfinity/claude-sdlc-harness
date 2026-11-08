@@ -225,34 +225,59 @@ print(repr(m.scan(FakeAX(), win)["composer"]))
 ' "$DPY" 2>&1)
 [ "$got" != "''" ] && pass "scan: an unreadable composer is not an empty composer" \
     || fail "scan: an unreadable composer is not an empty composer (got: $got)"
-# drive() is the press sequence; run it with scripted scans and record presses.
-drive_case() { # name expected scans-json allow_trust
+# drive() is the press sequence; run it with scripted scans, record presses,
+# and script the transcript proof (confirm) one poll at a time.
+drive_case() { # name expected scans-json confirms-json allow_trust
     local got
     got=$(python3 -c '
 import importlib.util, json, sys
 spec = importlib.util.spec_from_file_location("cd", sys.argv[1])
 m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
-scans, pressed = json.loads(sys.argv[2]), []
+scans, confirms, pressed = json.loads(sys.argv[2]), json.loads(sys.argv[3]), []
 def press(el): pressed.append(el); return True
-r = m.drive(lambda: scans.pop(0), press, "/Users/u/proj", "/Users/u", "hi", sys.argv[3] == "1", wait=lambda s: None)
-print(r, m.EXIT.get(r, 2), "+".join(pressed) or "none")
-' "$DPY" "$3" "$4" 2>&1)
+r = m.drive(lambda: scans.pop(0), press, lambda: confirms.pop(0) if confirms else False,
+            "/Users/u/proj", "/Users/u", "hi", sys.argv[4] == "1", wait=lambda s: None)
+print(r, m.EXIT.get(r, 2), "+".join(pressed) or "none", len(scans))
+' "$DPY" "$3" "$4" "$5" 2>&1)
     [ "$got" = "$2" ] && pass "drive: $1" || fail "drive: $1 (want $2, got $got)"
 }
 T='{"trust":"T","trustPath":"/Users/u/proj"}'
 R='{"folderLabel":"Folder: ~/proj","composer":"hi","send":"S"}'
-E='{"folderLabel":"Folder: ~/proj","composer":"","send":"S"}'
-drive_case "trusted folder sends once" "SENT 0 S" "[$R,$E]" 1
-drive_case "presses Trust then Send and says so" "TRUSTED_SENT 0 T+S" "[$T,$R,$E]" 1
-drive_case "SENT waits for the composer to empty" "SENT 0 S" "[$R,$R,$R,$E]" 1
-drive_case "a composer that keeps the prompt is SEND_UNCONFIRMED, exit 5" \
-    "SEND_UNCONFIRMED 5 S" "[$R,$R,$R,$R,$R,$R]" 1
-drive_case "a vanished composer is SEND_UNCONFIRMED, exit 5" \
-    "SEND_UNCONFIRMED 5 S" "[$R,{},{},{},{},{}]" 1
-drive_case "--no-trust presses nothing and exits 4" "NEEDS_TRUST 4 none" "[$T]" 0
-drive_case "wrong prompt presses nothing and exits 3" "MISMATCH 3 none" \
-    '[{"folderLabel":"Folder: ~/proj","composer":"bye","send":"S"}]' 1
-drive_case "a dialog that stays is TRUST_STUCK, exit 2" "TRUST_STUCK 2 T" "[$T,$T]" 1
+drive_case "trusted folder sends once the transcript proves it" "SENT 0 S 0" "[$R]" '[true]' 1
+drive_case "presses Trust then Send and says so" "TRUSTED_SENT 0 T+S 0" "[$T,$R]" '[true]' 1
+drive_case "SENT waits for the transcript" "SENT 0 S 0" "[$R]" '[false,false,true]' 1
+drive_case "composer still holding the prompt does not block a proven send (live 13:39)" \
+    "SENT 0 S 0" "[$R]" '[false,true]' 1
+drive_case "no transcript within the bound is SEND_UNCONFIRMED, exit 5" \
+    "SEND_UNCONFIRMED 5 S 0" "[$R]" '[]' 1
+drive_case "--no-trust presses nothing and exits 4" "NEEDS_TRUST 4 none 0" "[$T]" '[]' 0
+drive_case "wrong prompt presses nothing and exits 3" "MISMATCH 3 none 0" \
+    '[{"folderLabel":"Folder: ~/proj","composer":"bye","send":"S"}]' '[]' 1
+drive_case "a dialog that stays is TRUST_STUCK, exit 2" "TRUST_STUCK 2 T 0" "[$T,$T]" '[]' 1
+# The transcript is the proof of a send. Fixture: the first three lines of the
+# real 13:39 probe transcript, keys whitelisted (probe prompt only).
+FIX="$REPO_ROOT/tests/fixtures/conduct/desktop-send-transcript.jsonl"
+PDIR="$TMPDIR_T/projects/-Users-stefanayala-conduct-desktop-probe"
+mkdir -p "$PDIR" && cp "$FIX" "$PDIR/bc4e7f29-a6fb-4039-8927-39b61da3584d.jsonl"
+grep -v '"type": "user"' "$FIX" > "$TMPDIR_T/queue-only.jsonl"
+mkdir -p "$TMPDIR_T/qonly" && cp "$TMPDIR_T/queue-only.jsonl" "$TMPDIR_T/qonly/a.jsonl"
+got=$(python3 -c '
+import importlib.util, sys, time
+spec = importlib.util.spec_from_file_location("cd", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+P = "Live launch test from CONDUCTOR CLAUDE. Reply with exactly LIVE_TEST_OK 5e1c and stop. Do nothing else."
+now = time.time()
+print(m.project_dir("/Users/stefanayala/conduct-desktop-probe", "/H"),
+      m.project_dir("/Users/u/.claude-worktrees/x", "/H"),
+      m.transcript_sent(sys.argv[2], now - 60, P + "\n"),
+      m.transcript_sent(sys.argv[2], now - 60, "another prompt"),
+      m.transcript_sent(sys.argv[2], now + 60, P),
+      m.transcript_sent(sys.argv[3], now - 60, P),
+      m.transcript_sent(sys.argv[2] + "-missing", now - 60, P))
+' "$DPY" "$PDIR" "$TMPDIR_T/qonly" 2>&1)
+want="/H/.claude/projects/-Users-stefanayala-conduct-desktop-probe /H/.claude/projects/-Users-u--claude-worktrees-x True False False False False"
+[ "$got" = "$want" ] && pass "transcript proof: slug, match, wrong prompt, pre-launch file, queue-only, missing dir" \
+    || fail "transcript proof (want: $want; got: $got)"
 # codex-thread.py starts a new Codex thread (it appears in Codex Desktop).
 CTP="$SKILL_DIR/scripts/codex-thread.py"
 got=$(python3 -c '

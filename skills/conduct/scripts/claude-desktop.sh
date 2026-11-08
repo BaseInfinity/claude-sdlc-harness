@@ -13,7 +13,8 @@
 # Accessibility permission. Exit codes: 0 sent, 1 usage, 2 control not found
 # or script error, 3 wrong folder or composer does not hold this prompt
 # (refuses to send), 4 folder needs Trust and --no-trust was given, 5 Send
-# was pressed but the composer never emptied (not proven sent). Prints
+# was pressed but no new transcript under ~/.claude/projects/ held the prompt
+# within 30 s (not proven sent). Prints
 # TRUSTED_SENT instead of SENT when it pressed Trust. A prompt with a blank
 # line, or an empty prompt, is refused with exit 1 before Desktop opens.
 set -e
@@ -67,6 +68,7 @@ if [ -z "$PID" ]; then
 fi
 if [ -z "$PID" ]; then echo "claude-desktop: Claude is not running" >&2; exit 2; fi
 
+LAUNCH=$(date +%s)
 open "$URL"
 sleep 5
 
@@ -76,7 +78,7 @@ sleep 5
 HERE=$(cd "$(dirname "$0")" && pwd)
 # claude-desktop.py owns the result-to-exit-code table; a crash becomes 2.
 RC=0
-RESULT=$(python3 "$HERE/claude-desktop.py" "$PID" "$FOLDER" "$PROMPT_FILE" "$TRUST") || RC=$?
+RESULT=$(python3 "$HERE/claude-desktop.py" "$PID" "$FOLDER" "$PROMPT_FILE" "$TRUST" "$LAUNCH") || RC=$?
 
 echo "claude-desktop: ${RESULT:-ERROR}"
 case "$RC" in
