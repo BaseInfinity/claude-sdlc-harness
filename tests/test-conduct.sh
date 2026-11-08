@@ -422,6 +422,102 @@ grep -q 'outbox/<req-id>.json' "$SKILL" && pass "SKILL.md transports the outbox 
 grep -qi 'agent input' "$SKILL" && pass "SKILL.md requires an agent input before it2api send" \
     || fail "SKILL.md requires an agent input before it2api send"
 
+echo "=== fleet status ==="
+STATUS="$SKILL_DIR/scripts/status.cjs"
+FROOT="$TMPDIR_T/fleet"; mkdir -p "$FROOT"
+FLEET="$FROOT/.brain/fleet.json"
+sset() { node "$STATUS" set --root "$FROOT" "$@" >/dev/null 2>&1; }
+sview() { node "$STATUS" --root "$FROOT" "$@" 2>&1; }
+fleet_hash() { sha "$FLEET"; }
+
+sset --controller harness --workstream "Fleet Tracker!" --percent 5 --state in_flight \
+    --next "design, then Sol" --evidence "scratchpad/x.md" \
+    && pass "status set creates a row" || fail "status set creates a row"
+got=$(python3 - "$FLEET" <<'PY'
+import json, sys, datetime
+rows = json.load(open(sys.argv[1]))["rows"]
+r = rows.get("HARNESS/fleet-tracker", {})
+datetime.datetime.fromisoformat(r.get("updated_at", "x").replace("Z", "+00:00"))
+print(sorted(rows), r["controller"], r["workstream"], r["percent"], r["state"],
+      repr(r["blocker_owner"]), r["next_step"], r["evidence"])
+PY
+)
+[ "$got" = "['HARNESS/fleet-tracker'] HARNESS Fleet Tracker! 5 in_flight '' design, then Sol scratchpad/x.md" ] \
+    && pass "row is keyed CONTROLLER/slug with every field and an ISO updated_at" \
+    || fail "row is keyed CONTROLLER/slug with every field and an ISO updated_at (got: $got)"
+sset --controller HARNESS --workstream "fleet tracker" --percent 40 --state blocked --blocker-owner Stefan
+got=$(python3 -c 'import json,sys; r=json.load(open(sys.argv[1]))["rows"]; print(len(r), r["HARNESS/fleet-tracker"]["percent"], r["HARNESS/fleet-tracker"]["blocker_owner"], repr(r["HARNESS/fleet-tracker"]["next_step"]))' "$FLEET")
+[ "$got" = "1 40 Stefan ''" ] && pass "set upserts the same slug, replacing the row" \
+    || fail "set upserts the same slug, replacing the row (got: $got)"
+ls "$FROOT/.brain" | grep -qv '^fleet.json$' \
+    && fail "atomic write leaves no temp file behind" || pass "atomic write leaves no temp file behind"
+
+before=$(fleet_hash)
+for bad in \
+    "unknown state|--controller HARNESS --workstream w --percent 1 --state stalled" \
+    "percent below 0|--controller HARNESS --workstream w --percent -1 --state planned" \
+    "percent above 100|--controller HARNESS --workstream w --percent 101 --state planned" \
+    "fractional percent|--controller HARNESS --workstream w --percent 5.5 --state planned" \
+    "non-numeric percent|--controller HARNESS --workstream w --percent abc --state planned" \
+    "blocked without an owner|--controller HARNESS --workstream w --percent 1 --state blocked" \
+    "an owner when not blocked|--controller HARNESS --workstream w --percent 1 --state done --blocker-owner Stefan" \
+    "unknown controller|--controller NOBODY --workstream w --percent 1 --state planned" \
+    "a workstream with no slug|--controller HARNESS --workstream !!! --percent 1 --state planned"; do
+    # shellcheck disable=SC2086
+    sset ${bad#*|} && fail "status set refuses ${bad%%|*}" || pass "status set refuses ${bad%%|*}"
+done
+[ "$(fleet_hash)" = "$before" ] && pass "refused sets leave fleet.json unchanged" \
+    || fail "refused sets leave fleet.json unchanged"
+(cd "$FROOT" && node "$STATUS" set --controller HARNESS --workstream w --percent 1 --state planned >/dev/null 2>&1) \
+    && fail "status set refuses a missing --root" || pass "status set refuses a missing --root"
+LROOT="$TMPDIR_T/linked"; OUTSIDE="$TMPDIR_T/outside"; mkdir -p "$LROOT" "$OUTSIDE"
+ln -s "$OUTSIDE" "$LROOT/.brain"
+node "$STATUS" set --root "$LROOT" --controller HARNESS --workstream w --percent 1 --state planned >/dev/null 2>&1 \
+    && fail "status set refuses a symlinked .brain" || pass "status set refuses a symlinked .brain"
+[ ! -e "$OUTSIDE/fleet.json" ] && pass "symlinked .brain target stays untouched" \
+    || fail "symlinked .brain target stays untouched"
+
+for case in "0|░░░░░░░░░░   0%" "5|█░░░░░░░░░   5%" "50|█████░░░░░  50%" "100|██████████ 100%"; do
+    sset --controller WINDOWS --workstream "bar" --percent "${case%%|*}" --state in_flight
+    sview --controller WINDOWS | grep -qF "${case#*|} bar" \
+        && pass "bar renders ${case%%|*}%" || fail "bar renders ${case%%|*}% (got: $(sview --controller WINDOWS))"
+done
+
+rm -f "$FLEET"
+sset --controller CODEX --workstream "c-done" --percent 100 --state done
+sset --controller CODEX --workstream "c-planned" --percent 0 --state planned
+sset --controller CODEX --workstream "c-blocked" --percent 9 --state blocked --blocker-owner Stefan
+sset --controller CODEX --workstream "c-flight" --percent 50 --state in_flight --next "ship it"
+sset --controller HARNESS --workstream "h" --percent 1 --state planned
+sset --controller CONDUCTOR --workstream "k" --percent 1 --state planned
+got=$(sview | grep -oE '^\[[A-Z]+\]|c-(done|planned|blocked|flight)' | tr '\n' ' ')
+[ "$got" = "[CONDUCTOR] [HARNESS] [CODEX] c-flight c-blocked c-planned c-done " ] \
+    && pass "sections in label order, rows in flight > blocked > planned > done, empty sections skipped" \
+    || fail "sections in label order, rows in flight > blocked > planned > done (got: $got)"
+sview | grep -qF 'blocked on Stefan' && pass "blocked rows name who they wait on" \
+    || fail "blocked rows name who they wait on"
+sview | grep -qF 'next: ship it' && pass "rows show the next step" || fail "rows show the next step"
+got=$(sview --controller codex | grep -c '^\[')
+[ "$got" = 1 ] && pass "--controller filters to one section" || fail "--controller filters to one section (got: $got)"
+
+STAMP=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["rows"]["HARNESS/h"]["updated_at"])' "$FLEET")
+later() { python3 -c 'import datetime,sys; t=datetime.datetime.fromisoformat(sys.argv[1].replace("Z","+00:00")); print((t+datetime.timedelta(hours=float(sys.argv[2]))).isoformat())' "$STAMP" "$1"; }
+sview --controller HARNESS --now "$(later 25)" | grep -qF 'STALE' \
+    && pass "a row over 24h old is marked STALE" || fail "a row over 24h old is marked STALE"
+sview --controller HARNESS --now "$(later 23)" | grep -qF 'STALE' \
+    && fail "a row under 24h old is not STALE" || pass "a row under 24h old is not STALE"
+
+ESC=$(printf '\033')
+sview | grep -q "$ESC" && fail "piped output carries no ANSI" || pass "piped output carries no ANSI"
+on_tty() { # run a command under a pseudo-terminal (BSD or util-linux script)
+    if script --version >/dev/null 2>&1; then script -qec "$*" /dev/null
+    else script -q /dev/null "$@"; fi
+}
+(unset NO_COLOR; on_tty node "$STATUS" --root "$FROOT") | grep -q "$ESC" \
+    && pass "a TTY gets ANSI color" || fail "a TTY gets ANSI color"
+NO_COLOR=1 on_tty node "$STATUS" --root "$FROOT" | grep -q "$ESC" \
+    && fail "NO_COLOR suppresses ANSI on a TTY" || pass "NO_COLOR suppresses ANSI on a TTY"
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
