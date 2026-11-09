@@ -134,11 +134,23 @@ function main() {
   if (found.length === 0) throw new Error(`no attributable codex rate_limits event under ${home}/sessions`);
   const dir = path.join(path.resolve(argv[1]), ".brain", "usage");
   fs.mkdirSync(dir, { recursive: true });
-  for (const list of found) {
-    const text = list.map((row) => `${JSON.stringify(row)}\n`).join("");
-    fs.appendFileSync(path.join(dir, `${list[0].account}.jsonl`), text);
-    process.stdout.write(text);
+  // Refuse a symlinked output before writing any, so a refused collect writes
+  // nothing; O_NOFOLLOW also refuses one planted after the check.
+  const outputs = found.map((list) => path.join(dir, `${list[0].account}.jsonl`));
+  for (const file of outputs) {
+    if (fs.lstatSync(file, { throwIfNoEntry: false })?.isSymbolicLink()) throw new Error(`refusing symlinked ${file}`);
   }
+  const { O_WRONLY, O_APPEND, O_CREAT, O_NOFOLLOW } = fs.constants;
+  found.forEach((list, index) => {
+    const text = list.map((row) => `${JSON.stringify(row)}\n`).join("");
+    const fd = fs.openSync(outputs[index], O_WRONLY | O_APPEND | O_CREAT | O_NOFOLLOW, 0o644);
+    try {
+      fs.writeSync(fd, text);
+    } finally {
+      fs.closeSync(fd);
+    }
+    process.stdout.write(text);
+  });
 }
 
 try {

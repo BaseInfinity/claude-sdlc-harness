@@ -684,6 +684,14 @@ case "$got" in *"$ESC"*) fail "NO_COLOR suppresses ANSI on a TTY" ;;
     *"[HARNESS]"*) pass "NO_COLOR suppresses ANSI on a TTY" ;;
     *) fail "NO_COLOR suppresses ANSI on a TTY (no view rendered: $got)" ;; esac
 
+LROOT="$TMPDIR_T/fleet-link"; mkdir -p "$LROOT/.brain"; printf 'sentinel\n' > "$TMPDIR_T/link-target"
+ROOT="$LROOT" TARGET="$TMPDIR_T/link-target" STATUS="$STATUS" bash -c \
+    'ln -s "$TARGET" "$ROOT/.brain/fleet.json.$BASHPID.tmp"; exec node "$STATUS" set --root "$ROOT" --controller HARNESS --workstream w --percent 1 --state planned' >/dev/null 2>&1
+[ "$(cat "$TMPDIR_T/link-target")" = sentinel ] && pass "set never writes through a symlink planted at a PID temp path" \
+    || fail "set never writes through a symlink planted at a PID temp path"
+[ -L "$LROOT/.brain/fleet.json" ] && fail "set never installs a planted symlink as fleet.json" \
+    || pass "set never installs a planted symlink as fleet.json"
+
 echo "=== fleet usage ==="
 UROOT="$TMPDIR_T/usage"; UDIR="$UROOT/.brain/usage"; mkdir -p "$UDIR"
 UNOW="2026-11-08T12:00:00Z"
@@ -817,6 +825,14 @@ CODEX_HOME="$EMPTY" node "$COLLECT" --root "$EROOT" >/dev/null 2>&1 \
     && fail "collector fails when no attributable rate_limits event exists" \
     || pass "collector fails when no attributable rate_limits event exists"
 [ ! -e "$EROOT/.brain" ] && pass "a failed collect writes nothing" || fail "a failed collect writes nothing"
+SROOT="$TMPDIR_T/collect-link"; mkdir -p "$SROOT/.brain/usage"; printf 'sentinel\n' > "$TMPDIR_T/collect-target"
+ln -s "$TMPDIR_T/collect-target" "$SROOT/.brain/usage/codex-56c919.jsonl"
+CODEX_HOME="$CHOME" node "$COLLECT" --root "$SROOT" >/dev/null 2>&1 \
+    && fail "collector refuses a symlinked output file" || pass "collector refuses a symlinked output file"
+[ "$(cat "$TMPDIR_T/collect-target")" = sentinel ] && pass "collector never appends through a symlink" \
+    || fail "collector never appends through a symlink"
+[ ! -e "$SROOT/.brain/usage/codex-aed3bd.jsonl" ] && pass "a refused collect writes no other account's file" \
+    || fail "a refused collect writes no other account's file"
 NS=$(awk '/^### Never stall on the human/{f=1;next} /^##/{f=0} f' "$SKILL" | tr '\n' ' ')
 awk '/^## Conductor, controllers and workers/{f=1;next} /^## /{f=0} f' "$SKILL" \
     | grep -q '^### Never stall on the human' \

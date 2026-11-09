@@ -99,7 +99,7 @@ test_creates_all_files() {
     [ -x "$d/.claude/skills/conduct/scripts/status.cjs" ] && count=$((count + 1))
     [ -f "$d/CLAUDE_CODE_SDLC_WIZARD.md" ] && count=$((count + 1))
     if [ "$count" -eq 19 ]; then
-        pass "init creates all 18 expected files (#254 ships _find-sdlc-root.sh)"
+        pass "init creates all 19 expected files (#254 ships _find-sdlc-root.sh)"
     else
         fail "init should create 19 files, found $count"
     fi

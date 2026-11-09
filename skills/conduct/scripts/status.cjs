@@ -5,6 +5,7 @@
 // account-usage rows that collectors append to <root>/.brain/usage/*.jsonl. Sibling of conduct.cjs, which stays
 // byte-identical to the Codex upstream helper.
 
+const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -133,8 +134,10 @@ function set(args) {
       updated_at: new Date().toISOString(),
       evidence: args.evidence || ""
     };
-    const temp = `${file}.${process.pid}.tmp`;
-    fs.writeFileSync(temp, `${JSON.stringify(data, null, 2)}\n`);
+    // Random name, exclusive create: a path planted in advance, symlink or
+    // not, is never written through; a collision fails with EEXIST.
+    const temp = `${file}.${crypto.randomBytes(8).toString("hex")}.tmp`;
+    fs.writeFileSync(temp, `${JSON.stringify(data, null, 2)}\n`, { flag: "wx" });
     fs.renameSync(temp, file);
     return { key, row: data.rows[key] };
   });
