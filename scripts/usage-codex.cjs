@@ -1,24 +1,23 @@
 #!/usr/bin/env node
 
-// Codex usage collector: appends the newest Codex plan-limit reading as
-// shared usage rows to <root>/.brain/usage/<account>.jsonl, for status.cjs.
+// Codex usage collector: appends each Codex account's newest plan-limit
+// reading as shared usage rows to <root>/.brain/usage/codex-<id>.jsonl, for
+// status.cjs.
 //
-// Reads only `event_msg` / `token_count` events from
-// $CODEX_HOME/sessions/**/*.jsonl, and only their `rate_limits` object. Those
-// events name no account: `plan_type` is the plan at that moment, not an
-// identity. So the account is labelled by CODEX_HOME (~/.codex = codex-main),
-// and a second account needs its own CODEX_HOME.
+// Reads two things from $CODEX_HOME/sessions/**/*.jsonl and nothing else: the
+// first line's session_meta.creator_account_id, and `event_msg`/`token_count`
+// events' `rate_limits`. The account is the first 6 characters of
+// creator_account_id; status.cjs maps it to a name via accounts.json.
+//
+// creator_account_id is fixed when a thread is created. A thread resumed
+// under a different login keeps its creator, so its readings are attributed
+// to the creator. Threads that carry no creator_account_id are skipped.
 
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
 const WINDOWS = { 300: "5h", 10080: "7d" };
-
-function account(home) {
-  const name = path.basename(path.resolve(home)).replace(/^\.+/, "");
-  return name === "codex" ? "codex-main" : name;
-}
 
 function walk(dir) {
   if (!fs.existsSync(dir)) return [];
@@ -35,34 +34,73 @@ function rollouts(dir) {
     .sort((a, b) => b.mtime - a.mtime);
 }
 
-// Newest `codex` rate_limits event by its own timestamp. A file is never
-// written after its last event, so once a file's mtime predates the best
-// event so far, no older-mtime file can hold a newer one.
-function newest(files) {
-  let best = null;
-  for (const { file, mtime } of files) {
-    if (best && mtime < Date.parse(best.timestamp)) break;
-    for (const line of fs.readFileSync(file, "utf8").split("\n")) {
-      if (!line.includes('"rate_limits"')) continue;
-      let event;
-      try {
-        event = JSON.parse(line);
-      } catch {
-        continue;
-      }
-      const limits = event.type === "event_msg" && event.payload?.type === "token_count" && event.payload.rate_limits;
-      if (!limits || limits.limit_id !== "codex" || Number.isNaN(Date.parse(event.timestamp))) continue;
-      if (!best || Date.parse(event.timestamp) > Date.parse(best.timestamp)) best = { timestamp: event.timestamp, limits };
+// The first line only, read in chunks so a large transcript is never loaded.
+function firstLine(file) {
+  const fd = fs.openSync(file, "r");
+  try {
+    const chunks = [];
+    const buffer = Buffer.alloc(65536);
+    for (;;) {
+      const read = fs.readSync(fd, buffer, 0, buffer.length, null);
+      if (read === 0) break;
+      const end = buffer.subarray(0, read).indexOf(10);
+      chunks.push(Buffer.from(buffer.subarray(0, end === -1 ? read : end)));
+      if (end !== -1) break;
     }
+    return Buffer.concat(chunks).toString("utf8");
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+function creator(file) {
+  try {
+    const meta = JSON.parse(firstLine(file));
+    const id = meta.payload?.creator_account_id;
+    return typeof id === "string" && id.length >= 6 ? `codex-${id.slice(0, 6)}` : null;
+  } catch {
+    return null;
+  }
+}
+
+function newestIn(file) {
+  let best = null;
+  for (const line of fs.readFileSync(file, "utf8").split("\n")) {
+    if (!line.includes('"rate_limits"')) continue;
+    let event;
+    try {
+      event = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    const limits = event.type === "event_msg" && event.payload?.type === "token_count" && event.payload.rate_limits;
+    if (!limits || limits.limit_id !== "codex" || Number.isNaN(Date.parse(event.timestamp))) continue;
+    if (!best || Date.parse(event.timestamp) > Date.parse(best.timestamp)) best = { timestamp: event.timestamp, limits };
   }
   return best;
 }
 
-function rows(name, { timestamp, limits }) {
+// Newest `codex` rate_limits event per account, by the event's own timestamp.
+// A file is never written after its last event, so a file whose mtime
+// predates its account's best event so far cannot hold a newer one.
+function newestPerAccount(files) {
+  const best = new Map();
+  for (const { file, mtime } of files) {
+    const account = creator(file);
+    if (!account) continue;
+    const held = best.get(account);
+    if (held && mtime < Date.parse(held.timestamp)) continue;
+    const found = newestIn(file);
+    if (found && (!held || Date.parse(found.timestamp) > Date.parse(held.timestamp))) best.set(account, found);
+  }
+  return best;
+}
+
+function rows(account, { timestamp, limits }) {
   return [limits.primary, limits.secondary]
     .filter((window) => window && typeof window.used_percent === "number")
     .map((window) => ({
-      account: name,
+      account,
       provider: "codex",
       window: WINDOWS[window.window_minutes] || `${window.window_minutes}m`,
       used: window.used_percent,
@@ -80,14 +118,17 @@ function main() {
   const argv = process.argv.slice(2);
   if (argv.length !== 2 || argv[0] !== "--root") throw new Error("usage: usage-codex.cjs --root R");
   const home = process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
-  const event = newest(rollouts(path.join(home, "sessions")));
-  const found = event ? rows(account(home), event) : [];
-  if (found.length === 0) throw new Error(`no codex rate_limits event under ${home}/sessions`);
+  const found = [...newestPerAccount(rollouts(path.join(home, "sessions")))]
+    .map(([account, event]) => rows(account, event))
+    .filter((list) => list.length > 0);
+  if (found.length === 0) throw new Error(`no attributable codex rate_limits event under ${home}/sessions`);
   const dir = path.join(path.resolve(argv[1]), ".brain", "usage");
   fs.mkdirSync(dir, { recursive: true });
-  const text = found.map((row) => `${JSON.stringify(row)}\n`).join("");
-  fs.appendFileSync(path.join(dir, `${found[0].account}.jsonl`), text);
-  process.stdout.write(text);
+  for (const list of found) {
+    const text = list.map((row) => `${JSON.stringify(row)}\n`).join("");
+    fs.appendFileSync(path.join(dir, `${list[0].account}.jsonl`), text);
+    process.stdout.write(text);
+  }
 }
 
 try {

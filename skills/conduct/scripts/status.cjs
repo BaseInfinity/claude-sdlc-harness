@@ -13,7 +13,7 @@ const STATES = ["in_flight", "blocked", "planned", "done"];
 const COLORS = { HARNESS: "38;5;208", CONDUCTOR: "31", ANTICHEAT: "38;5;213", CODEX: "32" };
 const STALE_MS = 24 * 60 * 60 * 1000;
 const USAGE_STALE_MS = 6 * 60 * 60 * 1000;
-const BASE_ACCOUNTS = ["claude-main", "codex-main"];
+const BASE_ACCOUNTS = ["claude-main"];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function fail(message) {
@@ -33,7 +33,8 @@ set replaces the whole row keyed LABEL/slug(workstream) and stamps updated_at.
 --blocker-owner is required with --state blocked and refused otherwise.
 The full view opens with [USAGE]: the newest row per account/provider/window
 from <root>/.brain/usage/*.jsonl, STALE past 6h, and "unknown" for an account
-with no row.
+with no row. <root>/.brain/usage/accounts.json renames raw labels, e.g.
+{"codex-56c919": "codex-main"}; every name it maps to is expected.
 `);
 }
 
@@ -149,13 +150,31 @@ function age(ms) {
   return hours >= 48 ? `${Math.floor(hours / 24)}d` : `${hours}h`;
 }
 
+// accounts.json maps a raw row label (codex-56c919) to the name to print
+// (codex-main). Every name it maps to is an expected account.
+function loadAliases(dir) {
+  const file = path.join(dir, "accounts.json");
+  if (!fs.existsSync(file)) return {};
+  let aliases;
+  try {
+    aliases = JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch (error) {
+    throw new Error(`${file}: ${error.message}`);
+  }
+  const valid = aliases && typeof aliases === "object" && !Array.isArray(aliases)
+    && Object.values(aliases).every((name) => typeof name === "string" && name);
+  if (!valid) throw new Error(`${file} must map each raw account label to a non-empty name`);
+  return aliases;
+}
+
 function loadUsage(root) {
   const dir = path.join(path.resolve(root || process.cwd()), ".brain", "usage");
-  const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((name) => name.endsWith(".jsonl")).sort() : [];
-  return files.map((name) => ({
+  const names = fs.existsSync(dir) ? fs.readdirSync(dir).filter((name) => name.endsWith(".jsonl")).sort() : [];
+  const files = names.map((name) => ({
     account: name.slice(0, -".jsonl".length),
     lines: fs.readFileSync(path.join(dir, name), "utf8").split("\n")
   }));
+  return { files, aliases: loadAliases(dir) };
 }
 
 function parseUsage(text) {
@@ -170,14 +189,17 @@ function parseUsage(text) {
   }
 }
 
-// Newest observed_at per account/provider/window. A file named for an account
-// that holds no valid row still lists that account, so it renders as unknown.
-function latestUsage(files) {
-  const accounts = new Set(BASE_ACCOUNTS);
+// Newest observed_at per account/provider/window, after aliasing. A file
+// named for an account that holds no valid row still lists that account, as
+// does every alias target, so each renders as unknown.
+function latestUsage({ files, aliases }) {
+  const name = (account) => (Object.hasOwn(aliases, account) ? aliases[account] : account);
+  const accounts = new Set([...BASE_ACCOUNTS, ...Object.values(aliases)]);
   const latest = new Map();
   for (const file of files) {
-    accounts.add(file.account);
-    for (const row of file.lines.map(parseUsage).filter(Boolean)) {
+    accounts.add(name(file.account));
+    for (const parsed of file.lines.map(parseUsage).filter(Boolean)) {
+      const row = { ...parsed, account: name(parsed.account) };
       accounts.add(row.account);
       const key = `${row.account}\u0000${row.provider}\u0000${row.window}`;
       const held = latest.get(key);

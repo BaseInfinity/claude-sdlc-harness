@@ -511,13 +511,26 @@ sview --controller HARNESS --now "$(later 23)" | grep -qF 'STALE' \
 ESC=$(printf '\033')
 sview | grep -q "$ESC" && fail "piped output carries no ANSI" || pass "piped output carries no ANSI"
 on_tty() { # run a command under a pseudo-terminal (BSD or util-linux script)
-    if script --version >/dev/null 2>&1; then script -qec "$*" /dev/null
-    else script -q /dev/null "$@"; fi
+    # stdin is /dev/null because BSD script exits 1 on a socket stdin
+    # ("tcgetattr/ioctl: Operation not supported on socket") before running anything.
+    if script --version >/dev/null 2>&1; then script -qec "$*" /dev/null < /dev/null
+    else script -q /dev/null "$@" < /dev/null; fi
 }
-(unset NO_COLOR; on_tty node "$STATUS" --root "$FROOT") | grep -q "$ESC" \
+export -f on_tty
+# The TTY rows run with a socket on stdin, which is what the Claude Code Bash
+# tool hands its commands; it is the case that made these rows flake.
+socket_stdin() {
+    python3 -c 'import socket, subprocess, sys
+a, b = socket.socketpair()
+sys.exit(subprocess.run(sys.argv[1:], stdin=a).returncode)' "$@"
+}
+tty_view() { socket_stdin bash -c 'on_tty node "$0" --root "$1"' "$STATUS" "$FROOT"; }
+(unset NO_COLOR; tty_view) | grep -q "$ESC" \
     && pass "a TTY gets ANSI color" || fail "a TTY gets ANSI color"
-NO_COLOR=1 on_tty node "$STATUS" --root "$FROOT" | grep -q "$ESC" \
-    && fail "NO_COLOR suppresses ANSI on a TTY" || pass "NO_COLOR suppresses ANSI on a TTY"
+got=$(NO_COLOR=1 tty_view)
+case "$got" in *"$ESC"*) fail "NO_COLOR suppresses ANSI on a TTY" ;;
+    *"[HARNESS]"*) pass "NO_COLOR suppresses ANSI on a TTY" ;;
+    *) fail "NO_COLOR suppresses ANSI on a TTY (no view rendered: $got)" ;; esac
 
 echo "=== fleet usage ==="
 UROOT="$TMPDIR_T/usage"; UDIR="$UROOT/.brain/usage"; mkdir -p "$UDIR"
@@ -527,20 +540,24 @@ row() { # account provider window used resets observed
     printf '{"account":"%s","provider":"%s","window":"%s","used":%s,"limit":100,"unit":"pct","resets_at":"%s","source":"t","accuracy":"server","observed_at":"%s"}\n' "$@"
 }
 uview | grep -qxF '[USAGE]' && pass "an empty usage dir still renders [USAGE]" || fail "an empty usage dir still renders [USAGE]"
-for acct in claude-main codex-main; do
-    uview | grep -qxF "  $acct unknown" && pass "$acct with no row prints unknown" \
-        || fail "$acct with no row prints unknown (got: $(uview))"
-done
-{ row codex-main codex 7d 40 2026-11-10T18:00:00Z 2026-11-08T10:00:00Z
-  row codex-main codex 7d 50.9 2026-11-10T18:00:00Z 2026-11-08T11:00:00Z
-  row codex-main codex 7d 10 2026-11-10T18:00:00Z 2026-11-08T09:00:00Z; } > "$UDIR/codex-main.jsonl"
+[ "$(uview | sed -n 2,3p)" = "  claude-main unknown" ] && pass "with no rows and no aliases only claude-main prints, unknown" \
+    || fail "with no rows and no aliases only claude-main prints, unknown (got: $(uview))"
+{ row codex-56c919 codex 7d 40 2026-11-10T18:00:00Z 2026-11-08T10:00:00Z
+  row codex-56c919 codex 7d 50.9 2026-11-10T18:00:00Z 2026-11-08T11:00:00Z
+  row codex-56c919 codex 7d 10 2026-11-10T18:00:00Z 2026-11-08T09:00:00Z; } > "$UDIR/codex-56c919.jsonl"
 { row claude-main claude 5h 3 2026-11-08T14:30:00Z 2026-11-08T05:00:00Z
   echo 'not json'
   row claude-main claude 7d 100 2026-11-13T09:05:00Z 2026-11-08T07:00:00Z; } > "$UDIR/claude-main.jsonl"
 echo 'not json' > "$UDIR/claude-b.jsonl"
+uview | grep -qxF '  codex-56c919 codex 7d  █████░░░░░ 50% · resets Tue 18:00' \
+    && pass "an unaliased account prints its raw label" || fail "an unaliased account prints its raw label (got: $(uview))"
+echo '{"codex-56c919": "codex-main", "codex-ffffff": "codex-spare"}' > "$UDIR/accounts.json"
 uview | grep -qxF '  codex-main codex 7d  █████░░░░░ 50% · resets Tue 18:00' \
-    && pass "newest observed_at wins, bar and used% floor, reset in local time" \
-    || fail "newest observed_at wins, bar and used% floor, reset in local time (got: $(uview))"
+    && pass "newest observed_at wins, aliased, bar and used% floor, reset in local time" \
+    || fail "newest observed_at wins, aliased, bar and used% floor, reset in local time (got: $(uview))"
+uview | grep -q 'codex-56c919' && fail "an aliased raw label is not printed" || pass "an aliased raw label is not printed"
+uview | grep -qxF '  codex-spare unknown' && pass "an alias with no row prints unknown" \
+    || fail "an alias with no row prints unknown (got: $(uview))"
 [ "$(uview | grep -c '^  codex-main')" = 1 ] && pass "one line per account/provider/window" \
     || fail "one line per account/provider/window (got: $(uview))"
 uview | grep -qxF '  claude-main claude 5h  █░░░░░░░░░ 3% · resets Sun 14:30  STALE 7h' \
@@ -549,9 +566,13 @@ uview | grep -qxF '  claude-main claude 7d  ██████████ 100% 
     && pass "a usage row under 6h old is not STALE" || fail "a usage row under 6h old is not STALE (got: $(uview))"
 uview | grep -qxF '  claude-b unknown' && pass "a usage file with no valid row prints unknown" \
     || fail "a usage file with no valid row prints unknown (got: $(uview))"
-got=$(uview | grep -oE '^  [a-z-]+ ' | tr -d ' ' | tr '\n' ' ')
-[ "$got" = "claude-b claude-main claude-main codex-main " ] && pass "usage lines sort by account, then window" \
+got=$(uview | grep -oE '^  [a-z0-9-]+ ' | tr -d ' ' | tr '\n' ' ')
+[ "$got" = "claude-b claude-main claude-main codex-main codex-spare " ] && pass "usage lines sort by account, then window" \
     || fail "usage lines sort by account, then window (got: $got)"
+echo '{"codex-56c919": ' > "$UDIR/accounts.json"
+uview | grep -q 'accounts.json' && pass "a malformed accounts.json is reported by name" \
+    || fail "a malformed accounts.json is reported by name (got: $(uview))"
+echo '{"codex-56c919": "codex-main"}' > "$UDIR/accounts.json"
 node "$STATUS" set --root "$UROOT" --controller HARNESS --workstream w --percent 1 --state planned >/dev/null
 got=$(uview | grep -nE '^\[(USAGE|HARNESS)\]' | tr '\n' ' ')
 case "$got" in 1:\[USAGE\]*\[HARNESS\]*) pass "[USAGE] renders above the controllers" ;;
@@ -559,49 +580,67 @@ case "$got" in 1:\[USAGE\]*\[HARNESS\]*) pass "[USAGE] renders above the control
 
 echo "=== codex usage collector ==="
 COLLECT="$REPO_ROOT/scripts/usage-codex.cjs"
-CHOME="$TMPDIR_T/codex-home/.codex"; CROOT="$TMPDIR_T/collect"
-mkdir -p "$CHOME/sessions/2026/11/07" "$CHOME/sessions/2026/11/08" "$CROOT"
+CHOME="$TMPDIR_T/codex-home/.codex"; CROOT="$TMPDIR_T/collect"; CS="$CHOME/sessions/2026/11"
+mkdir -p "$CS/07" "$CS/08" "$CHOME/sessions/2026/10/04" "$CROOT"
+meta() { # creator_account_id, or "" for a thread that carries none
+    if [ -n "$1" ]; then printf '{"timestamp":"2026-11-01T00:00:00.000Z","type":"session_meta","payload":{"id":"t","creator_account_id":"%s"}}\n' "$1"
+    else printf '{"timestamp":"2026-11-01T00:00:00.000Z","type":"session_meta","payload":{"id":"t"}}\n'; fi
+}
 tc() { # timestamp limit_id primary secondary
     printf '{"timestamp":"%s","type":"event_msg","payload":{"type":"token_count","info":null,"rate_limits":{"limit_id":"%s","limit_name":null,"primary":%s,"secondary":%s,"credits":null,"plan_type":"prolite"}}}\n' "$@"
 }
 W7='{"used_percent":50.0,"window_minutes":10080,"resets_at":1794387895}'
 W5='{"used_percent":12.5,"window_minutes":300,"resets_at":1794300000}'
-# The mtime-newest file holds an OLDER event, and so does the last line of the
-# other file: selection must go by event time. Later-stamped non-token_count
-# lines that mention rate_limits, and a premium limit, must be ignored.
-{ tc 2026-11-08T20:00:00.000Z codex "$W7" "$W5"
+A=56c919aa-1111-2222-3333-444455556666; B=aed3bdbb-1111-2222-3333-444455556666
+# Account A: the mtime-newest file holds an OLDER event, and so does the last
+# line of the other file, so selection must go by event time. Later-stamped
+# non-token_count lines that mention rate_limits, and a premium limit, are noise.
+{ meta "$A"
+  tc 2026-11-08T20:00:00.000Z codex "$W7" "$W5"
   echo '{"timestamp":"2026-11-08T23:00:00.000Z","type":"response_item","payload":{"type":"message","text":"rate_limits"}}'
   echo "{\"timestamp\":\"2026-11-08T23:30:00.000Z\",\"type\":\"response_item\",\"payload\":{\"type\":\"token_count\",\"rate_limits\":{\"limit_id\":\"codex\",\"primary\":$W7}}}"
   tc 2026-11-08T22:00:00.000Z premium null null
-  tc 2026-11-08T18:00:00.000Z codex "$W7" null; } > "$CHOME/sessions/2026/11/07/rollout-old.jsonl"
-tc 2026-11-08T19:00:00.000Z codex '{"used_percent":9.0,"window_minutes":10080,"resets_at":1794387895}' null \
-    > "$CHOME/sessions/2026/11/08/rollout-new.jsonl"
-touch -t 202611082100 "$CHOME/sessions/2026/11/07/rollout-old.jsonl"
-touch -t 202611082300 "$CHOME/sessions/2026/11/08/rollout-new.jsonl"
+  tc 2026-11-08T18:00:00.000Z codex "$W7" null; } > "$CS/07/rollout-old.jsonl"
+{ meta "$A"; tc 2026-11-08T19:00:00.000Z codex '{"used_percent":9.0,"window_minutes":10080,"resets_at":1794387895}' null; } \
+    > "$CS/08/rollout-new.jsonl"
+# A thread with no creator id holds the newest event of all: it names nobody.
+{ meta ""; tc 2026-11-08T23:45:00.000Z codex '{"used_percent":77.0,"window_minutes":10080,"resets_at":1794387895}' null; } \
+    > "$CS/08/rollout-anon.jsonl"
+# Account B: one old thread, older than every file of A.
+{ meta "$B"; tc 2026-10-04T10:00:00.000Z codex '{"used_percent":30.0,"window_minutes":10080,"resets_at":1791580818}' null; } \
+    > "$CHOME/sessions/2026/10/04/rollout-b.jsonl"
+touch -t 202611082100 "$CS/07/rollout-old.jsonl"
+touch -t 202611082300 "$CS/08/rollout-new.jsonl"
+touch -t 202611082345 "$CS/08/rollout-anon.jsonl"
+touch -t 202610041000 "$CHOME/sessions/2026/10/04/rollout-b.jsonl"
 CODEX_HOME="$CHOME" node "$COLLECT" --root "$CROOT" >/dev/null 2>&1 \
     && pass "collector runs against a fixture CODEX_HOME" || fail "collector runs against a fixture CODEX_HOME"
-got=$(python3 - "$CROOT/.brain/usage/codex-main.jsonl" <<'PY'
+rows_of() { python3 - "$1" <<'PY'
 import json, sys
 for r in (json.loads(l) for l in open(sys.argv[1])):
     print(r["account"], r["provider"], r["window"], r["used"], r["limit"], r["unit"], r["resets_at"],
           r["accuracy"], r["observed_at"], r["source"])
 PY
-)
-want="codex-main codex 5h 12.5 100 pct 2026-11-10T08:40:00.000Z server 2026-11-08T20:00:00.000Z codex-rollout plan=prolite
-codex-main codex 7d 50 100 pct 2026-11-11T09:04:55.000Z server 2026-11-08T20:00:00.000Z codex-rollout plan=prolite"
+}
+got=$(rows_of "$CROOT/.brain/usage/codex-56c919.jsonl" 2>&1)
+want="codex-56c919 codex 5h 12.5 100 pct 2026-11-10T08:40:00.000Z server 2026-11-08T20:00:00.000Z codex-rollout plan=prolite
+codex-56c919 codex 7d 50 100 pct 2026-11-11T09:04:55.000Z server 2026-11-08T20:00:00.000Z codex-rollout plan=prolite"
 [ "$got" = "$want" ] \
-    && pass "collector takes the newest codex token_count by event time, one row per window" \
-    || fail "collector takes the newest codex token_count by event time, one row per window (got: $got)"
-OTHER="$TMPDIR_T/codex-home/codex-b"; mkdir -p "$OTHER"; cp -Rp "$CHOME/sessions" "$OTHER/"
-CODEX_HOME="$OTHER" node "$COLLECT" --root "$CROOT" >/dev/null 2>&1
-grep -q '"account":"codex-b"' "$CROOT/.brain/usage/codex-b.jsonl" 2>/dev/null \
-    && pass "a non-default CODEX_HOME is labelled by its basename" \
-    || fail "a non-default CODEX_HOME is labelled by its basename"
-EMPTY="$TMPDIR_T/codex-home/empty"; mkdir -p "$EMPTY/sessions"
-CODEX_HOME="$EMPTY" node "$COLLECT" --root "$CROOT" >/dev/null 2>&1 \
-    && fail "collector fails when no rate_limits event exists" || pass "collector fails when no rate_limits event exists"
-[ ! -e "$CROOT/.brain/usage/empty.jsonl" ] && pass "a failed collect writes no file" \
-    || fail "a failed collect writes no file"
+    && pass "collector takes each account's newest codex token_count by event time, one row per window" \
+    || fail "collector takes each account's newest codex token_count by event time, one row per window (got: $got)"
+got=$(rows_of "$CROOT/.brain/usage/codex-aed3bd.jsonl" 2>&1)
+[ "$got" = "codex-aed3bd codex 7d 30 100 pct 2026-10-09T21:20:18.000Z server 2026-10-04T10:00:00.000Z codex-rollout plan=prolite" ] \
+    && pass "a second creator_account_id gets its own rows, labelled by its prefix" \
+    || fail "a second creator_account_id gets its own rows, labelled by its prefix (got: $got)"
+[ "$(ls "$CROOT/.brain/usage")" = "codex-56c919.jsonl
+codex-aed3bd.jsonl" ] && pass "a thread with no creator_account_id is attributed to nobody" \
+    || fail "a thread with no creator_account_id is attributed to nobody (got: $(ls "$CROOT/.brain/usage"))"
+EMPTY="$TMPDIR_T/codex-home/empty"; EROOT="$TMPDIR_T/collect-empty"; mkdir -p "$EMPTY/sessions" "$EROOT"
+meta "" > "$EMPTY/sessions/rollout-anon.jsonl"; tc 2026-11-08T10:00:00.000Z codex "$W7" null >> "$EMPTY/sessions/rollout-anon.jsonl"
+CODEX_HOME="$EMPTY" node "$COLLECT" --root "$EROOT" >/dev/null 2>&1 \
+    && fail "collector fails when no attributable rate_limits event exists" \
+    || pass "collector fails when no attributable rate_limits event exists"
+[ ! -e "$EROOT/.brain" ] && pass "a failed collect writes nothing" || fail "a failed collect writes nothing"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
