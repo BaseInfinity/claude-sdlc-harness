@@ -22,6 +22,10 @@
 #   show; 5 (never stall); 6 (headless, no focus steal); 7 (report labels);
 #   9 (computer-use handoff); 10 (auto-trust scope). Each needs a real
 #   multi-session fleet, a GUI, or a human-only dialog to observe.
+# - Cross-machine route (Routes, "Another machine"): wording assertions only.
+#   No behavioral test: nothing in this repo parses a ListAgents row or a
+#   reply, so a fixture row plus a fake reply would only test the fixture.
+#   Delivery is decided by reading the reply, the same observable as rule 4.
 
 set -u
 
@@ -561,6 +565,23 @@ for term in optional 'one-off' 'worker tab' 'CLAUDE SDLC: <task>' 'own git workt
     printf '%s' "$WT" | grep -qiF -- "$term" && pass "worker-tab names: $term" \
         || fail "worker-tab names: $term"
 done
+
+XM=$(awk '/^### Another machine: Remote Control/{f=1;next} /^##/{f=0} f' "$SKILL" | tr '\n' ' ')
+awk '/^## Routes \(native first\)/{f=1;next} /^## /{f=0} f' "$SKILL" \
+    | grep -q '^### Another machine: Remote Control (recommended)' \
+    && pass "routes section has the recommended cross-machine subsection" \
+    || fail "routes section has the recommended cross-machine subsection"
+for term in 'Code tab' 'New session' 'import' 'Remote Control' '[ref]' 'bridge:session_' \
+    'connected to Remote Control' 'crossSessionInbound' 'permission class' 'dialogExpiry' \
+    'cross-session-messaging#control-inbound-messages' "can't show the dialog" \
+    'runs anything' 'from the reply' 'real folder' 'Computer use' 'Codex Desktop' 'unverified' \
+    'through the ledger'; do
+    printf '%s' "$XM" | grep -qiF -- "$term" && pass "cross-machine names: $term" \
+        || fail "cross-machine names: $term"
+done
+printf '%s' "$XM" | grep -qiF 'bootstrap' \
+    && fail "cross-machine section does not point to the retired bootstrap" \
+    || pass "cross-machine section does not point to the retired bootstrap"
 
 echo "=== operating model ==="
 OM_BEGIN='<!-- conduct-operating-model:begin -->'

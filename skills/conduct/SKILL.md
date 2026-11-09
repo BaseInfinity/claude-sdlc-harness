@@ -158,6 +158,7 @@ record your result in the run and root its header names.
 | One-shot Claude | `claude -p "$(cat "$ENV")"` | none |
 | One-shot Codex | `codex exec "$(cat "$ENV")"`, see the note below | `codex queue` to an existing session |
 | Claude Desktop | `SendMessage`, once `ListAgents` lists it | none |
+| Session on another machine | `SendMessage` over Remote Control, see Another machine | none |
 | Codex Desktop | Native thread adapter, once Codex exposes one | none |
 
 **Starting a Claude Desktop Code session from a terminal.**
@@ -239,6 +240,52 @@ Any other root, such as `/private/tmp/<name>`, fails with
 `EPERM ... mkdir '<root>/.brain/runs/<run-id>'`. Then that one call needs
 `dangerouslyDisableSandbox`. The receiver records into the same root, so pick
 one it can also write.
+
+### Another machine: Remote Control (recommended)
+
+Observed 2026-11-08, from a Mac conductor to a Windows PC, with the user
+watching. The conductor needs only a session list and a cross-session send.
+A Codex conductor asks a Claude conductor to run it, through the ledger.
+
+1. On the remote machine: Claude Desktop → Code tab → New session, local to
+   that machine. Skip the "import N CLI sessions" prompt. Turn on Remote Control.
+2. The conductor's own session must be connected to Remote Control too.
+   Otherwise the remote session is not listed, and a send carries no reply
+   address.
+3. `ListAgents` shows it as kind `Remote Control`, named from the hostname
+   (`laptop-ll31rdd8-hidden-bengio`). A later listing showed `Remote control`
+   with a `[ref]`. Address it as the latest listing prints it.
+4. Send with `SendMessage`. The reply came from
+   `bridge:session_01HGbPRydtg8WyFwx4CznqB7`, carrying the nonce `WIN-7Q4K`,
+   on Windows 10.0.19045.6466.
+
+**Held messages.** The PC held the conductor's messages until its permission
+mode changed. The rule, per
+[cross-session messaging](https://code.claude.com/docs/en/cross-session-messaging#control-inbound-messages):
+with no `crossSessionInbound` set, a receiver holds a message from a sender in
+the other permission class. Bypass is one class; auto, `acceptEdits` and
+`dontAsk` are the other. Plan counts as bypass in a terminal session that has
+bypass available. The conductor runs in bypass, so delivery came when the
+PC session switched to Bypass. A Desktop session can't show the dialog that
+approves a held message, so it waits for `dialogExpiry` (five minutes by
+default), then drops. Each fix below is the user's to choose:
+
+| Fix | Tradeoff |
+|---|---|
+| Send from a session in the receiver's class | No settings change. A bypass conductor is not one. |
+| Set `crossSessionInbound: "accept"` on the receiver | Every peer message lands unattended. In user settings it covers every session. |
+| Switch the receiver to bypass | A security choice: a remote endpoint in bypass runs anything it's told. |
+
+**Verify from the reply only.** The send result never confirms a read (rule 4),
+and nothing reports a hold back from a Remote Control session. Put a nonce in
+the message and wait for it in the reply.
+
+**The session's folder is temporary.** It was deleted with the session. Open
+the Desktop session in a real folder for long-lived work.
+
+Computer use was listed in that session, untested. Reaching Codex Desktop on
+Windows the same way is unverified: the Claude Code docs cover Claude Code
+sessions only.
 
 ## Safety
 
