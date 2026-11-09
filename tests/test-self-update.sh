@@ -82,7 +82,7 @@ test_notification_workflow_yaml() {
     # call (outside the heredoc). This test validates the YAML is structurally sound, which
     # would catch similar issues that break YAML parsing.
     local temp_yaml
-    temp_yaml=$(mktemp "${TMPDIR:-/tmp}/wizard-workflow-XXXXXX.yml")
+    temp_yaml=$(mktemp "${TMPDIR:-/tmp}/wizard-workflow.XXXXXX")
 
     # Extract YAML between the notification workflow code fence.
     # FRAGILITY NOTE: The closing-fence detection (grep '^\`\`\`$') will misfire if any

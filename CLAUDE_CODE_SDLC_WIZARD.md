@@ -148,7 +148,7 @@ These aren't preferences - they're **how AI agents stay on track**:
 |----------------|--------------------------|
 | **TDD Red-Green-Pass** | AI agents need concrete pass/fail feedback. Where a RED mutation is writable, failing tests first are the feedback loop that keeps implementation correct; where no assertion can catch the wrong version (meaning-level prose), cross-model review is the verification — see "When TDD RED Applies". |
 | **Testing Diamond** | Integration tests catch real bugs. Unit tests with mocks can "pass" while production fails. AI agents need tests that actually validate behavior. |
-| **Confidence Levels** | Prevents Claude from guessing when uncertain. LOW confidence = escalate (Fable, then Codex) before interrupting a human. This stops runaway bad implementations. |
+| **Confidence Levels** | Prevents Claude from guessing when uncertain. LOW confidence = escalate (Sol, then Fable only if unreconciled) before interrupting a human. This stops runaway bad implementations. |
 | **TodoWrite Visibility** | You need to see what Claude is doing. Without visibility, Claude can go off-track without you knowing. |
 | **Planning Before Coding** | Claude must understand before implementing. Skipping planning = wasted effort and wrong approaches. |
 
@@ -273,7 +273,7 @@ Claude Code's **effort level** controls how much thinking the model does before 
 | Opus 4.8 (escalation, pinned) | `xhigh` | `max` triggers excessive reasoning on 4.7/4.8 — documented 40-60x cache-token jump vs `high` (see "Opus 4.6" row below) |
 | Fable 5.1 (advisor / subagent fallback) | `high` everywhere — driver, subagent fallback, and `advisor()` (which exposes no effort parameter at all) | Adaptive thinking always on; pin `advisorModel: "claude-fable-5-1"` — see "Advisor Model" below |
 | Opus 4.6 (pinned, stability profile) | `max` | The one model where `max` doesn't overthink — no `xhigh` support at all (only low/medium/high/max) |
-| OpenAI/Codex (cross-model reviewer) | `high` default (maintainer decision 2026-08-01 — cost and review-noise, not capability); escalate to `xhigh` for unusually risky PRs | Lower reasoning misses subtle bugs the reviewer exists to catch; see `AI_SETUP_LANES.md`'s Final Review Policy for when to escalate |
+| OpenAI/Codex (cross-model reviewer) | `high` for the first round (maintainer policy 2026-11-08, applies to every brain); escalate to `xhigh` only later — a recheck that fails to reconcile, or a second repair | Lower reasoning misses subtle bugs the reviewer exists to catch; see `AI_SETUP_LANES.md`'s Final Review Policy for when to escalate |
 
 **Strict effort behavior (Opus 4.7+, carried forward in 4.8):**
 - **`xhigh` was introduced in 4.7** — sits between `high` and `max`, designed for coding and agentic work (30+ minute tasks with token budgets in the millions)
@@ -425,8 +425,8 @@ New built-in commands available to use alongside the wizard:
 
 | Driver | Advisor | Lane |
 |--------|---------|------|
-| Opus 4.6[1m] (`claude-opus-4-6[1m]`) | GPT-5.6 Sol xhigh + Fable 5.1 (`"claude-fable-5-1"`) | **Reliable — recommended default** |
-| Opus 5.5 (`claude-opus-5-5`) | GPT-5.6 Sol xhigh + Fable 5.1 (`"claude-fable-5-1"`) | Frontier — experimental |
+| Opus 4.6[1m] (`claude-opus-4-6[1m]`) | GPT-5.6 Sol high + Fable 5.1 (`"claude-fable-5-1"`) | **Reliable — recommended default** |
+| Opus 5.5 (`claude-opus-5-5`) | GPT-5.6 Sol high + Fable 5.1 (`"claude-fable-5-1"`) | Frontier — experimental |
 | Sonnet 5 (`sonnet`) | Fable 5.1 (`"claude-fable-5-1"`) | Setup B — Simple/One-Off |
 | Sonnet via opusplan | Opus 5 (`"claude-opus-5"`) | Setup C — OpusPlan Hybrid |
 | Opus 4.8 (`claude-opus-4-8`, pinned) | Fable 5.1 (`"claude-fable-5-1"`) | Escalation tier |
@@ -659,7 +659,7 @@ Claude MUST state confidence before implementing:
 | **HIGH (90%+)** | "I know exactly what to do" | Proceeds after your approval |
 | **MEDIUM (60-89%)** | "Solid approach, some unknowns" | Highlights uncertainties |
 | **LOW (<60%)** | "I'm not sure" | **Escalates before asking you** |
-| **FAILED 2x** | "Something's wrong" | **Escalates to Fable, then Codex** |
+| **FAILED 2x** | "Something's wrong" | **Escalates to Sol; Fable only if unreconciled** |
 | **CONFUSED** | "I don't understand why this is failing" | **Escalates, describing what was tried** |
 
 **Why this matters**: You have domain expertise. When Claude is uncertain, asking you takes 30 seconds. Guessing wrong takes 30 minutes to fix.
@@ -1192,7 +1192,7 @@ This is **Setup C (OpusPlan Hybrid/Saver)** in `AI_SETUP_LANES.md`. CC's native 
 |-------|--------------------|---------------------------|----------------------------|
 | Planner | Opus 5 `xhigh` (Plan Mode) | Opus 5 `high` (`medium` routine) | Sonnet 5 `medium`→`high`→`xhigh` |
 | Driver | Sonnet 5 `medium` (execute mode) | Opus 5 `high` (`medium` routine) | Sonnet 5 `medium`→`high`→`xhigh` |
-| Reviewer | GPT-5.6 Sol xhigh | GPT-5.6 Sol xhigh | GPT-5.6 Sol xhigh |
+| Reviewer | GPT-5.6 Sol high | GPT-5.6 Sol high | GPT-5.6 Sol high |
 
 **How to opt in:**
 ```json
@@ -2324,7 +2324,7 @@ cat << 'EOF'
 SDLC BASELINE:
 1. Task list FIRST (TodoWrite or TaskCreate) (plan tasks before coding)
 2. STATE CONFIDENCE: HIGH/MEDIUM/LOW
-3. LOW confidence or FAILED 2x? Ladder: Fable -> Codex xhigh -> human LAST
+3. LOW confidence or FAILED 2x? Ladder: Sol (Codex) -> Fable only if you and Sol cannot reconcile -> human LAST (sequential)
 4. Never ask what a model can settle; confidence is not authorization
 5. 🛑 ALL TESTS MUST PASS BEFORE COMMIT - NO EXCEPTIONS
 
@@ -2442,12 +2442,10 @@ Before presenting approach, STATE your confidence:
 
 Low confidence does **not** mean "ask the user." It means "escalate," and the user is the third rung, not the first. Ask a human only for what no model can settle.
 
-1. **Fable — the primary thinker, not a rung you escalate to.** Fable **decides** design, priority and sequencing; you implement its call. You are the coder. Reach for it *before* an approach exists, via `advisor()`, or a Fable subagent at `high` while the advisor is server-side disabled. **The tell that you got this backwards:** you have already chosen an approach and are asking Fable to grade it. Prompt it to decide — "where you would normally say consider X, say do X" — rather than to critique. Codex is a different job entirely: the **adversarial check** that tries to break a decision already made, run before commit or merge. Fable thinks, Codex attacks; do not collapse them into "get a second opinion".
+The ladder is **sequential**. One brain at a time, and never Sol and Fable on the same question at once.
 
-   **The loop, in order.** Fable decides the approach → Opus implements it → **Fable reviews the implementation** → only once that is clean, Codex runs as the final cross-model check. Fable appears twice on purpose: once as the brain before code exists, once as the reviewer of what got built. Codex is last and singular — it is the adversarial gate, not a second opinion to average with the first. Sending work to Codex before Fable has reviewed it wastes the expensive check on defects the cheaper one would have caught.
-
-   **Open question, not yet settled:** this topology runs Opus as the driver calling out to Fable. The inverse — Fable as driver, delegating implementation to Opus subagents — has not been tested and may be better, since it puts the stronger reasoner in the seat that makes decisions continuously rather than on request. Do not assume the current arrangement is optimal; it is the one that has been used, not the one that has been measured.
-2. **Codex `xhigh`** — when Fable can't close the gap, or when a second, adversarially-framed opinion is what's needed.
+1. **Sol (GPT-5.6 Sol via Codex CLI, `high`; `xhigh` only as a later escalation) — the first brain.** Design calls, reviews, options menus, and anything you could not get to 95% after exhausting your own research. It is a different model family, so it does not share your blind spots. You fix what it finds and it rechecks: a dialogue, never a unilateral dismissal.
+2. **Fable (`advisor()`; if down, a Fable subagent at `high`) — only when you and Sol cannot reconcile.** That means a disagreement that survives the recheck round, a second repair to the same component in one cycle (a design question, not a third patch: review converges on a fix, never on the right design), or a `WRONG_SHAPE` verdict. Present both positions to Fable verbatim, never a summary; Fable's ruling settles it. Expect this on about 5% of questions — much more means you are escalating instead of reconciling. Fable finds different things than Sol, which is why it is the tie-break rung and not a second reviewer run every time.
 3. **The human** — priority, risk appetite, scope, spend, or anything irreversible or outward-facing. A merge gate that demands explicit confirmation *is* this rung, invoked by design rather than by uncertainty.
 
 **A standing instruction stays in force until it is withdrawn.** Once the human has ruled — "fix findings yourself", "don't ask before X", "stop checking in each round" — re-asking is not caution. It hands back a decision they already made, and it costs them the same interruption twice. Treat "you may proceed without asking" as durable, not as permission for one turn.
@@ -2466,7 +2464,7 @@ Low confidence does **not** mean "ask the user." It means "escalate," and the us
 
 **The skipped-rung tell:** presenting the user with options while you already hold a lean means you skipped a rung. Act on the lean, or send it up to the next reviewer — don't outsource a model-answerable decision upward.
 
-**Act-don't-ask threshold.** When Fable ≥95% or Codex ≥95% (require **both** for policy-, release-, or consumer-adjacent changes, scaled to the change's complexity), proceed and report afterward instead of asking. Below that, or when the two reviewers disagree, keep escalating rather than defaulting to a question.
+**Act-don't-ask threshold.** When you and Sol reconcile at ≥95% (for policy-, release-, or consumer-adjacent changes that means Sol's own explicit ≥95%, scaled to the change's complexity), proceed and report afterward instead of asking. Below that, or when you and Sol still disagree after the recheck, escalate to Fable rather than defaulting to a question.
 
 > **Scope — confidence is not authorization.** This threshold applies **only** to decisions that are model-answerable, already authorized, and reversible. It **never** overrides an approval gate: human sign-off, anything with external effect (publishing, sending, posting), production deploys, deletions, new architectural patterns, releases, or policy changes. **Merge protections are non-overridable** — `gh pr merge --auto` stays banned unconditionally, and a merge gate demanding explicit confirmation is the human rung by design, not a low-confidence signal to be cleared by a high score. A model can be entirely confident about *how* to do something irreversible while having no idea whether it *should* — that judgement is the user's, and no confidence number substitutes for it.
 
@@ -2507,7 +2505,7 @@ Local tests pass -> Commit -> Push -> Watch CI
                                                            |
                                                    Still failing?
                                                            |
-                                                   ESCALATE: Fable→Codex
+                                                   ESCALATE: Sol→Fable if unreconciled
 ```
 
 **How to watch CI:**
@@ -2527,7 +2525,7 @@ Local tests pass -> Commit -> Push -> Watch CI
    - Read failure logs: `gh run view <RUN_ID> --log-failed`
    - Diagnose root cause (same philosophy as local test failures)
    - Fix and push again
-4. Max 2 fix attempts - if still failing, escalate (Fable → Codex `xhigh`) before asking the user
+4. Max 2 fix attempts - if still failing, escalate (Sol via Codex `xhigh` — two failed repairs is the later escalation; Fable only if you and Sol cannot reconcile) before asking the user
 5. **Read CI logs whether pass or fail — not just on failure.** A green checkmark hides warnings, skipped steps, and degraded scores (v1.24.0 shipped a degraded E2E score and a silently excluded test suite behind a passing check). Use `gh run view <RUN_ID> --log`, not just `--log-failed`.
 6. **Cross-model audit the CI logs** — same `codex exec` pattern as the Cross-Model Review Loop above. Prompt: *"Audit for silent failures, skipped tests, degraded metrics, warnings-that-should-be-errors."* Do this even when every check is green.
 7. Only after logs are read and audited — proceed to present final summary
@@ -2538,7 +2536,7 @@ Local tests pass -> Commit -> Push -> Watch CI
 - Your code broke it? Fix your code
 - CI config issue? Fix the config
 - Flaky? Investigate - flakiness is a bug
-- Stuck? Escalate — Fable, then Codex `xhigh`; the user last
+- Stuck? Escalate — Sol (Codex `xhigh` after failed repairs), then Fable only if unreconciled; the user last
 
 ### CI Review Feedback Loop — Local Shepherd (After CI Passes)
 
@@ -3390,8 +3388,8 @@ All checks passed! Setup complete.
 7. Claude implements with TDD
 
 **When Claude should ask you:**
-- LOW confidence → Must escalate (Fable → Codex) before interrupting a human
-- FAILED 2x → Must escalate (Fable → Codex) before interrupting a human
+- LOW confidence → Must escalate (Sol, then Fable only if unreconciled) before interrupting a human
+- FAILED 2x → Must escalate (Sol, then Fable only if unreconciled) before interrupting a human
 - Multiple valid approaches → Should present options
 
 ---
@@ -3413,7 +3411,7 @@ All checks passed! Setup complete.
 |-------|---------------|
 | HIGH (90%+) | Proceed after approval |
 | MEDIUM (60-89%) | Highlight uncertainties |
-| LOW (<60%) | **Escalation ladder** — Fable → Codex xhigh → human last |
+| LOW (<60%) | **Escalation ladder** — Sol (Codex high) → Fable only if unreconciled → human last |
 | FAILED 2x | **Escalation ladder** — human is the last rung, not the first |
 
 ### Hook Summary
@@ -3463,7 +3461,7 @@ You've successfully set up the system when:
 - [ ] Claude auto-invokes sdlc skill for all tasks
 - [ ] Claude uses TodoWrite to track progress
 - [ ] Claude states confidence levels
-- [ ] Claude escalates (Fable → Codex) when LOW confidence, before asking
+- [ ] Claude escalates (Sol, then Fable only if unreconciled) when LOW confidence, before asking
 - [ ] TDD hook reminds about tests before editing source files
 - [ ] Claude requests /compact before implementation
 
@@ -3846,7 +3844,7 @@ Use an independent AI model from a different company as a code reviewer. The aut
 
 **Use the best model, at an effort you can afford to run every time.** This is your quality gate — don't economize on the *model*. Always use the latest, most capable one available (**GPT-5.6 Sol if you have access**, otherwise Terra). Cheaper/faster models miss things; the whole point is catching what the authoring model couldn't.
 
-**Effort default: `high`** (changed from `xhigh` 2026-08-01). The reasoning is cost and review-noise, not capability: a reviewer you skip because it takes 30 minutes catches nothing, and a long tail of cosmetic findings crowds out the real ones. Escalate to `xhigh` for unusually risky PRs — auth, payments, data migrations, anything touching a merge or release gate — and to `max`/Pro above that; see `AI_SETUP_LANES.md`'s Final Review Policy.
+**Effort default: `high` for the first round, for every brain** (maintainer policy 2026-11-08; first set 2026-08-01, reverted to `xhigh` 2026-09-26). The reasoning is cost and review-noise, not capability: a reviewer you skip because it takes 30 minutes catches nothing, and a long tail of cosmetic findings crowds out the real ones. Escalate to `xhigh` only later — when a recheck fails to reconcile, or on a second repair to the same component — and to `max`/Pro above that; see `AI_SETUP_LANES.md`'s Final Review Policy.
 
 **Be honest about the evidence here, because we weren't.** This document previously asserted that "testing showed `xhigh` caught 3 findings that `high` missed on the same content", and framed that setting as beyond question. That line was written 2026-03-26 against **GPT-5.4** — two reviewer generations before GPT-5.6 Sol — with no measurement artifact behind it, and it survived unchallenged for four months. Neither the old default nor the new one rests on a controlled comparison in this repo. If you want the real answer, run both efforts on the same diff and count P0/P1 findings, not total findings.
 
@@ -4114,7 +4112,7 @@ The `mission/success/failure` fields give the reviewer context. Without them, yo
 
 ```bash
 codex exec \
-  -c 'model_reasoning_effort="xhigh"' \
+  -c 'model_reasoning_effort="high"' \
   -s danger-full-access \
   -o .reviews/latest-review.md \
   "You are an independent code reviewer. Read .reviews/handoff.json, \
@@ -4178,7 +4176,7 @@ Then update `handoff.json` to `"status": "PENDING_RECHECK"`, increment `round`, 
 
 ```bash
 codex exec \
-  -c 'model_reasoning_effort="xhigh"' \
+  -c 'model_reasoning_effort="high"' \
   -s danger-full-access \
   -o .reviews/latest-review.md \
   "You are doing a TARGETED RECHECK. First read .reviews/handoff.json \
@@ -4234,7 +4232,7 @@ Claude writes code → handoff.json (round 1)
 **Every CERTIFIED path above writes `"commit_sha": "<git rev-parse HEAD>"` into `handoff.json`** — `hooks/codex-gate-check.sh` (ROADMAP #437) treats a missing or mismatched SHA as a stale certification, so a bare `CERTIFIED` status string is never enough on its own.
 
 **Key flags:**
-- `-c 'model_reasoning_effort="xhigh"'` — the reviewer effort level, restored to `xhigh` on 2026-09-26 (quality-first). Previously `high` (2026-08-01, cost decision). Escalate to `max` or Pro mode for security-critical PRs.
+- `-c 'model_reasoning_effort="high"'` — the reviewer effort level: `high` for the first round (policy 2026-11-08; it was `xhigh` from 2026-09-26). Escalate to `xhigh` only when a recheck fails to reconcile or on a second repair, and to `max` or Pro mode for security-critical PRs.
 - `-s danger-full-access` — Full filesystem read/write so the reviewer can read your actual code.
 - `-o .reviews/latest-review.md` — Save the review output for Claude to read back.
 - **Claude Code sandbox bypass required:** Codex's Rust binary needs access to macOS system configuration APIs (`SCDynamicStore`) during initialization. Claude Code's sandbox blocks this, causing `codex exec` to crash with `panicked: Attempted to create a NULL object`. When running from within Claude Code, use `dangerouslyDisableSandbox: true` on the Bash tool call. This only bypasses CC's sandbox for the Codex process — Codex's own sandbox (`-s danger-full-access`) still applies. Known issue: [openai/codex#15640](https://github.com/openai/codex/issues/5914).
@@ -4287,7 +4285,7 @@ CLI-distributed file parity (skills, hooks, settings).
 
 #### Multiple reviewers (Claude review + Codex + human)
 
-Run them in parallel; collect feedback via `gh api repos/OWNER/REPO/pulls/PR/comments` (single source of truth). Respond per-reviewer (different blind spots — don't merge feedback). On a conflict between two model reviewers, cross-feed their positions verbatim and let them reconcile — you relay, you do not pick a winner. A human-vs-model split goes to the human as one question. Termination is the cumulative stop rule (#539) applied per root task — not a per-reviewer iteration cap.
+Collect feedback via `gh api repos/OWNER/REPO/pulls/PR/comments` (single source of truth). Respond per-reviewer (different blind spots — don't merge feedback). On a conflict between two model reviewers, cross-feed their positions verbatim and let them reconcile — you relay, you do not pick a winner. A human-vs-model split goes to the human as one question. Termination is the cumulative stop rule (#539) applied per root task — not a per-reviewer iteration cap.
 
 #### Non-code domains (research, persuasion, medical content)
 
@@ -4295,7 +4293,7 @@ Same handoff format. Adapt `review_instructions` (e.g. "verify each cited claim 
 
 #### Parallel Blind Dual Review
 
-When two models review the same change, **run them in parallel and blind to each other, then merge the findings**. Do not chain them.
+**Only for live enforcement** — CI config, hooks, agent config, the merge mechanism itself (see **Cost control** below). Everywhere else the escalation ladder is sequential: Sol first, Fable only if you and Sol cannot reconcile. For those live-enforcement changes, when two models review the same change, **run them in parallel and blind to each other, then merge the findings**. Do not chain them.
 
 **The rule:** neither reviewer sees the other's output, or your own responses to it, until both have reported. Give each the same diff, the same preflight, and the same instruction to attack. Then merge: treat any finding either one raises as real until disproved.
 
@@ -4359,7 +4357,7 @@ Tell both reviewers this in the prompt, and tell them explicitly: **do not manuf
 
 This table is blast radius; PROCESS BUDGET is the promise. **Where they disagree, PROCESS BUDGET wins** — it is the newer rule and the one derived from an incident. Blast radius is a useful first cut, but "it's only docs" is exactly the reasoning that shipped the defect these rules exist because of.
 
-**Iterating vs. gating.** Looping with one reviewer while you build is cheap and effective — use the model that does not bill per token if you have one. But that reviewer is no longer independent by the end: it is reading code shaped by its own earlier feedback. So iterate with it freely, then run the **final** gate as a parallel blind round with a *fresh* instance of each model.
+**Iterating vs. gating.** Looping with one reviewer while you build is cheap and effective — use the model that does not bill per token if you have one. But that reviewer is no longer independent by the end: it is reading code shaped by its own earlier feedback. So iterate with it freely, then run the **final** gate with a *fresh* instance: a fresh Sol round, or for live-enforcement changes a parallel blind round of each model.
 
 **The loop, stated explicitly.** Reviewers returning findings is the normal case, not a setback, and the agent must not stop to ask permission each time. Run this until it terminates:
 
@@ -4371,7 +4369,7 @@ implement  →  fix in-allowlist findings  →  re-review with the ITERATION mod
                     └────────────────────────────┼────────┘
                                                  no
                                                  ↓
-                                    GATE: fresh parallel blind round
+                                    GATE: fresh Sol round (parallel blind only for live enforcement)
                                                  ↓
                                     findings? ──yes──→ back to the top
                                                  ↓ no

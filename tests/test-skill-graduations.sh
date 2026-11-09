@@ -23,7 +23,7 @@ else
   fail "SKILL.md missing confidence ramp pattern"
 fi
 
-# Test 2: Mentions Fable batch review as part of the ramp
+# Test 2: Mentions the (Sol) batch review as part of the ramp
 if grep -q "batch.*review\|batch.*consult" "$SKILL"; then
   pass "confidence ramp includes batch review step"
 else

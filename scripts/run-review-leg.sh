@@ -273,7 +273,7 @@ done
 set +e
 codex exec \
     -m "${REVIEW_MODEL:-gpt-5.6-sol}" \
-    -c 'model_reasoning_effort="xhigh"' \
+    -c 'model_reasoning_effort="high"' \
     ${SANDBOX_ARGS[@]+"${SANDBOX_ARGS[@]}"} \
     --output-schema "$SCHEMA" \
     --output-last-message "$VERDICT" \

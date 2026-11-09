@@ -155,7 +155,7 @@ test_fixture_extraction() {
 # Test 10: get_fixture_for_scenario defaults to 'test-repo' when no header
 test_fixture_default() {
     local tmpfile
-    tmpfile=$(mktemp "${TMPDIR:-/tmp}/scenario-XXXXXX.md")
+    tmpfile=$(mktemp "${TMPDIR:-/tmp}/scenario.XXXXXX")
     echo "# Scenario: No Fixture Header" > "$tmpfile"
     echo "## Task" >> "$tmpfile"
     echo "Do something" >> "$tmpfile"

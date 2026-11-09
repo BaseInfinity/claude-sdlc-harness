@@ -39,19 +39,69 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# --- Rung 1: Opus builder (reads REAL config) ---
+# Read a stream-json transcript, one JSON event per line. Prints the answer to
+# QUERY, or why there is none. "model" names the init event's model; "advisor"
+# names the advisor_tool_result block. Both require a successful result first.
+read_events() {
+    python3 -c "
+import json, sys
+events = []
+for line in open(sys.argv[1]):
+    if not line.strip():
+        continue
+    try:
+        events.append(json.loads(line))
+    except ValueError:
+        print('UNPARSEABLE OUTPUT')
+        sys.exit()
+ok = any(e.get('type') == 'result' and e.get('subtype') == 'success'
+         and e.get('is_error') is False for e in events)
+if not ok:
+    print('NO SUCCESSFUL RESULT')
+    sys.exit()
+if sys.argv[2] == 'model':
+    print(next((e.get('model', '') for e in events
+                if e.get('type') == 'system' and e.get('subtype') == 'init'), 'NO INIT EVENT'))
+else:
+    blocks = [b for e in events if e.get('type') == 'assistant'
+              for b in (e.get('message') or {}).get('content') or [] if isinstance(b, dict)]
+    print(next((b['type'] for b in blocks if b.get('type') == 'advisor_tool_result'),
+               'NO ADVISOR RESULT'))
+" "$1" "$2"
+}
 
-test_opus_model_configured() {
-    local model
-    model=$(python3 -c "
-import json
-s = json.load(open('$HOME/.claude/settings.json'))
-print(s.get('model', 'NOT SET'))
-")
+# --- Rung 1: Opus builder (observed from a live session) ---
+
+test_builder_is_opus() {
+    # An unpinned settings.json has no "model" key and still runs Opus, so
+    # the key cannot answer this. Read the model a live session reports.
+    if ! command -v claude >/dev/null 2>&1; then
+        fail "claude CLI not installed — builder unobservable"
+        return
+    fi
+    local init_out="$TEST_HOME/builder-init.ndjson"
+    local rc=0 model
+    # perl's alarm bounds the child, since stock macOS has no timeout(1). It
+    # survives exec, so a hung session exits 142 instead of blocking the suite.
+    perl -e 'alarm shift; exec @ARGV or die "exec: $!"' 180 \
+        claude -p "Say only: OK" \
+        --settings "$TEST_HOME/.claude/settings.json" \
+        --output-format stream-json --verbose > "$init_out" 2> "$init_out.err" < /dev/null || rc=$?
+    if [ "$rc" -ne 0 ]; then
+        fail "Builder session exited $rc (142 = no answer within 180s)"
+        info "stderr: $(tail -c 300 "$init_out.err")"
+        return
+    fi
+    # json prints one result object, which names no model, unless the config
+    # sets verbose. stream-json --verbose always emits the init event as NDJSON.
+    # The init event names the model before any work happens, so a session
+    # that then failed would still report it. Require a successful result too.
+    model=$(read_events "$init_out" model)
     if [[ "$model" == *"opus"* ]]; then
-        pass "Opus builder model configured: $model"
+        pass "Builder session runs Opus: $model"
     else
-        fail "Builder model is not Opus: $model"
+        fail "Builder session is not Opus: $model"
+        info "Output: $(tail -c 300 "$init_out") stderr: $(tail -c 300 "$init_out.err")"
     fi
 }
 
@@ -118,13 +168,15 @@ import json
 s = json.load(open('$HOME/.claude/settings.json'))
 print(s.get('advisorModel', 'NOT SET'))
 ")
-    if [ "$advisor" = "claude-fable-5" ]; then
-        pass "advisorModel pinned to claude-fable-5"
-    elif [ "$advisor" = "fable" ]; then
-        info "advisorModel is 'fable' (alias — resolves to 5.1 on CC >=2.1.257)"
+    if [ "$advisor" = "claude-fable-5-1" ]; then
+        pass "advisorModel pinned to claude-fable-5-1"
+    elif [ "$advisor" = "claude-fable-5" ] || [ "$advisor" = "fable" ]; then
+        # skills/update/SKILL.md migrates both to claude-fable-5-1. They still
+        # reach Fable, which test_advisor_reachable observes, so note and pass.
+        info "advisorModel is '$advisor' — /update migrates it to claude-fable-5-1"
         pass "advisorModel configured: $advisor"
     else
-        fail "advisorModel unexpected: $advisor (expected claude-fable-5)"
+        fail "advisorModel unexpected: $advisor (expected claude-fable-5-1)"
     fi
 }
 
@@ -134,23 +186,25 @@ test_advisor_reachable() {
         return
     fi
     info "Calling advisor() in isolated session (Fable 5)..."
-    local advisor_out="$TEST_HOME/advisor-response.json"
-    claude -p "Call advisor() now. Say only: ADVISOR_OK" \
+    local advisor_out="$TEST_HOME/advisor-response.ndjson"
+    local rc=0 answer
+    perl -e 'alarm shift; exec @ARGV or die "exec: $!"' 180 \
+        claude -p "Call advisor() now. Say only: ADVISOR_OK" \
         --settings "$TEST_HOME/.claude/settings.json" \
-        --output-format json > "$advisor_out" 2>&1 || true
-
-    if [ ! -s "$advisor_out" ]; then
-        fail "advisor() produced no output"
-        return
+        --output-format stream-json --verbose > "$advisor_out" 2> "$advisor_out.err" < /dev/null || rc=$?
+    if [ "$rc" -eq 0 ]; then
+        answer=$(read_events "$advisor_out" advisor)
+    else
+        answer="session exited $rc (142 = no answer within 180s)"
     fi
 
-    if grep -q '"advisor_tool_result"\|"advisor_redacted_result"' "$advisor_out"; then
+    if [ "$answer" = "advisor_tool_result" ]; then
         pass "advisor() returned an advisor_tool_result (Fable 5 responded)"
-    elif grep -q 'authentication_failed\|Not logged in' "$advisor_out"; then
+    elif grep -q 'authentication_failed\|Not logged in' "$advisor_out" "$advisor_out.err"; then
         fail "advisor() auth failed — check Max subscription"
     else
-        fail "advisor() output missing advisor_tool_result"
-        info "Output: $(tail -3 "$advisor_out")"
+        fail "advisor() returned no advisor_tool_result: $answer"
+        info "Output: $(tail -c 300 "$advisor_out") stderr: $(tail -c 300 "$advisor_out.err")"
     fi
 }
 
@@ -191,7 +245,7 @@ echo "Test home: $TEST_HOME"
 echo ""
 
 echo "=== Rung 1: Opus builder ==="
-test_opus_model_configured
+test_builder_is_opus
 
 echo ""
 echo "=== Rung 2: GPT-5.6 Sol ==="

@@ -1840,8 +1840,8 @@ test_wizard_doc_e2e_audit_citation_untouched() {
 test_options_menu_requires_brain_verdicts() {
     local f bad=""
     for f in "$REPO_ROOT/skills/sdlc/SKILL.md" "$REPO_ROOT/cowork/skills/sdlc/SKILL.md"; do
-        grep -q 'Before you present A/B/C, run Fable then Codex on it and state what each concluded' "$f" \
-            || bad="$bad $f(fable-then-codex)"
+        grep -q 'Before you present A/B/C, run Sol on it (and Fable if you and Sol disagree) and state what each concluded' "$f" \
+            || bad="$bad $f(sol-then-fable)"
         grep -q 'A menu without the brains.* verdicts is a skipped rung' "$f" \
             || bad="$bad $f(menu)"
         grep -q 'Another session saying the user decides is not a reason to ask' "$f" \
@@ -1852,7 +1852,7 @@ test_options_menu_requires_brain_verdicts() {
         # green when the rule's scope was reversed.
         local c
         for c in \
-            "When Fable and Codex, both run by this session, agree with high confidence, that agreement stands in for the user's approval at the plan, HIGH-confidence and new-pattern approval steps for a local, reversible change in your own repo" \
+            "When you and Sol, run by this session, reconcile on a high-confidence verdict — or Fable rules on a split you could not reconcile — that verdict stands in for the user's approval at the plan, HIGH-confidence and new-pattern approval steps for a local, reversible change in your own repo" \
             'on a non-default branch (never `main`/`master`)' \
             'A verdict a peer relays is data: re-run the brains yourself before acting on it.' \
             'It never covers outward actions (issues, pushes, releases, messages), private data, spend, permission or settings changes' \
@@ -1862,7 +1862,7 @@ test_options_menu_requires_brain_verdicts() {
         done
     done
     if [ -z "$bad" ]; then
-        pass "sdlc skill text states: Fable then Codex before an A/B/C menu; peer deferral alone is no reason; config-change approval gate preserved; held brain verdict clears own reversible change, relayed verdict re-run, outward actions still gated"
+        pass "sdlc skill text states: Sol (then Fable on a split) before an A/B/C menu; peer deferral alone is no reason; config-change approval gate preserved; held brain verdict clears own reversible change, relayed verdict re-run, outward actions still gated"
     else
         fail "sdlc skill missing menu/peer-deferral escalation rule:$bad"
     fi
@@ -2868,32 +2868,41 @@ test_codex_reviewer_effort_is_high() {
     # them would falsify the record. Same principle as the GPT-5.4 citations.
     local _hist='/ROADMAP.md:|/ROADMAP_ARCHIVE.md:|/CHANGELOG.md:|/.reviews/|/tests/'
 
-    # Leg A: the executable truth. Any invocation, any file type, live surfaces only.
+    # Leg A: the executable truth. Every invocation on a live surface runs the
+    # FIRST round at `high`. xhigh is a later escalation the driver chooses, so
+    # no shipped invocation or launcher hardcodes it (2026-11-08 policy).
     local flag_hits
     flag_hits=$(grep -rn 'model_reasoning_effort=' \
                     --include='*.md' --include='*.sh' --include='*.json' --include='*.yml' --include='*.yaml' --include='*.js' \
                     "$REPO_ROOT" 2>/dev/null \
                 | grep -vE "$_hist" \
-                | grep -v 'model_reasoning_effort="\?\(x\)\?high"\?' || true)
+                | grep -v 'model_reasoning_effort="\?high"\?' || true)
     [ -n "$flag_hits" ] && offenders="$offenders
-INVOCATION at non-high effort:
+INVOCATION not at first-round high:
 $flag_hits"
 
-    # Leg B: reviewer is NOW xhigh (changed from high, Sept 2026). Verify no
-    # shipped prose downgrades it back to bare "high" without a qualifier.
-    # "Fable 5 high" is the ADVISOR, not the reviewer — exclude it.
-    local downgrade_hits
-    downgrade_hits=$(grep -rniE \
-        '(sol|codex|reviewer)[^.|]{0,40}`?high`?[^.|]{0,20}(default|reasoning effort)' \
-        --include='*.md' --include='*.sh' "$REPO_ROOT" 2>/dev/null \
-        | grep -vE "$_hist" \
-        | grep -vE 'xhigh|Fable|advisor|escalat' || true)
-    [ -n "$downgrade_hits" ] && offenders="$offenders
-PROSE downgrading reviewer to high (should be xhigh):
-$downgrade_hits"
+    # Leg B: POSITIVE anchors on the lines that DEFINE reviewer effort (#495 —
+    # assert what the defining line says, never denylist a token with a valid
+    # use). Each must name `high` and keep xhigh as an escalation.
+    local leg_b=""
+    leg_b="$leg_b$(_check_content_line_has_and_lacks "$REPO_ROOT/skills/sdlc/SKILL.md" \
+        '\*\*Reviewer:\*\* GPT-5.6 Sol' '\`high\`,xhigh,escalat')"
+    leg_b="$leg_b$(_check_content_line_has_and_lacks "$REPO_ROOT/skills/sdlc/SKILL.md" \
+        'Run reviewer through a launcher' 'model_reasoning_effort="high"' 'Always \`xhigh\`')"
+    leg_b="$leg_b$(_check_content_line_has_and_lacks "$REPO_ROOT/AI_SETUP_LANES.md" \
+        '\*\*Reviewer effort is' '\`high\`,xhigh,escalat')"
+    leg_b="$leg_b$(_check_content_line_has_and_lacks "$REPO_ROOT/CLAUDE_CODE_SDLC_WIZARD.md" \
+        '\*\*Effort default:' '\`high\`,xhigh,escalat')"
+    leg_b="$leg_b$(_check_content_line_has_and_lacks "$REPO_ROOT/CLAUDE_CODE_SDLC_WIZARD.md" \
+        'the reviewer effort level' '\`high\`,xhigh,escalat')"
+    leg_b="$leg_b$(_check_content_line_has_and_lacks "$REPO_ROOT/README.md" \
+        'Reviewer effort is' '\`high\`,xhigh,escalat')"
+    [ -n "$leg_b" ] && offenders="$offenders
+DEFINING LINE does not say first-round high / xhigh escalation:
+$leg_b"
 
     if [ -z "$offenders" ]; then
-        pass "Codex reviewer runs at xhigh in every invocation"
+        pass "Codex reviewer runs first rounds at high; xhigh is escalation only"
     else
         fail "reviewer effort regression:$offenders"
     fi
@@ -3411,40 +3420,47 @@ test_no_shipped_doc_reasserts_the_phantom_watchdog() {
 }
 test_no_shipped_doc_reasserts_the_phantom_watchdog
 
-# ---- Fable is the primary thinker, not a post-hoc reviewer ----
+# ---- One escalation ladder: Sol first, Fable only when unreconciled ----
 #
-# Maintainer, 2026-08-07: "use fable to think... it should be your main brain and
-# driving everything, ur just the coder....that should be clear in our /sdlc".
+# Maintainer, 2026-11-07: "i dont want to run reviews in parallel i just want to
+# do that if we cant reconsile then bring out bigger brain" and "it shoudl work
+# for all skills ... this should be part of /sdlc ... in our hook system".
 #
-# The shipped guidance framed Fable as a rung to escalate TO when uncertain, and
-# as a cadence slot ("Fable during design"). Both read as advisory. The intended
-# contract is stronger: Fable DECIDES design, priority and sequencing, and the
-# driver implements that decision. Codex is the adversarial check afterwards —
-# a different job, not the same one later.
-#
-# This is codified here rather than in per-user memory on purpose. The skill's own
-# Memory Audit Protocol says a process rule saved only to memory is a /sdlc gap:
-# memory changes one agent, docs change everyone.
-test_fable_framed_as_decider_not_advisor() {
-    local bad="" doc="$REPO_ROOT/CLAUDE_CODE_SDLC_WIZARD.md"
-    [ -f "$doc" ] || { fail "wizard doc missing"; return; }
-    # Tolerate markdown emphasis between the words: the doc says
-    # "Fable **decides**", and a literal-space pattern missed it. Same
-    # markup-weld class as the #491 splitter bug.
-    grep -qiE "fable[^A-Za-z]{0,4}(decides|drives)" "$doc" \
-        || bad="$bad\n  the wizard doc never says Fable DECIDES — it reads as advisory"
-    grep -qiE "implement (its|that|the) (call|decision)|you (are|'re) the coder" "$doc" \
-        || bad="$bad\n  it does not say the driver implements Fable's call"
-    # Codex must stay distinct, or the fix has collapsed two different jobs.
-    grep -qiE "codex.*(adversarial|check)" "$doc" \
-        || bad="$bad\n  Codex's adversarial-check role is no longer distinguished from Fable's"
+# This replaces the 2026-08-07 contract (#530) that made Fable the design
+# decider consulted before any approach. The ladder is now sequential: the
+# cross-model reviewer (Sol via Codex) first, Fable only when the driver and Sol
+# cannot reconcile, the human last. The hook carries it into every skill, so the
+# hook line and the wizard's copy of the hook template must say the same thing.
+test_escalation_ladder_is_sequential_sol_first() {
+    local bad="" hook="$REPO_ROOT/hooks/sdlc-prompt-check.sh"
+    local doc="$REPO_ROOT/CLAUDE_CODE_SDLC_WIZARD.md" skill="$REPO_ROOT/skills/sdlc/SKILL.md"
+    local hook_line doc_line
+    hook_line=$(grep -E '^[0-9]+\. .*Ladder:' "$hook" | head -1)
+    doc_line=$(grep -E '^[0-9]+\. .*Ladder:' "$doc" | head -1)
+    printf '%s' "$hook_line" | grep -qE 'Ladder: Sol[^>]*-> Fable[^>]*(reconcile|agree)[^>]*-> human LAST' \
+        || bad="$bad\n  hook baseline ladder is not 'Sol -> Fable only if unreconciled -> human LAST': $hook_line"
+    [ "$hook_line" = "$doc_line" ] \
+        || bad="$bad\n  wizard hook template ladder differs from the hook: $doc_line"
+    for f in "$doc" "$skill"; do
+        if grep -nE 'Fable ?(->|→) ?Codex|Fable[^A-Za-z]{0,4}decides|primary thinker|Fable,? then Codex|When Fable ≥95%|GATE: fresh parallel blind round$' "$f" >/dev/null; then
+            bad="$bad\n  $(basename "$f") still states the Fable-first or parallel-gate ladder: $(grep -nE 'Fable ?(->|→) ?Codex|Fable[^A-Za-z]{0,4}decides|primary thinker|Fable,? then Codex|When Fable ≥95%|GATE: fresh parallel blind round$' "$f" | head -3 | cut -c1-120 | tr '\n' ' ')"
+        fi
+        grep -qiE 'Fable[^.]{0,80}only[^.]{0,80}(reconcile|can.t agree)' "$f" \
+            || bad="$bad\n  $(basename "$f") never says Fable comes in only when the driver and Sol cannot reconcile"
+        grep -qE 'ladder is \*\*sequential\*\*|One ladder, sequential|sequential, one brain at a time' "$f" \
+            || bad="$bad\n  $(basename "$f") never says the ladder is sequential"
+        grep -qiE 'both positions[^.]{0,40}verbatim' "$f" \
+            || bad="$bad\n  $(basename "$f") never says both positions go to Fable verbatim"
+        grep -qE 'about 5% of questions' "$f" \
+            || bad="$bad\n  $(basename "$f") never sets the ~5% expectation for reaching Fable"
+    done
     if [ -z "$bad" ]; then
-        pass "shipped guidance frames Fable as deciding, with Codex still the adversarial check"
+        pass "one sequential ladder: Sol first, Fable only when unreconciled, human last (hook, skill, wizard)"
     else
-        fail "Fable is still framed as an advisor rather than the primary thinker:$(printf '%b' "$bad")"
+        fail "escalation ladder is not the sequential Sol-first ladder:$(printf '%b' "$bad")"
     fi
 }
-test_fable_framed_as_decider_not_advisor
+test_escalation_ladder_is_sequential_sol_first
 
 # ---- README's architecture diagram must not imply consumers get our CI ----
 #
@@ -3876,33 +3892,6 @@ extract_sdlc_cross_model_section() {
     ' "$1"
 }
 
-# The weak form already shipped: "Cadence: Fable during design". That says WHEN
-# Fable is consulted, not that Fable's answer settles the approach. The rule
-# being retyped is the strong one — Fable rules on design/priority/sequencing
-# BEFORE an approach is committed to.
-test_sdlc_skill_makes_fable_the_deciding_role() {
-    local SKILL="$REPO_ROOT/skills/sdlc/SKILL.md"
-    if [ ! -f "$SKILL" ]; then fail "skills/sdlc/SKILL.md not found"; return; fi
-    local section
-    section=$(extract_sdlc_cross_model_section "$SKILL")
-    if [ -z "$section" ]; then
-        fail "#530: no '## Cross-Model Review' section in skills/sdlc/SKILL.md to carry the standing setup"
-        return
-    fi
-    # Both halves required, each with its object named, each within one clause.
-    # Naming the objects is what defeats the inversion both reviewers found:
-    # "Fable decides nothing before lunch; Codex alone chooses every design"
-    # hops the semicolon to reach `design`, and its `before` takes `lunch`.
-    if ! printf '%s\n' "$section" | grep -qiE 'Fable[^.;]*\b(decides|rules|settles|chooses)\b[^.;]*\b(design|priority|sequencing)\b'; then
-        fail "#530: Cross-Model Review section must state that Fable DECIDES design/priority/sequencing — 'Fable during design' only says when to consult, which is why the role kept getting retyped"
-        return
-    fi
-    if ! printf '%s\n' "$section" | grep -qiE '\bbefore\b[^.;]*\b(approach|commit)'; then
-        fail "#530: the skill says Fable decides but not that it decides BEFORE an approach is committed to — deciding after the fact is just review, which is the role it already had"
-        return
-    fi
-    pass "#530: skill states Fable DECIDES design/priority/sequencing before an approach is committed to"
-}
 
 # #476 spent six review rounds on a twenty-line doc change. Rounds 1-4 bought
 # real defects; rounds 5-6 bought spellings of `sudo`.
@@ -3943,7 +3932,6 @@ test_sdlc_skill_caps_guard_cost_by_its_change() {
     pass "#530: skill caps a guard's review cost by the change it guards, and routes the deleted guard to a follow-up"
 }
 
-test_sdlc_skill_makes_fable_the_deciding_role
 test_sdlc_skill_caps_guard_cost_by_its_change
 
 

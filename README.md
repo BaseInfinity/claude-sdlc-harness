@@ -4,9 +4,9 @@ A **self-evolving Software Development Life Cycle (SDLC) enforcement system for 
 
 **Built on 15+ years of software engineering and founding engineering experience** — battle-tested patterns from real production systems, baked into an AI agent that follows tried-and-true software quality practices so you don't have to enforce them manually.
 
-> **The Reliable lane is the recommended default.** Opus 4.6[1m] max + GPT-5.6 Sol xhigh + Fable 5.1 high — field-proven, actively dogfooded.
+> **The Reliable lane is the recommended default.** Opus 4.6[1m] max + GPT-5.6 Sol high + Fable 5.1 high — field-proven, actively dogfooded.
 >
-> The Frontier lane (`@frontier`, not yet published) uses Opus 5.5 high + GPT-5.6 Sol xhigh + Fable 5.1 high — experimental, latest models.
+> The Frontier lane (`@frontier`, not yet published) uses Opus 5.5 high + GPT-5.6 Sol high + Fable 5.1 high — experimental, latest models.
 
 > **Built for Claude Code.** Using OpenAI's Codex CLI instead? Check out [`codex-sdlc-wizard`](https://github.com/BaseInfinity/codex-sdlc-wizard). Need privacy-first / any-backend (local Ollama, Azure OpenAI, hosted OSS)? See [`opencode-sdlc-wizard`](https://github.com/BaseInfinity/opencode-sdlc-wizard). ([Full ecosystem](#xdlc-ecosystem-sibling-projects).)
 
@@ -15,10 +15,10 @@ A **self-evolving Software Development Life Cycle (SDLC) enforcement system for 
 > npm install -g agentic-sdlc-wizard              # Reliable (default, @latest)
 > # npm install -g agentic-sdlc-wizard@frontier   # Bleeding edge (not yet published)
 > ```
-> **Reliable** (`@latest`) — Opus 4.6[1m] max + GPT-5.6 Sol xhigh + Fable 5.1 high.
+> **Reliable** (`@latest`) — Opus 4.6[1m] max + GPT-5.6 Sol high + Fable 5.1 high.
 > Field-proven, stable. Use `/model claude-opus-4-6[1m]` (`/effort max`).
 > The bare `claude-opus-4-6` pin (without `[1m]`) gives only 200K.
-> **Frontier** (`@frontier`, not yet published) — Opus 5.5 high + GPT-5.6 Sol xhigh + Fable 5.1 high.
+> **Frontier** (`@frontier`, not yet published) — Opus 5.5 high + GPT-5.6 Sol high + Fable 5.1 high.
 > Latest models, less field data. See [AI_SETUP_LANES.md](AI_SETUP_LANES.md)
 > for full details.
 > Known defect on **both** lanes: setup does not auto-invoke on a brand-new
@@ -174,7 +174,7 @@ That's it. Codex picks up your OpenAI account's best available model automatical
 **How to use it:** when the change is high-stakes, write a one-file mission brief and run:
 
 ```bash
-codex exec -c 'model_reasoning_effort="xhigh"' -s danger-full-access \
+codex exec -c 'model_reasoning_effort="high"' -s danger-full-access \
   -o .reviews/latest-review.md \
   "Read .reviews/handoff.json and review per the checklist. Output findings + CERTIFIED or NOT CERTIFIED." \
   < /dev/null
@@ -182,7 +182,7 @@ codex exec -c 'model_reasoning_effort="xhigh"' -s danger-full-access \
 
 **Always append `< /dev/null`** when running `codex exec` from a non-interactive parent (background, hooks, CI, Claude Code Bash tool). Without it, codex blocks on stdin reads even when the prompt is an argument — the process sits at S/0% CPU indefinitely with a 0-byte `-o` output file. Validated on codex-cli 0.130.0 / macOS 14, 2026-05-15.
 
-Reviewer effort is `xhigh` (restored from `high` — the user's quality-first stance removes the cost constraint that motivated the downgrade on 2026-08-01). See [CLAUDE_CODE_SDLC_WIZARD.md](CLAUDE_CODE_SDLC_WIZARD.md#cross-model-review-loop-required-for-high-stakes) for the full protocol (handoff format, round-2 dialogue loop, preflight docs). Real-world: this catches P0/P1 issues in 2-3 out of 10 reviews that Claude's self-review rated as clean.
+Reviewer effort is `high` for the first round (policy 2026-11-08; it was `xhigh` from 2026-09-26). Escalate to `xhigh` only when a recheck fails to reconcile or on a second repair. See [CLAUDE_CODE_SDLC_WIZARD.md](CLAUDE_CODE_SDLC_WIZARD.md#cross-model-review-loop-required-for-high-stakes) for the full protocol (handoff format, round-2 dialogue loop, preflight docs). Real-world: this catches P0/P1 issues in 2-3 out of 10 reviews that Claude's self-review rated as clean.
 
 ## Choosing Your Model
 
@@ -225,10 +225,10 @@ The wizard defines five AI coding setups in [`AI_SETUP_LANES.md`](AI_SETUP_LANES
 
 | Lane | Advisor | Driver | Reviewer | Escalation |
 |------|---------|--------|----------|------------|
-| **Reliable (default)** | Fable 5.1 (`advisor()`) | Opus 4.6[1m], `max` | GPT-5.6 Sol xhigh | Fable 5.1 high |
-| **Frontier** | Fable 5.1 (`advisor()`) | Opus 5.5, `high` | GPT-5.6 Sol xhigh | Fable 5.1 high |
-| **B — Simple/One-Off** | Fable 5.1 (advisorModel, fallback subagent) | Sonnet 5, `medium`→`high`→`xhigh` | GPT-5.6 Sol xhigh | Opus 4.8 xhigh or Fable 5.1 review |
-| **C — Saver** | Fable 5.1 (advisorModel) | Opus 5 plans, Sonnet 5 executes | GPT-5.6 Sol xhigh | None |
+| **Reliable (default)** | Fable 5.1 (`advisor()`) | Opus 4.6[1m], `max` | GPT-5.6 Sol high | Fable 5.1 high |
+| **Frontier** | Fable 5.1 (`advisor()`) | Opus 5.5, `high` | GPT-5.6 Sol high | Fable 5.1 high |
+| **B — Simple/One-Off** | Fable 5.1 (advisorModel, fallback subagent) | Sonnet 5, `medium`→`high`→`xhigh` | GPT-5.6 Sol high | Opus 4.8 xhigh or Fable 5.1 review |
+| **C — Saver** | Fable 5.1 (advisorModel) | Opus 5 plans, Sonnet 5 executes | GPT-5.6 Sol high | None |
 | **D — Lite** | None | Sonnet 5, `medium` | None | None |
 
 Setup D's whole point: **the discipline of knowing when NOT to use discipline.** When blast radius is low and you just need fast cheap hands, skip the SDLC overhead.

@@ -89,19 +89,21 @@ test_fable_51_in_docs() {
     fi
 }
 
-test_no_stale_fable_5() {
-    # claude-fable-5 IS the correct model ID (no point releases exist).
-    # Flag only stale claude-fable-5-1 references (the old wrong ID).
-    local stale=0
-    for f in "${SHIPPED_DOCS[@]}"; do
-        if [ -f "$f" ] && grep -q 'claude-fable-5-1' "$f" 2>/dev/null; then
-            stale=$((stale + 1))
-        fi
-    done
-    if [ "$stale" -eq 0 ]; then
-        pass "No stale claude-fable-5-1 refs in shipped docs"
+test_advisor_pins_are_fable_51() {
+    # claude-fable-5-1 is the Fable 5.1 model ID. skills/update/SKILL.md
+    # migrates "claude-fable-5" and "fable" pins to it, so every
+    # advisorModel pin a shipped doc tells a consumer to set must match.
+    local pins stale
+    pins=$(grep -ohE 'advisorModel"?: *"[^"]*"' "${SHIPPED_DOCS[@]}" 2>/dev/null || true)
+    if [ -z "$pins" ]; then
+        fail "No advisorModel pins found in shipped docs"
+        return
+    fi
+    stale=$(echo "$pins" | grep -v '"claude-fable-5-1"$' || true)
+    if [ -z "$stale" ]; then
+        pass "All $(echo "$pins" | wc -l | tr -d ' ') advisorModel pins in shipped docs are claude-fable-5-1"
     else
-        fail "$stale shipped docs still reference claude-fable-5-1 (should be claude-fable-5)"
+        fail "Shipped docs pin advisorModel to a stale ID: $(echo "$stale" | sort -u | tr '\n' ' ')"
     fi
 }
 
@@ -142,7 +144,7 @@ test_sol_is_review_default
 echo ""
 echo "--- Advisor: Fable 5 ---"
 test_fable_51_in_docs
-test_no_stale_fable_5
+test_advisor_pins_are_fable_51
 
 echo ""
 echo "--- No stale GPT-5.5 ---"

@@ -229,7 +229,7 @@ preconditions, not the redesign.
 Note also that `validate` is defined in `.github/workflows/`, which a candidate
 branch can modify. The merge gate blocks that via `HARD_DENY`; branch
 protection does not.
-- **Fable is the primary reviewer/advisor** (via `advisor()` or Fable subagent fallback when advisor is down). Codex (GPT-5.6 Sol) `high` is the **cross-model safety check** — default to running before committing and pushing. Skip only with logged justification (e.g., single-line typo fix). Incident 2026-06-09: 4 PRs shipped without cross-model check, all had issues
+- **Sol is the first brain; the ladder is sequential.** Codex (GPT-5.6 Sol, via `scripts/run-review-leg.sh`) is the cross-model safety check: it reviews design calls and every change — default to running before committing and pushing. Fable (`advisor()`, or a Fable subagent when the advisor is down) comes in only when you and Sol cannot reconcile, or on a second repair to the same component. Never run both on one question at once. Skip only with logged justification (e.g., single-line typo fix). Incident 2026-06-09: 4 PRs shipped without cross-model check, all had issues
 
 ## Special Notes
 
