@@ -266,21 +266,23 @@ SDLC_ATTACH_RE='"type":"invoked_skills","skills":\[.*\{"name":"([A-Za-z0-9_.-]+:
 # Memo first, transcript on a miss; a transcript hit writes the memo.
 # Sets SDLC_RECORD to hit | miss | nopath | unreadable. Returns 0 only on hit.
 #
-# Subagents (observed live, CC 2.1.289): a subagent's payload carries its
-# agent_id but the PARENT's transcript_path, so the grep below lets it inherit
-# the parent's invocation. The memo follows the same rule — a subagent accepts
-# its own memo or the parent's, never a sibling's, and the parent never
-# accepts a subagent's. A subagent's own Skill call is written to its own
-# subagents/agent-*.jsonl, which no payload names; its memo is the record.
+# Subagents need their own invocation (Sol r2 design ruling, 2026-11-08). A
+# subagent does not receive the parent's loaded skill body, so the parent's
+# call says nothing about the subagent's context. Its payload carries its
+# agent_id but the PARENT's transcript_path (observed live, CC 2.1.289), so
+# the grep below would read the parent's record: a subagent skips it and
+# counts only its own memo, which the PostToolUse Skill hook writes. Its own
+# Skill call lands in subagents/agent-*.jsonl, which no payload names. The
+# parent never accepts a subagent's memo, nor a subagent a sibling's.
 sdlc_skill_on_record() {
     local sid="$1" aid="$2" tp="$3" memo
     SDLC_RECORD=miss
-    for memo in "$(sdlc_memo_path "$sid" "$aid")" "$(sdlc_memo_path "$sid")"; do
-        if [ -n "$memo" ] && [ -f "$memo" ]; then
-            SDLC_RECORD=hit
-            return 0
-        fi
-    done
+    memo=$(sdlc_memo_path "$sid" "$aid")
+    if [ -n "$memo" ] && [ -f "$memo" ]; then
+        SDLC_RECORD=hit
+        return 0
+    fi
+    [ -z "$aid" ] || return 1
     if [ -z "$tp" ]; then
         SDLC_RECORD=nopath
         return 1

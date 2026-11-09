@@ -381,14 +381,11 @@ test_opt_out() {
     fi
 }
 
-# --- subagents (leg 6, observed live on CC 2.1.289) ---
-# A subagent's PreToolUse payload carries agent_id but the PARENT's
-# transcript_path, so the transcript grep already lets a subagent inherit the
-# parent's invocation. The memo follows the same rule: a subagent accepts its
-# own memo or the parent's; the parent never accepts a subagent's, and a
-# sibling never accepts another sibling's. A subagent's own Skill call lives
-# in its own subagents/agent-*.jsonl, which no payload names, so its own memo
-# is the only record of it.
+# --- subagents (leg 6, observed live on CC 2.1.289; Sol r2 design ruling) ---
+# A subagent's payload carries agent_id but the PARENT's transcript_path. A
+# subagent does not get the parent's skill body, so it needs its own call: it
+# accepts only its own memo, never the parent's record or a sibling's, and
+# the parent never accepts a subagent's.
 test_memo_subagent_semantics() {
     local c; c=$(fresh_cache ctx)
     run_prompt_hook "$c" "$(post_skill_payload sdlc S agentA)"
@@ -406,17 +403,30 @@ test_memo_subagent_semantics() {
     : > "$c/sdlc-invoked-S"
     run_tdd "$c" "$(edit_payload "$PROJ/src/app.js" "$T/base.jsonl" S agentB)"
     local inherit_rc=$RC
-    if [ "$parent_rc" -eq 2 ] && [ "$agent_rc" -eq 0 ] && [ "$sibling_rc" -eq 2 ] && [ "$inherit_rc" -eq 0 ]; then
-        pass "leg 6: a subagent accepts its own memo or the parent's; parent and siblings never accept a subagent's"
+    if [ "$parent_rc" -eq 2 ] && [ "$agent_rc" -eq 0 ] && [ "$sibling_rc" -eq 2 ] && [ "$inherit_rc" -eq 2 ]; then
+        pass "leg 6: a subagent accepts only its own memo; never the parent's or a sibling's, and the parent never a subagent's"
     else
-        fail "leg 6 memo semantics (parent rc=$parent_rc, same agent rc=$agent_rc, sibling rc=$sibling_rc, inherit-from-parent rc=$inherit_rc)"
+        fail "leg 6 memo semantics (parent rc=$parent_rc, same agent rc=$agent_rc, sibling rc=$sibling_rc, parent memo only rc=$inherit_rc)"
     fi
     c=$(fresh_cache ctx2)
     run_tdd "$c" "$(edit_payload "$PROJ/src/app.js" "$T/skill.jsonl" S agentC)"
-    if [ "$RC" -eq 0 ]; then
-        pass "leg 6: a subagent payload naming the parent transcript inherits the parent's Skill(sdlc)"
+    if [ "$RC" -eq 2 ] && printf '%s' "$ERR" | grep -qF "$BLOCK_LINE" && [ ! -f "$c/sdlc-invoked-S-agentC" ]; then
+        pass "leg 6: a subagent is blocked even when the parent transcript it names holds Skill(sdlc)"
     else
-        fail "leg 6: subagent with the parent's transcript blocked (rc=$RC err=$ERR)"
+        fail "leg 6: subagent passed on the parent's Skill(sdlc) (rc=$RC err=$ERR files: $(ls "$c"))"
+    fi
+    run_tdd "$c" "$(edit_payload "$PROJ/src/app.js" "" S agentC)"
+    if [ "$RC" -eq 2 ]; then
+        pass "leg 6: a subagent with no memo and no transcript_path is blocked"
+    else
+        fail "leg 6: subagent with no memo and no transcript_path allowed (rc=$RC)"
+    fi
+    run_prompt_hook "$c" "$(post_skill_payload sdlc S agentC)"
+    run_tdd "$c" "$(edit_payload "$PROJ/src/app.js" "$T/base.jsonl" S agentC)"
+    if [ "$RC" -eq 0 ]; then
+        pass "leg 6: the subagent's own Skill(sdlc) ends its block"
+    else
+        fail "leg 6: subagent still blocked after its own Skill(sdlc) (rc=$RC)"
     fi
 }
 
@@ -530,9 +540,10 @@ setup_grepo() {
 }
 
 commit_payload() {
-    local tp="$1" sid="${2:-S}"
+    local tp="$1" sid="${2:-S}" aid="${3:-}"
     local extra=""
     [ -n "$tp" ] && extra=",\"transcript_path\":\"$tp\""
+    [ -n "$aid" ] && extra="$extra,\"agent_id\":\"$aid\""
     printf '{"session_id":"%s"%s,"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"git commit -m wip","description":"commit"}}' "$sid" "$extra"
 }
 
@@ -564,6 +575,12 @@ test_leg8_commit_late_catch() {
         pass "leg 8: with sdlc on record the commit falls through to the existing allows"
     else
         fail "leg 8: hit should fall through to the local-pass allow (rc=$RC err=$ERR)"
+    fi
+    run_gate "$c" "$(commit_payload "$T/skill.jsonl" S agentD)"
+    if [ "$RC" -eq 2 ] && printf '%s' "$ERR" | grep -qF "$BLOCK_LINE"; then
+        pass "leg 8: a subagent's commit is caught even when the parent transcript holds Skill(sdlc)"
+    else
+        fail "leg 8: subagent commit passed on the parent's invocation (rc=$RC err=$ERR)"
     fi
     run_gate "$c" "$(commit_payload "$T/base.jsonl")" SDLC_SKILL_GATE=off
     if [ "$RC" -eq 0 ]; then
