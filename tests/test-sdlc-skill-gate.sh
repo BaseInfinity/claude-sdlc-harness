@@ -1,18 +1,19 @@
 #!/bin/bash
 # The sdlc-skill gate (Fable ruling 2026-11-08).
 #
-# Predicate: "this context has an sdlc invocation on record" — a memo written
-# by the PostToolUse Skill hook, else a grep of the payload's transcript_path
-# for a Skill tool_use, a typed /sdlc command record, or a post-compaction
-# invoked_skills re-attachment naming sdlc.
+# Predicate: "this context has an sdlc invocation on record" — a grep of the
+# context's own transcript (the payload's transcript_path, or for a subagent
+# its subagents/agent-<id>.jsonl) for a Skill tool_use, a typed /sdlc command
+# record, or a post-compaction invoked_skills re-attachment naming sdlc.
 #
 # Gated at edit (tdd-pretool-check.sh, Write/Edit/MultiEdit on a gated path)
 # and at commit (codex-gate-check.sh, staged gated paths, before any
 # review-state allow). The transcript fixtures below are synthetic and copy
 # only the STRUCTURE of real Claude Code records, never their content.
 #
-# Proof legs from the ruling covered here: 1, 2, 3, 4a, 5, 7, 8, 9. Legs 4b
-# and 6 depend on Claude Code's own behaviour and are run live.
+# Proof legs from the ruling covered here: 1, 2, 3, 4a, 5, 6, 7, 8. Legs 4b,
+# 9 (the Skill line is on disk by the next tool's PreToolUse) and the real
+# subagent transcript layout depend on Claude Code itself and are run live.
 
 set -e
 
@@ -163,96 +164,11 @@ test_each_record_kind_allows() {
     fi
 }
 
-# --- a transcript hit writes the memo, so the next check needs no grep ---
-test_hit_writes_memo() {
-    local c; c=$(fresh_cache memo)
-    run_tdd "$c" "$(edit_payload "$PROJ/src/app.js" "$T/skill.jsonl")"
-    if [ "$RC" -eq 0 ] && [ -f "$c/sdlc-invoked-S" ]; then
-        pass "a transcript hit writes the memo sdlc-invoked-<sid>"
-    else
-        fail "transcript hit should write $c/sdlc-invoked-S (rc=$RC)"
-    fi
-    # memo first: same session, transcript now lacking the record, still allowed
-    run_tdd "$c" "$(edit_payload "$PROJ/src/app.js" "$T/base.jsonl")"
-    if [ "$RC" -eq 0 ]; then
-        pass "memo is consulted before the transcript"
-    else
-        fail "memo present but gate blocked (rc=$RC err=$ERR)"
-    fi
-}
-
-# --- leg 9: Skill then gated Edit in one turn (memo from PostToolUse) ---
-post_skill_payload() {
-    local skill="$1" sid="${2:-S}" aid="${3:-}" tool="${4:-Skill}"
-    local extra=""
-    [ -n "$aid" ] && extra=",\"agent_id\":\"$aid\""
-    printf '{"session_id":"%s"%s,"transcript_path":"/nonexistent/t.jsonl","cwd":"/p","hook_event_name":"PostToolUse","tool_name":"%s","tool_input":{"skill":"%s"},"tool_response":{"success":true,"commandName":"%s"}}' \
-        "$sid" "$extra" "$tool" "$skill" "$skill"
-}
-
 run_prompt_hook() {
     local cache="$1" payload="$2" cwd="${3:-$PROJ}"
     RC=0
     OUT=$(cd "$cwd" && SDLC_WIZARD_CACHE_DIR="$cache" bash "$PROMPT_HOOK" <<<"$payload" 2>"$WORKSPACE/err") || RC=$?
     ERR=$(cat "$WORKSPACE/err")
-}
-
-test_leg9_posttooluse_memo() {
-    local c; c=$(fresh_cache l9)
-    run_prompt_hook "$c" "$(post_skill_payload sdlc)"
-    local post_rc=$RC post_out="$OUT"
-    if [ "$post_rc" -eq 0 ] && [ -z "$post_out" ] && [ -f "$c/sdlc-invoked-S" ]; then
-        pass "leg 9: PostToolUse Skill(sdlc) writes sdlc-invoked-<sid>, silently"
-    else
-        fail "leg 9: PostToolUse Skill(sdlc) should write the memo with no stdout (rc=$post_rc out='$post_out')"
-    fi
-    # the transcript has not caught up yet: the memo alone must carry the edit
-    run_tdd "$c" "$(edit_payload "$PROJ/src/app.js" "$T/base.jsonl")"
-    if [ "$RC" -eq 0 ]; then
-        pass "leg 9: gated Edit right after Skill(sdlc) is not falsely blocked"
-    else
-        fail "leg 9: false block after Skill(sdlc) in the same turn (rc=$RC err=$ERR)"
-    fi
-    c=$(fresh_cache l9ns)
-    run_prompt_hook "$c" "$(post_skill_payload sdlc-wizard:sdlc)"
-    if [ -f "$c/sdlc-invoked-S" ]; then
-        pass "leg 9: PostToolUse Skill(sdlc-wizard:sdlc) writes the memo"
-    else
-        fail "leg 9: namespaced skill should write the memo"
-    fi
-}
-
-test_posttooluse_ignores_other_skills() {
-    local s c bad=""
-    for s in rdlc sdlc-wizard:update mysdlc sdlc-extra; do
-        c=$(fresh_cache "pt-$s")
-        run_prompt_hook "$c" "$(post_skill_payload "$s")"
-        [ -f "$c/sdlc-invoked-S" ] && bad="$bad $s"
-    done
-    c=$(fresh_cache pt-tool)
-    run_prompt_hook "$c" "$(post_skill_payload sdlc S "" Read)"
-    [ -f "$c/sdlc-invoked-S" ] && bad="$bad tool_name=Read"
-    if [ -z "$bad" ]; then
-        pass "PostToolUse writes no memo for other skills or other tools"
-    else
-        fail "memo written for a non-sdlc invocation:$bad"
-    fi
-}
-
-test_leg9_unwritable_memo_still_passes_via_grep() {
-    # cache dir path is a regular FILE: mkdir and every write fail, as root too
-    local c="$WORKSPACE/cache-is-a-file"
-    : > "$c"
-    run_prompt_hook "$c" "$(post_skill_payload sdlc)"
-    local post_rc=$RC
-    # TDD sentinel cannot exist here either, so isolate the skill gate: a miss
-    # must report the skill line (it runs first), a hit must not.
-    run_tdd "$c" "$(edit_payload "$PROJ/src/app.js" "$T/skill.jsonl")"
-    if [ "$post_rc" -eq 0 ] && ! printf '%s' "$ERR" | grep -q "SDLC SKILL REQUIRED"; then
-        pass "leg 9: memo dir unwritable, the same sequence still passes the skill gate via the transcript"
-    else
-        fail "leg 9: unwritable memo dir broke the gate (post rc=$post_rc, edit rc=$RC err=$ERR)"
-    fi
 }
 
 # --- the skill gate runs BEFORE the TDD gate ---
@@ -381,52 +297,56 @@ test_opt_out() {
     fi
 }
 
-# --- subagents (leg 6, observed live on CC 2.1.289; Sol r2 design ruling) ---
-# A subagent's payload carries agent_id but the PARENT's transcript_path. A
-# subagent does not get the parent's skill body, so it needs its own call: it
-# accepts only its own memo, never the parent's record or a sibling's, and
-# the parent never accepts a subagent's.
-test_memo_subagent_semantics() {
-    local c; c=$(fresh_cache ctx)
-    run_prompt_hook "$c" "$(post_skill_payload sdlc S agentA)"
-    if [ -f "$c/sdlc-invoked-S-agentA" ] && [ ! -f "$c/sdlc-invoked-S" ]; then
-        pass "a subagent's Skill(sdlc) writes sdlc-invoked-<sid>-<agent_id>"
+# --- subagents (leg 6) ---
+# A subagent's payload carries agent_id and the PARENT's transcript_path. It
+# does not get the parent's skill body, so it is read from its OWN transcript,
+# ${transcript_path%.jsonl}/subagents/agent-<agent_id>.jsonl (observed live,
+# CC 2.1.289), and the parent's record never counts for it.
+test_subagent_own_transcript() {
+    local c; c=$(fresh_cache sub)
+    local par="$T/parent.jsonl"
+    cp "$T/skill.jsonl" "$par"
+    mkdir -p "$T/parent/subagents"
+    { cat "$T/base.jsonl"; skill_rec sdlc; } > "$T/parent/subagents/agent-agentE.jsonl"
+    cp "$T/base.jsonl" "$T/parent/subagents/agent-agentF.jsonl"
+    run_tdd "$c" "$(edit_payload "$PROJ/src/app.js" "$par" S agentE)"
+    if [ "$RC" -eq 0 ] && ! printf '%s%s' "$OUT" "$ERR" | grep -q "SDLC SKILL\|degraded"; then
+        pass "leg 6: subagent whose own transcript holds Skill(sdlc) is allowed"
     else
-        fail "subagent memo key wrong: $(ls "$c")"
+        fail "leg 6: subagent own-transcript hit not recognised (rc=$RC out=$OUT err=$ERR)"
     fi
-    run_tdd "$c" "$(edit_payload "$PROJ/src/app.js" "$T/base.jsonl" S)"
-    local parent_rc=$RC
-    run_tdd "$c" "$(edit_payload "$PROJ/src/app.js" "$T/base.jsonl" S agentA)"
-    local agent_rc=$RC
-    run_tdd "$c" "$(edit_payload "$PROJ/src/app.js" "$T/base.jsonl" S agentB)"
-    local sibling_rc=$RC
-    : > "$c/sdlc-invoked-S"
-    run_tdd "$c" "$(edit_payload "$PROJ/src/app.js" "$T/base.jsonl" S agentB)"
-    local inherit_rc=$RC
-    if [ "$parent_rc" -eq 2 ] && [ "$agent_rc" -eq 0 ] && [ "$sibling_rc" -eq 2 ] && [ "$inherit_rc" -eq 2 ]; then
-        pass "leg 6: a subagent accepts only its own memo; never the parent's or a sibling's, and the parent never a subagent's"
+    run_tdd "$c" "$(edit_payload "$PROJ/src/app.js" "$par" S agentF)"
+    if [ "$RC" -eq 2 ] && [ "$ERR" = "$BLOCK_LINE" ]; then
+        pass "leg 6: subagent without its own call is blocked although the parent transcript holds one"
     else
-        fail "leg 6 memo semantics (parent rc=$parent_rc, same agent rc=$agent_rc, sibling rc=$sibling_rc, parent memo only rc=$inherit_rc)"
+        fail "leg 6: subagent passed on the parent's invocation (rc=$RC err=$ERR)"
     fi
-    c=$(fresh_cache ctx2)
-    run_tdd "$c" "$(edit_payload "$PROJ/src/app.js" "$T/skill.jsonl" S agentC)"
-    if [ "$RC" -eq 2 ] && printf '%s' "$ERR" | grep -qF "$BLOCK_LINE" && [ ! -f "$c/sdlc-invoked-S-agentC" ]; then
-        pass "leg 6: a subagent is blocked even when the parent transcript it names holds Skill(sdlc)"
-    else
-        fail "leg 6: subagent passed on the parent's Skill(sdlc) (rc=$RC err=$ERR files: $(ls "$c"))"
-    fi
-    run_tdd "$c" "$(edit_payload "$PROJ/src/app.js" "" S agentC)"
+    cp "$T/base.jsonl" "$T/parent-miss.jsonl"
+    mkdir -p "$T/parent-miss/subagents"
+    { cat "$T/base.jsonl"; skill_rec sdlc; } > "$T/parent-miss/subagents/agent-agentE.jsonl"
+    run_tdd "$c" "$(edit_payload "$PROJ/src/app.js" "$T/parent-miss.jsonl")"
     if [ "$RC" -eq 2 ]; then
-        pass "leg 6: a subagent with no memo and no transcript_path is blocked"
+        pass "leg 6: the parent never counts a subagent's call"
     else
-        fail "leg 6: subagent with no memo and no transcript_path allowed (rc=$RC)"
+        fail "leg 6: parent passed on a subagent's call (rc=$RC)"
     fi
-    run_prompt_hook "$c" "$(post_skill_payload sdlc S agentC)"
-    run_tdd "$c" "$(edit_payload "$PROJ/src/app.js" "$T/base.jsonl" S agentC)"
-    if [ "$RC" -eq 0 ]; then
-        pass "leg 6: the subagent's own Skill(sdlc) ends its block"
+    run_tdd "$c" "$(edit_payload "$PROJ/src/app.js" "$par" S agentG)"
+    if [ "$RC" -eq 0 ] && printf '%s' "$OUT" | grep -qF "SDLC gate degraded: cannot read $T/parent/subagents/agent-agentG.jsonl"; then
+        pass "leg 6: a missing subagent transcript degrades with its own path named (leg 7 rule)"
     else
-        fail "leg 6: subagent still blocked after its own Skill(sdlc) (rc=$RC)"
+        fail "leg 6: missing subagent transcript handled wrong (rc=$RC out=$OUT err=$ERR)"
+    fi
+    # "/" is stripped, so a crafted id cannot climb to agentE's transcript
+    run_tdd "$c" "$(edit_payload "$PROJ/src/app.js" "$par" S '../parent/subagents/agent-agentE')"
+    if [ "$RC" -eq 0 ] && printf '%s' "$OUT" | grep -qF "cannot read $T/parent/subagents/agent-..parentsubagentsagent-agentE.jsonl"; then
+        pass "leg 6: agent_id is sanitised before it builds a path"
+    else
+        fail "leg 6: crafted agent_id not sanitised (rc=$RC out=$OUT)"
+    fi
+    if ! ls "$c" | grep -q '^sdlc-invoked-'; then
+        pass "no gate check writes a sdlc-invoked-* memo"
+    else
+        fail "a memo was written: $(ls "$c")"
     fi
 }
 
@@ -434,11 +354,10 @@ test_memo_subagent_semantics() {
 test_leg5_compact_rearms_baseline() {
     local c; c=$(fresh_cache l5)
     : > "$c/baseline-shown-S"
-    : > "$c/sdlc-invoked-S"
     run_prompt_hook "$c" '{"session_id":"S","hook_event_name":"SessionStart","source":"compact"}'
     local ss_rc=$RC ss_out="$OUT"
-    if [ "$ss_rc" -eq 0 ] && [ -z "$ss_out" ] && [ ! -f "$c/baseline-shown-S" ] && [ -f "$c/sdlc-invoked-S" ]; then
-        pass "leg 5: SessionStart compact deletes baseline-shown-<sid>, keeps the skill memo, prints nothing"
+    if [ "$ss_rc" -eq 0 ] && [ -z "$ss_out" ] && [ ! -f "$c/baseline-shown-S" ]; then
+        pass "leg 5: SessionStart compact deletes baseline-shown-<sid> and prints nothing"
     else
         fail "leg 5: compact handling wrong (rc=$ss_rc out='$ss_out' files: $(ls "$c"))"
     fi
@@ -470,7 +389,7 @@ test_leg5_compact_rearms_baseline() {
 # --- r1 P1: the plugin copy's dedupe must not swallow the non-prompt events ---
 # An older CLI install registers this script under UserPromptSubmit only. The
 # plugin copy then yields the prompt (correct: the project prints BASELINE),
-# but nothing else runs the memo writer or the compaction reset.
+# but nothing else runs the compaction reset.
 test_dedupe_spares_non_prompt_events() {
     local c; c=$(fresh_cache dd)
     local plug="$WORKSPACE/home/.claude/plugins-local/sdlc-wizard-wrap"
@@ -492,12 +411,6 @@ EOF
     else
         fail "dedupe: plugin copy skipped the compact reset (files: $(ls "$c"))"
     fi
-    run_plug '{"session_id":"S","hook_event_name":"PostToolUse","tool_name":"Skill","tool_input":{"skill":"sdlc"}}'
-    if [ -f "$c/sdlc-invoked-S" ] && [ -z "$OUT" ]; then
-        pass "dedupe: plugin copy still writes the skill memo"
-    else
-        fail "dedupe: plugin copy skipped the memo writer (files: $(ls "$c"))"
-    fi
     run_plug '{"session_id":"S","hook_event_name":"UserPromptSubmit","prompt":"hi"}'
     if [ -z "$OUT" ]; then
         pass "dedupe: plugin copy still yields the prompt to the project registration"
@@ -512,14 +425,13 @@ test_fire_log_counts_prompts_only() {
     local c; c=$(fresh_cache fl)
     local log="$WORKSPACE/fire-fl.log"; rm -f "$log"
     local p
-    for p in '{"session_id":"S","hook_event_name":"PostToolUse","tool_name":"Skill","tool_input":{"skill":"sdlc"}}' \
-             '{"session_id":"S","hook_event_name":"SessionStart","source":"compact"}' \
+    for p in '{"session_id":"S","hook_event_name":"SessionStart","source":"compact"}' \
              '{"session_id":"S","hook_event_name":"UserPromptSubmit","prompt":"hi"}'; do
         (cd "$PROJ" && SDLC_WIZARD_CACHE_DIR="$c" SDLC_HOOK_FIRE_LOG="$log" bash "$PROMPT_HOOK" <<<"$p" >/dev/null 2>&1) || true
     done
     local n=0; [ -f "$log" ] && n=$(wc -l < "$log" | tr -d ' ')
     if [ "$n" = "1" ]; then
-        pass "fire log: one Skill call, one compaction and one prompt log exactly one line"
+        pass "fire log: one compaction and one prompt log exactly one line"
     else
         fail "fire log: expected 1 line, got $n"
     fi
@@ -576,6 +488,7 @@ test_leg8_commit_late_catch() {
     else
         fail "leg 8: hit should fall through to the local-pass allow (rc=$RC err=$ERR)"
     fi
+    mkdir -p "$T/skill/subagents"; cp "$T/base.jsonl" "$T/skill/subagents/agent-agentD.jsonl"
     run_gate "$c" "$(commit_payload "$T/skill.jsonl" S agentD)"
     if [ "$RC" -eq 2 ] && printf '%s' "$ERR" | grep -qF "$BLOCK_LINE"; then
         pass "leg 8: a subagent's commit is caught even when the parent transcript holds Skill(sdlc)"
@@ -636,7 +549,7 @@ test_leg8_non_commit_untouched() {
     fi
 }
 
-# --- registration: the shipped manifests wire the memo writer and drop the pre-filter ---
+# --- registration: the shipped manifests wire the compaction re-arm and drop the pre-filter ---
 test_registration() {
     local f bad=""
     for f in "$REPO_ROOT/hooks/hooks.json" "$REPO_ROOT/cli/templates/settings.json"; do
@@ -650,8 +563,8 @@ def cmds(event, matcher=None):
             continue
         out += [h for h in e.get("hooks", [])]
     return out
-post = [h["command"] for h in cmds("PostToolUse", "Skill")]
-assert any(c.endswith("sdlc-prompt-check.sh") for c in post), "PostToolUse/Skill -> sdlc-prompt-check.sh missing"
+post = [h["command"] for h in cmds("PostToolUse")]
+assert not any(c.endswith("sdlc-prompt-check.sh") for c in post), "PostToolUse -> sdlc-prompt-check.sh still registered"
 ss = [h["command"] for h in cmds("SessionStart")]
 assert any(c.endswith("sdlc-prompt-check.sh") for c in ss), "SessionStart -> sdlc-prompt-check.sh missing"
 tdd = [h for h in cmds("PreToolUse", "Write|Edit|MultiEdit") if h["command"].endswith("tdd-pretool-check.sh")]
@@ -660,7 +573,7 @@ assert all("if" not in h for h in tdd), "tdd hook still carries an if: pre-filte
 PYEOF
     done
     if [ -z "$bad" ]; then
-        pass "hooks.json and the CLI template register PostToolUse/Skill + SessionStart on sdlc-prompt-check.sh, and the TDD hook has no if: pre-filter"
+        pass "hooks.json and the CLI template register SessionStart (and no PostToolUse) on sdlc-prompt-check.sh, and the TDD hook has no if: pre-filter"
     else
         fail "registration wrong in:$bad"
     fi
@@ -669,10 +582,6 @@ PYEOF
 test_leg2_miss_blocks_with_exact_line
 test_near_misses_block
 test_each_record_kind_allows
-test_hit_writes_memo
-test_leg9_posttooluse_memo
-test_posttooluse_ignores_other_skills
-test_leg9_unwritable_memo_still_passes_via_grep
 test_skill_gate_precedes_tdd_gate
 test_leg3_non_gated_path_allows
 test_non_sdlc_project_allows
@@ -681,7 +590,7 @@ test_src_pattern_override_is_shared
 test_no_transcript_path_allows_silently
 test_leg7_unreadable_transcript_allows_with_context
 test_opt_out
-test_memo_subagent_semantics
+test_subagent_own_transcript
 test_leg5_compact_rearms_baseline
 test_dedupe_spares_non_prompt_events
 test_fire_log_counts_prompts_only

@@ -648,10 +648,9 @@ if [ "${SDLC_SKILL_GATE:-}" != "off" ] && find_sdlc_root; then
         fi
     done <<< "$(git diff --cached --name-only 2>/dev/null || true)"
     if [ "$SDLC_GATED_STAGED" -eq 1 ]; then
-        _sid=$(sdlc_json_field "$TOOL_INPUT" session_id)
         _aid=$(sdlc_json_field "$TOOL_INPUT" agent_id)
         _tp=$(sdlc_json_field "$TOOL_INPUT" transcript_path)
-        if ! sdlc_skill_on_record "$_sid" "$_aid" "$_tp"; then
+        if ! sdlc_skill_on_record "$_aid" "$_tp"; then
             case "$SDLC_RECORD" in
                 miss)
                     echo "$SDLC_SKILL_BLOCK (Late catch at commit: gated files are staged and no sdlc invocation is on record for this context.)" >&2
@@ -659,7 +658,7 @@ if [ "${SDLC_SKILL_GATE:-}" != "off" ] && find_sdlc_root; then
                     ;;
                 unreadable)
                     printf '{"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": "%s"}}\n' \
-                        "$(sdlc_json_escape "$(sdlc_degraded_notice "$_tp")")"
+                        "$(sdlc_json_escape "$(sdlc_degraded_notice "$SDLC_RECORD_PATH")")"
                     ;;
             esac
         fi

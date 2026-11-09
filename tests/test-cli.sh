@@ -270,9 +270,8 @@ test_wizard_doc() {
     rm -rf "$d"
 }
 
-# Test 10: settings.json is valid JSON with 7 hook events
-# (UserPromptSubmit, PreToolUse, PostToolUse, InstructionsLoaded, SessionStart,
-# PreCompact, Stop). PostToolUse/Skill writes the sdlc-skill gate's memo.
+# Test 10: settings.json is valid JSON with 6 hook events
+# (UserPromptSubmit, PreToolUse, InstructionsLoaded, SessionStart, PreCompact, Stop)
 test_settings_json() {
     local d
     d=$(make_temp)
@@ -285,10 +284,10 @@ with open('$d/.claude/settings.json') as f:
 hooks = data.get('hooks', {})
 print(len(hooks))
 " 2>/dev/null)
-    if [ "$hook_count" = "7" ]; then
-        pass "settings.json is valid JSON with 7 hook events"
+    if [ "$hook_count" = "6" ]; then
+        pass "settings.json is valid JSON with 6 hook events"
     else
-        fail "settings.json should have 7 hook events (added PostToolUse for the sdlc-skill gate memo), found: $hook_count"
+        fail "settings.json should have 6 hook events (added Stop, #436), found: $hook_count"
     fi
     rm -rf "$d"
 }
@@ -824,7 +823,7 @@ FIXTURE
     (cd "$d" && node "$CLI" init > /dev/null 2>&1)
     (cd "$d" && node "$CLI" init > /dev/null 2>&1)
     # sdlc-prompt-check is registered once per event it serves (UserPromptSubmit,
-    # PostToolUse, SessionStart) — exactly as many times as the template, no more
+    # SessionStart) — exactly as many times as the template, no more
     local count want
     count=$(grep -c "sdlc-prompt-check" "$d/.claude/settings.json")
     want=$(grep -c "sdlc-prompt-check" "$SCRIPT_DIR/../cli/templates/settings.json")

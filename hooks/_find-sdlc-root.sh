@@ -189,8 +189,8 @@ read_stdin_bounded() {
 
 # ---------------------------------------------------------------------------
 # The sdlc-skill gate (Fable ruling 2026-11-08). Shared by tdd-pretool-check.sh
-# (edit time), codex-gate-check.sh (commit time) and sdlc-prompt-check.sh (the
-# PostToolUse memo writer), so the three cannot drift apart.
+# (edit time) and codex-gate-check.sh (commit time), so the two cannot drift
+# apart.
 # ---------------------------------------------------------------------------
 
 # sdlc_json_field <json> <key> — first string value of KEY, jq-free, the same
@@ -230,25 +230,6 @@ sdlc_path_is_gated() {
     [[ "$path" == *"/src/"* || "$path" == "src/"* ]]
 }
 
-# sdlc_memo_path <session_id> [agent_id] — the per-context memo, or empty.
-sdlc_memo_path() {
-    local sid aid
-    sid=$(printf '%s' "$1" | tr -cd 'A-Za-z0-9._-')
-    aid=$(printf '%s' "${2:-}" | tr -cd 'A-Za-z0-9._-')
-    [ -n "$sid" ] || return 0
-    printf '%s/sdlc-invoked-%s%s' "${SDLC_WIZARD_CACHE_DIR:-$HOME/.cache/sdlc-wizard}" "$sid" "${aid:+-$aid}"
-}
-
-# sdlc_memo_write <session_id> [agent_id] — best effort. An unwritable cache
-# costs a transcript grep on the next check, never a wrong answer.
-sdlc_memo_write() {
-    local memo
-    memo=$(sdlc_memo_path "$1" "${2:-}")
-    [ -n "$memo" ] || return 0
-    mkdir -p "${memo%/*}" 2>/dev/null || return 0
-    : > "$memo" 2>/dev/null || true
-}
-
 # The transcript records that count as "sdlc was invoked in this context":
 #   - a Skill tool_use naming sdlc or <ns>:sdlc
 #   - a typed /sdlc or /<ns>:sdlc: a user record whose content OPENS with the
@@ -262,41 +243,35 @@ SDLC_SKILL_RE='"name":"Skill","input":\{[^{}]*"skill":"([A-Za-z0-9_.-]+:)?sdlc"'
 SDLC_SLASH_RE='"role":"user","content":"(<command-message>[^"<]*</command-message>\\n)?<command-name>/([A-Za-z0-9_.-]+:)?sdlc</command-name>'
 SDLC_ATTACH_RE='"type":"invoked_skills","skills":\[.*\{"name":"([A-Za-z0-9_.-]+:)?sdlc","path":"'
 
-# sdlc_skill_on_record <session_id> <agent_id> <transcript_path>
-# Memo first, transcript on a miss; a transcript hit writes the memo.
-# Sets SDLC_RECORD to hit | miss | nopath | unreadable. Returns 0 only on hit.
-#
-# Subagents need their own invocation (Sol r2 design ruling, 2026-11-08). A
-# subagent does not receive the parent's loaded skill body, so the parent's
-# call says nothing about the subagent's context. Its payload carries its
-# agent_id but the PARENT's transcript_path (observed live, CC 2.1.289), so
-# the grep below would read the parent's record: a subagent skips it and
-# counts only its own memo, which the PostToolUse Skill hook writes. Its own
-# Skill call lands in subagents/agent-*.jsonl, which no payload names. The
-# parent never accepts a subagent's memo, nor a subagent a sibling's.
+# sdlc_skill_on_record <agent_id> <transcript_path>
+# Greps THIS context's own transcript: the payload's transcript_path for the
+# main session, or for a subagent ${transcript_path%.jsonl}/subagents/
+# agent-<agent_id>.jsonl. A subagent's payload names the PARENT's transcript
+# (observed live, CC 2.1.289), but it does not get the parent's skill body,
+# so the parent's record never counts for it, nor a subagent's for the parent.
+# The Skill tool_use line is on disk by the next tool's PreToolUse (observed
+# live, 5/5 main and 4/4 subagent), so no other record is kept.
+# Sets SDLC_RECORD to hit | miss | nopath | unreadable and SDLC_RECORD_PATH to
+# the file read. Returns 0 only on hit.
 sdlc_skill_on_record() {
-    local sid="$1" aid="$2" tp="$3" memo
+    local aid tp="$2"
+    aid=$(printf '%s' "$1" | tr -cd 'A-Za-z0-9._-')
     SDLC_RECORD=miss
-    memo=$(sdlc_memo_path "$sid" "$aid")
-    if [ -n "$memo" ] && [ -f "$memo" ]; then
-        SDLC_RECORD=hit
-        return 0
-    fi
-    [ -z "$aid" ] || return 1
+    SDLC_RECORD_PATH="$tp"
     if [ -z "$tp" ]; then
         SDLC_RECORD=nopath
         return 1
     fi
-    if [ ! -f "$tp" ] || [ ! -r "$tp" ]; then
+    [ -z "$aid" ] || SDLC_RECORD_PATH="${tp%.jsonl}/subagents/agent-${aid}.jsonl"
+    if [ ! -f "$SDLC_RECORD_PATH" ] || [ ! -r "$SDLC_RECORD_PATH" ]; then
         SDLC_RECORD=unreadable
         return 1
     fi
     # The fixed-string prefilter keeps a 75 MB transcript near 1.5 s; the
     # regexes then run only on candidate lines.
-    if LC_ALL=C grep -F -e '"name":"Skill"' -e '<command-name>/' -e '"type":"invoked_skills"' -- "$tp" 2>/dev/null \
+    if LC_ALL=C grep -F -e '"name":"Skill"' -e '<command-name>/' -e '"type":"invoked_skills"' -- "$SDLC_RECORD_PATH" 2>/dev/null \
         | LC_ALL=C grep -qE -e "$SDLC_SKILL_RE" -e "$SDLC_SLASH_RE" -e "$SDLC_ATTACH_RE"; then
         SDLC_RECORD=hit
-        sdlc_memo_write "$sid" "$aid"
         return 0
     fi
     return 1

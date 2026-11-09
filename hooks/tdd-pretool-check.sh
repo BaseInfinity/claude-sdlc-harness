@@ -69,9 +69,9 @@ CONTEXT=""
 
 if [ "$SRC_MATCH" -eq 1 ]; then
   # sdlc-skill gate (Fable ruling 2026-11-08), checked BEFORE the TDD gate.
-  # A gated edit needs an sdlc invocation on record for THIS context: the
-  # PostToolUse memo, else the transcript (a Skill call, a typed /sdlc, or the
-  # invoked_skills re-attachment Claude Code writes after compaction).
+  # A gated edit needs an sdlc invocation in THIS context's own transcript (a
+  # Skill call, a typed /sdlc, or the invoked_skills re-attachment Claude Code
+  # writes after compaction); a subagent's is its own subagents/ file.
   # Active only inside an SDLC project. No transcript_path allows silently
   # (the no-session_id stance); an unreadable one allows with a model-visible
   # notice; a miss blocks with the one ruled line.
@@ -79,9 +79,9 @@ if [ "$SRC_MATCH" -eq 1 ]; then
   if [ "${SDLC_SKILL_GATE:-}" != "off" ] && find_sdlc_root; then
     TRANSCRIPT_PATH=$(sdlc_json_field "$TOOL_INPUT" transcript_path)
     AGENT_ID=$(sdlc_json_field "$TOOL_INPUT" agent_id)
-    if ! sdlc_skill_on_record "$SESSION_ID" "$AGENT_ID" "$TRANSCRIPT_PATH"; then
+    if ! sdlc_skill_on_record "$AGENT_ID" "$TRANSCRIPT_PATH"; then
       case "$SDLC_RECORD" in
-        unreadable) CONTEXT=$(sdlc_json_escape "$(sdlc_degraded_notice "$TRANSCRIPT_PATH")") ;;
+        unreadable) CONTEXT=$(sdlc_json_escape "$(sdlc_degraded_notice "$SDLC_RECORD_PATH")") ;;
         miss) echo "$SDLC_SKILL_BLOCK" >&2; exit 2 ;;
       esac
     fi

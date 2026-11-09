@@ -31,17 +31,6 @@
         ]
       }
     ],
-    "PostToolUse": [
-      {
-        "matcher": "Skill",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/sdlc-prompt-check.sh"
-          }
-        ]
-      }
-    ],
     "InstructionsLoaded": [
       {
         "hooks": [

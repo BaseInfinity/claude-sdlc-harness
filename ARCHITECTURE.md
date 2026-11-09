@@ -50,7 +50,7 @@ The main wizard document (installed by `npx agentic-sdlc-wizard init`). Contains
 
 | Hook | Trigger | Purpose |
 |------|---------|---------|
-| `sdlc-prompt-check.sh` | UserPromptSubmit, PostToolUse (Skill), SessionStart | SDLC baseline (re-armed after compaction); writes the sdlc-skill gate's memo |
+| `sdlc-prompt-check.sh` | UserPromptSubmit, SessionStart | SDLC baseline (re-armed after compaction) |
 | `tdd-pretool-check.sh` | PreToolUse (Write/Edit/MultiEdit) | sdlc-skill gate, then TDD gate, before code changes |
 | `instructions-loaded-check.sh` | InstructionsLoaded | Validates SDLC.md/TESTING.md exist |
 

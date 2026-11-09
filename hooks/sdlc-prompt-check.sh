@@ -1,8 +1,8 @@
 #!/bin/bash
 # Light SDLC hook - baseline reminder every prompt (~100 tokens)
 # Full guidance in skill: .claude/skills/sdlc/
-# Also registered on PostToolUse (matcher Skill: writes the sdlc-skill gate
-# memo) and SessionStart (re-arms BASELINE after compaction); see below.
+# Also registered on SessionStart (re-arms BASELINE after compaction); see
+# below.
 
 # Walk up from CWD to find nearest SDLC.md + TESTING.md (#171: monorepo support)
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -20,27 +20,11 @@ fi
 SESSION_ID=$(sdlc_json_field "$STDIN_JSON" session_id)
 HOOK_EVENT=$(sdlc_json_field "$STDIN_JSON" hook_event_name)
 
-# This script also owns the two other halves of the sdlc-skill gate (Fable
-# ruling 2026-11-08). Both are silent: SessionStart stdout would land in
-# context, and PostToolUse needs none.
+# SessionStart is silent: its stdout would land in context.
 case "$HOOK_EVENT" in
-    PostToolUse)
-        # The memo the PreToolUse gate reads first. Written from the
-        # documented fields only — tool_name and tool_input.skill — so the
-        # one tool call the block asks for ends the block in one retry, even
-        # if transcript serialization drifts. Keyed per context: a subagent
-        # payload carries agent_id, and its memo is its own.
-        if [ "$(sdlc_json_field "$STDIN_JSON" tool_name)" = "Skill" ] \
-            && [[ "$(sdlc_json_field "$STDIN_JSON" skill)" =~ (^|:)sdlc$ ]]; then
-            sdlc_memo_write "$SESSION_ID" "$(sdlc_json_field "$STDIN_JSON" agent_id)"
-        fi
-        exit 0
-        ;;
     SessionStart)
         # Nudge repair. Compaction drops hook text, so BASELINE is gone from
         # context while its fires-once sentinel says it was shown: re-arm it.
-        # The skill memo is deliberately NOT reset — Claude Code re-attaches
-        # an invoked skill's body after every compact_boundary.
         if [ "$(sdlc_json_field "$STDIN_JSON" source)" = "compact" ]; then
             SAFE_SID=$(printf '%s' "$SESSION_ID" | tr -cd 'A-Za-z0-9._-')
             [ -n "$SAFE_SID" ] && rm -f "${SDLC_WIZARD_CACHE_DIR:-$HOME/.cache/sdlc-wizard}/baseline-shown-${SAFE_SID}" 2>/dev/null
@@ -50,7 +34,7 @@ case "$HOOK_EVENT" in
 esac
 
 # Token-bloat fix: when both project + plugin register this hook, plugin yields.
-# Prompt path only: the two branches above are idempotent, and an older
+# Prompt path only: the SessionStart branch above is idempotent, and an older
 # project registration may cover UserPromptSubmit alone (Sol r1 P1).
 # Prevents 2× SDLC BASELINE print per UserPromptSubmit (~300 tokens doubled).
 # Pass real script path explicitly (not $0) so the dedupe heuristic recognizes
@@ -60,7 +44,7 @@ dedupe_plugin_or_project "${BASH_SOURCE[0]}" || exit 0
 # Roadmap #224: opt-in fires-once instrumentation. CC 2.1.118 shipped a fix for
 # prompt hooks double-firing when a verifier subagent itself made tool calls.
 # When SDLC_HOOK_FIRE_LOG is set, append one tab-separated record per real
-# prompt (post-dedupe; PostToolUse and SessionStart runs are not counted).
+# prompt (post-dedupe; SessionStart runs are not counted).
 # Maintainer can compare line count against prompt count to verify the CC fix
 # in real sessions. See CLAUDE_CODE_SDLC_WIZARD.md →
 # "Verifying Prompt-Hook-Fires-Once" for the procedure.
