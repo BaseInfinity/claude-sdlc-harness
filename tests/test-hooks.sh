@@ -1632,22 +1632,42 @@ test_wizard_documents_if_field() {
     fi
 }
 
-# Test: Wizard settings.json example includes if field
-test_wizard_settings_example_has_if() {
-    local wizard="$SCRIPT_DIR/../CLAUDE_CODE_SDLC_WIZARD.md"
-    # The settings.json code block in the wizard should show the if field
-    if grep -q '"if":' "$wizard"; then
-        pass "Wizard settings.json example includes if field"
-    else
-        fail "Wizard settings.json example should include the if field"
-    fi
+# Test: no wizard settings example registers the TDD hook with an if field
+test_wizard_settings_example_no_tdd_if() {
+    # sdlc-skill-gate ruling: the TDD hook carries no if: pre-filter anywhere a
+    # consumer could copy one from. Parses every json block in the wizard doc.
+    local wizard="$SCRIPT_DIR/../CLAUDE_CODE_SDLC_WIZARD.md" out
+    out=$(python3 - "$wizard" <<'PYEOF'
+import json, re, sys
+blocks = re.findall(r"```json\n(.*?)```", open(sys.argv[1]).read(), re.S)
+bad, seen = [], 0
+def walk(o):
+    global seen
+    if isinstance(o, dict):
+        if str(o.get("command", "")).endswith("tdd-pretool-check.sh"):
+            seen += 1
+            if "if" in o: bad.append(o["if"])
+        for v in o.values(): walk(v)
+    elif isinstance(o, list):
+        for v in o: walk(v)
+for b in blocks:
+    try: walk(json.loads(b))
+    except ValueError: pass
+print("SEEN=%d BAD=%s" % (seen, bad))
+PYEOF
+)
+    case "$out" in
+        "SEEN=0 "*) fail "no tdd-pretool-check.sh registration found in the wizard's json blocks (extractor broke): $out" ;;
+        *"BAD=[]") pass "Wizard settings examples register the TDD hook with no if: pre-filter" ;;
+        *) fail "Wizard doc shows the TDD hook with an if: pre-filter a consumer would copy: $out" ;;
+    esac
 }
 
 test_settings_has_if_field
 test_if_field_targets_workflows
 test_template_settings_has_if_field
 test_wizard_documents_if_field
-test_wizard_settings_example_has_if
+test_wizard_settings_example_no_tdd_if
 
 echo ""
 echo "--- CWD walk-up tests (#171: monorepo / nested project support) ---"

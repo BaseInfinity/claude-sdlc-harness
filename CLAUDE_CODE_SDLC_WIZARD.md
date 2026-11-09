@@ -479,8 +479,8 @@ The `if` field on individual hook handlers filters by tool name AND arguments us
 ```json
 {
   "type": "command",
-  "if": "Write(src/**) Edit(src/**) MultiEdit(src/**)",
-  "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/tdd-pretool-check.sh"
+  "if": "Bash(git push *)",
+  "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/your-push-check.sh"
 }
 ```
 
@@ -493,7 +493,7 @@ The `if` field on individual hook handlers filters by tool name AND arguments us
 
 **Only works on tool-use events:** `PreToolUse`, `PostToolUse`, `PostToolUseFailure`. Adding `if` to non-tool events prevents the hook from running.
 
-**CUSTOMIZE:** Replace `src/**` with your source directory pattern. The wizard generates this based on your project structure detected in Step 0.4.
+**The wizard's own TDD hook carries no `if`.** `tdd-pretool-check.sh` filters paths itself (`SDLC_TDD_SRC_PATTERN`, default any `src/`), and the sdlc-skill gate inside it uses the same filter. A second copy of the filter in `if` is how consumers lost both gates: a single-segment `Write(src/**)` matches only `<cwd>/src` since Claude Code 2.1.214 (#475). Do not add one.
 
 ### Security Hardening (v2.1.49-v2.1.78)
 
@@ -2233,7 +2233,6 @@ Create `.claude/settings.json`:
         "hooks": [
           {
             "type": "command",
-            "if": "Write(src/**) Edit(src/**) MultiEdit(src/**)",
             "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/tdd-pretool-check.sh"
           }
         ]
@@ -2315,6 +2314,7 @@ SDLC SKILL REQUIRED: invoke Skill(skill="sdlc") once this session, then retry.
 
 **What it guarantees, and its limits:** gated at edit for Write/Edit/MultiEdit (Claude) and apply_patch (Codex); gated at commit for anything staged; a Bash write never committed is not covered. The Codex half belongs to `codex-sdlc-wizard` and is not part of this package.
 
+- A gated edit sent in the same message as the `Skill(sdlc)` call is blocked once in the main session, because the call is not yet in the transcript; the block line says to retry, and the retry passes (observed 3/3 on Claude Code 2.1.289; a subagent's same-message edit passed 3/3).
 - The gate proves the skill was loaded before the first code edit. It cannot reach planning: only the BASELINE reminder does that, and it is re-armed after each compaction.
 - Subagents: each subagent needs its **own** `Skill(sdlc)` call before a gated edit or commit. It does not receive the parent's loaded skill, so the parent's call does not count for it. Its hook payload carries its `agent_id` but names the **parent's** transcript, so the gate reads the subagent's own transcript instead, `<transcript_path without .jsonl>/subagents/agent-<agent_id>.jsonl`, and never the parent's (layout observed on Claude Code 2.1.289). A missing subagent transcript degrades like an unreadable one, below. What happens to a skill inside a subagent that compacts is unobserved, and no compact event is hookable there.
 - Active only inside an SDLC project (`SDLC.md` + `TESTING.md`). A payload with no `transcript_path` is allowed silently. An unreadable transcript is allowed with a model-visible notice: `SDLC gate degraded: cannot read <path>; invoke Skill(sdlc) now if not loaded`.
