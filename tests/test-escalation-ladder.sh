@@ -39,19 +39,53 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# --- Rung 1: Opus builder (reads REAL config) ---
+# --- Rung 1: Opus builder (observed from a live session) ---
 
-test_opus_model_configured() {
-    local model
+test_builder_is_opus() {
+    # An unpinned settings.json has no "model" key and still runs Opus, so
+    # the key cannot answer this. Read the model a live session reports.
+    if ! command -v claude >/dev/null 2>&1; then
+        fail "claude CLI not installed — builder unobservable"
+        return
+    fi
+    local init_out="$TEST_HOME/builder-init.json"
+    local rc=0 model
+    # perl's alarm bounds the child, since stock macOS has no timeout(1). It
+    # survives exec, so a hung session exits 142 instead of blocking the suite.
+    perl -e 'alarm shift; exec @ARGV or die "exec: $!"' 180 \
+        claude -p "Say only: OK" \
+        --settings "$TEST_HOME/.claude/settings.json" \
+        --output-format json > "$init_out" 2> "$init_out.err" < /dev/null || rc=$?
+    if [ "$rc" -ne 0 ]; then
+        fail "Builder session exited $rc (142 = no answer within 180s)"
+        info "stderr: $(tail -c 300 "$init_out.err")"
+        return
+    fi
+    # The init event names the model before any work happens, so a session
+    # that then failed would still report it. Require a successful result too.
     model=$(python3 -c "
-import json
-s = json.load(open('$HOME/.claude/settings.json'))
-print(s.get('model', 'NOT SET'))
-")
+import json, sys
+try:
+    events = json.load(open(sys.argv[1]))
+except ValueError:
+    print('UNPARSEABLE OUTPUT')
+    sys.exit()
+if not isinstance(events, list):
+    print('NO EVENT LIST')
+    sys.exit()
+ok = any(e.get('type') == 'result' and e.get('subtype') == 'success'
+         and e.get('is_error') is False for e in events)
+if not ok:
+    print('NO SUCCESSFUL RESULT')
+    sys.exit()
+print(next((e.get('model', '') for e in events
+            if e.get('type') == 'system' and e.get('subtype') == 'init'), 'NO INIT EVENT'))
+" "$init_out")
     if [[ "$model" == *"opus"* ]]; then
-        pass "Opus builder model configured: $model"
+        pass "Builder session runs Opus: $model"
     else
-        fail "Builder model is not Opus: $model"
+        fail "Builder session is not Opus: $model"
+        info "Output: $(tail -c 300 "$init_out") stderr: $(tail -c 300 "$init_out.err")"
     fi
 }
 
@@ -118,13 +152,15 @@ import json
 s = json.load(open('$HOME/.claude/settings.json'))
 print(s.get('advisorModel', 'NOT SET'))
 ")
-    if [ "$advisor" = "claude-fable-5" ]; then
-        pass "advisorModel pinned to claude-fable-5"
-    elif [ "$advisor" = "fable" ]; then
-        info "advisorModel is 'fable' (alias — resolves to 5.1 on CC >=2.1.257)"
+    if [ "$advisor" = "claude-fable-5-1" ]; then
+        pass "advisorModel pinned to claude-fable-5-1"
+    elif [ "$advisor" = "claude-fable-5" ] || [ "$advisor" = "fable" ]; then
+        # skills/update/SKILL.md migrates both to claude-fable-5-1. They still
+        # reach Fable, which test_advisor_reachable observes, so note and pass.
+        info "advisorModel is '$advisor' — /update migrates it to claude-fable-5-1"
         pass "advisorModel configured: $advisor"
     else
-        fail "advisorModel unexpected: $advisor (expected claude-fable-5)"
+        fail "advisorModel unexpected: $advisor (expected claude-fable-5-1)"
     fi
 }
 
@@ -191,7 +227,7 @@ echo "Test home: $TEST_HOME"
 echo ""
 
 echo "=== Rung 1: Opus builder ==="
-test_opus_model_configured
+test_builder_is_opus
 
 echo ""
 echo "=== Rung 2: GPT-5.6 Sol ==="
