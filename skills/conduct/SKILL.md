@@ -335,15 +335,15 @@ checkout.
 |---|---|
 | 1 | The conductor only routes. There is one controller per project or harness, and it picks an existing worker or a new one for each item. |
 | 2 | Run independent work in parallel. Never queue it behind a long task. |
-| 3 | A subagent is for one-off lookups. Material work goes to a worker tab named `<CONTROLLER>: <task>`, in the controller's window group and its own git worktree, colored like the controller. |
+| 3 | Material work goes to a named worker session/tab `<CONTROLLER>: <task>` in its own git worktree. Use the controller's window group and color only where supported without stealing focus. Subagents are for one-off lookups. |
 | 4 | Verify from a transcript or the ledger, never from a send succeeding. |
-| 5 | Never stall on the human. Rewrite to pass the guard, climb the brain ladder (Sol at high first, then Fable on a split), then dispatch. A blocker no model can clear is a P0 to engineer away. Only the user's own calls go to the user. |
+| 5 | Never stall on the human. Resolve technical uncertainty within existing authorization: rewrite rejected command syntax without changing the action, consult Sol High, then Fable High only on an unresolved split, and dispatch after resolution. Respect action denials, managed policy and user pauses; record an unresolvable blocker as P0 and continue independent authorized work. Batch user-owned decisions into one ask; never re-ask existing explicit approval. |
 | 6 | Work headless and never steal focus. Use connectors and files before any GUI. |
 | 7 | Relayed reports carry a fixed text label per controller: `[CONDUCTOR]` `[HARNESS]` `[MEESEEKS]` `[ANTICHEAT]` `[CODEX]` `[ROBBIE]` `[WINDOWS]`. Use color only where the medium supports it. |
 | 8 | Run the SDLC skill before code, and prove it loaded: Claude `Skill(sdlc)` or `/sdlc`, Codex `$sdlc` with the skill actually read. Never invent a CLI alias. Claude Code enforces this with a pre-edit and pre-commit skill gate where the repo's hooks are current. |
-| 9 | Hand computer use over by ending the holder session. Never delete the lock. |
-| 10 | Auto-trust only a workspace the conductor itself opens in the user's own repo. Never press Trust for any other folder. |
-| 11 | Fleet progress: `status.cjs` (lands with feat/conduct-status). Each controller updates its own rows when a workstream changes state, never another controller's. |
+| 9 | For a user-authorized computer-use handoff, preserve the confirmed holder's UUID, cwd/worktree, task, plugin arguments and unsubmitted draft. Gracefully end only that holder if release is required, verify its exit before the new writer, and never delete locks, force-kill busy/paused peers or override a pause. |
+| 10 | Auto-trust requires prior user authorization and host permission, and is limited to the exact workspace the conductor opened for the current task in the user's own repo. Never trust other folders, approve permission/auth dialogs, change OS privacy controls, self-grant access or bypass a runtime denial. Report required user action as a blocker. |
+| 11 | Each controller updates only its own progress rows when a workstream changes state. Use a verified installed status collector, such as `status.cjs`, only when available; otherwise report from the existing transcript or ledger. A filename or source branch is not installation evidence. |
 <!-- conduct-operating-model:end -->
 
 In this adapter, rule 3's `<CONTROLLER>` is `CLAUDE SDLC` for the Claude
