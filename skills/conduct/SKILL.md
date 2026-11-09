@@ -123,9 +123,14 @@ gate, and the text never touches a shell.
    ```
 
    Transport acceptance is `sent`. It does not prove the receiver ran anything.
-5. Wait for exactly one response, then record it (see `reply`). After the
-   result is recorded, `mark --status answered`. The helper rejects `answered`
-   without a correlated result.
+5. Wait for exactly one response. Before you write a result, reread the ledger
+   and validate any result in `inbox` that references the request. If a valid
+   correlated result already exists, reuse it, even when the courier exited
+   nonzero, and emit no duplicate. Report that exit as a transport note, not as
+   a request failure. An invalid existing result is never trusted, overwritten
+   or marked `answered`. Otherwise record the response (see `reply`). After a
+   valid result is recorded, `mark --status answered`. The helper rejects
+   `answered` without a correlated result.
 6. Show the result to the user and stop. Do not dispatch another turn.
 
 Ledger lines may share an ID, because `mark` appends observations. Count unique
@@ -199,8 +204,13 @@ window, so tell the user to discard it.
 To start a NEW Codex thread, which Codex Desktop lists under its folder, run
 `python3 scripts/codex-thread.py CWD PROMPT_FILE`. It prints `THREAD <id>`
 and the final answer, with a read-only sandbox and no approvals. Exit 0 means
-the turn completed. A Codex conductor that needs a new Claude Desktop session
-asks a Claude conductor to run `claude-desktop.sh`, through the ledger. The terminal needs the macOS Accessibility
+usable transport data only, not task or ledger completion: validate the answer
+as data, then follow step 5 of `send`. With a nonzero exit and no valid result
+in the ledger, write no result and leave the request unanswered. A read-only,
+`never`-approval Codex target may run the read-only inspection commands its
+sandbox permits, such as `git diff` and file searches. It returns its answer in
+the first turn. It never writes the ledger or widens its own permissions.
+A Codex conductor that needs a new Claude Desktop session asks a Claude conductor to run `claude-desktop.sh`, through the ledger. The terminal needs the macOS Accessibility
 permission. `--dry-run` prints the link only. After the first turn, the session appears in
 `ListAgents` as a `Claude Desktop session`, and `SendMessage` reaches it.
 Verify by its transcript under `~/.claude/projects/` and its `ListAgents` row,

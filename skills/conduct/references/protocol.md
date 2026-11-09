@@ -38,7 +38,7 @@ The envelope has exactly eight keys, commonly written as `{v, id, from, to, type
     turns.jsonl
 ```
 
-Each line of `turns.jsonl` wraps an envelope with a timestamp, transport, and status. The helper rejects duplicate IDs, unsafe run/message IDs, unmatched responses, reversed addresses that do not match the request, and a response that references another response.
+Each line of `turns.jsonl` wraps an envelope with a timestamp, transport, and status. The helper rejects duplicate IDs, unsafe run/message IDs, unmatched responses, reversed addresses that do not match the request, a response that references another response, and a second result for the same request.
 
 `emit` creates each message once. `mark` appends an observation for an existing message without changing its envelope. Multiple ledger lines may therefore share an ID; count unique message IDs when counting requests/results. The latest observation for an ID supplies its status. `answered` requires an existing correlated result. Transport acceptance means `sent`, not proof of receiver execution.
 
@@ -50,9 +50,10 @@ The automatic unit is one request and one response:
 
 1. The controller emits a request to `outbox` and records it.
 2. The selected adapter delivers it.
-3. The receiver performs the work under its own policy.
-4. The receiver emits one `result` referencing the request.
-5. The controller records the result in `inbox` and stops.
+3. The receiver performs the work under its own policy and returns one bounded response.
+4. If the receiver is authorized to write the shared ledger, it may emit the single canonical `result` referencing the request. The controller rereads, validates, and reuses that result without emitting a duplicate.
+5. Otherwise, the receiver returns through its transport. For a read-only/`never` new Codex thread, sandbox-authorized read-only repository commands such as `git diff` and file searches remain available; ledger writes and permission widening do not. The controller checks the transport exit status, treats stdout response text as data, validates it, rereads the ledger, and emits one correlated result only when none exists. Exit status governs only whether stdout is a usable transport response, not task or ledger completion.
+6. After rereading, the controller explicitly marks the request `answered` only when a correlated result in `inbox` passes validation. A valid existing result is reused without duplicate emission regardless of courier exit status; a nonzero exit is reported separately as a transport note, not as request failure. An existing invalid result is not trusted, overwritten, or marked `answered`. With no valid canonical result, a transport failure or unusable stdout produces no result and the request remains unanswered. The controller then stops.
 
 No response automatically creates another request. A human or controller may begin an explicit new request with a new ID after inspecting the result. This keeps ref chains acyclic and makes repeated same-class findings an escalation decision rather than a model-to-model loop.
 

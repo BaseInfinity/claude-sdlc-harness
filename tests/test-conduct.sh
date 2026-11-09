@@ -33,8 +33,8 @@ REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 SKILL_DIR="$REPO_ROOT/skills/conduct"
 HELPER="$SKILL_DIR/scripts/conduct.cjs"
 
-HELPER_SHA="53ed69e212151d6eddc850e1bc651d1b1b534e4513b1ae3eda95eb9d2cf5d9a6"
-PROTOCOL_SHA="92f3611ab3704a2a3a382c682c42bc8a02672271125fcea80a329baa26860c22"
+HELPER_SHA="e76ad7089fdd16f0db7fec2d48d9628f48a2ae6cd53253a97a5179e834b659c8"
+PROTOCOL_SHA="9adfe0b425c9e48a6c89d72ddf4d0e0e24eae238611083b9b5adb98d73ac49f1"
 
 PASS=0
 FAIL=0
@@ -85,6 +85,17 @@ emit --box outbox --id req-3 --from "$REQ_FROM" --to "$REQ_TO" --type task --pro
     || pass "emit rejects an invented answered initial status"
 [ ! -f "$TMPDIR_T/.brain/runs/t1/outbox/req-3.json" ] \
     && pass "rejected emit leaves no outbox file" || fail "rejected emit leaves no outbox file"
+
+pemit() { node "$HELPER" emit --root "$TMPDIR_T" --run t2 --box outbox --from "$REQ_FROM" --to "$REQ_TO" --type task "$@" >/dev/null 2>&1; }
+pfield() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["prompt"], end="")' "$TMPDIR_T/.brain/runs/t2/outbox/$1.json" 2>/dev/null; }
+printf 'line one\n"quoted" $HOME\n' > "$TMPDIR_T/pf.txt"
+pemit --id req-pf1 --prompt-file "$TMPDIR_T/pf.txt" && [ "$(pfield req-pf1)" = "$(cat "$TMPDIR_T/pf.txt")" ] \
+    && pass "--prompt-file carries the file contents unchanged" \
+    || fail "--prompt-file carries the file contents unchanged"
+printf 'from stdin' | pemit --id req-pf2 --prompt-file - && [ "$(pfield req-pf2)" = "from stdin" ] \
+    && pass "--prompt-file - reads stdin" || fail "--prompt-file - reads stdin"
+pemit --id req-pf3 --prompt x --prompt-file "$TMPDIR_T/pf.txt" \
+    && fail "--prompt with --prompt-file rejected" || pass "--prompt with --prompt-file rejected"
 
 mark() { node "$HELPER" mark --root "$TMPDIR_T" --run t1 "$@" >/dev/null 2>&1; }
 mark --id req-2 --status answered \
@@ -488,6 +499,23 @@ grep -qF 'scripts/codex-thread.py' "$SKILL" \
     && pass "SKILL.md points at codex-thread.py" || fail "SKILL.md points at codex-thread.py"
 grep -qF 'scripts/claude-desktop.sh' "$SKILL" \
     && pass "SKILL.md points at claude-desktop.sh" || fail "SKILL.md points at claude-desktop.sh"
+
+# Result reuse and courier exit semantics, mirrored from the shared protocol.
+SKILL_FLAT=$(tr '\n' ' ' < "$SKILL" | tr -s ' ')
+for phrase in \
+    'reread the ledger and validate' \
+    'reuse it, even when the courier exited nonzero' \
+    'as a transport note, not as a request failure' \
+    'never trusted, overwritten or marked `answered`' \
+    'Exit 0 means usable transport data only' \
+    'write no result and leave the request unanswered' \
+    'never writes the ledger or widens its own permissions'; do
+    printf '%s' "$SKILL_FLAT" | grep -qF -- "$phrase" \
+        && pass "SKILL.md says: $phrase" || fail "SKILL.md says: $phrase"
+done
+printf '%s' "$SKILL_FLAT" | grep -qF 'Exit 0 means the turn completed' \
+    && fail "SKILL.md drops 'Exit 0 means the turn completed'" \
+    || pass "SKILL.md drops 'Exit 0 means the turn completed'"
 grep -q '^## Reciprocal recovery' "$SKILL_DIR/references/protocol.md" \
     && pass "protocol.md carries Reciprocal recovery" \
     || fail "protocol.md carries Reciprocal recovery"
