@@ -229,6 +229,9 @@ COMMAND_VALUE=$(printf '%s' "$COMMAND_FIELD" \
 # which is exactly what #533 ruled out — the same ruling this PR has refused to
 # re-litigate everywhere else. So it is reverted rather than deepened, and the
 # heredoc false positive goes back to being an accepted limit that fails CLOSED.
+# Kept for the target resolution further down, which must refuse a relocating
+# command whose path text this normalisation rewrites.
+COMMAND_VALUE_JSON="$COMMAND_VALUE"
 ESC_SENTINEL=$(printf '\001')
 COMMAND_VALUE=$(printf '%s' "$COMMAND_VALUE" \
     | sed -E -e "s/\\\\\\\\/$ESC_SENTINEL/g" \
@@ -631,16 +634,196 @@ if ! printf '%s' "$MASKED_COMMAND" | grep -qE \
     exit 0
 fi
 
+# --- WHICH REPOSITORY THE COMMIT TARGETS ------------------------------------
+#
+# Every read below — the handoff, the index tree, the worktree diff, the
+# branch, the local test result — used to come from the HOOK's cwd, which is
+# the session's primary checkout. `git -C <worktree> commit` and
+# `cd <worktree> && git commit` land in the worktree, so the gate judged a
+# repository the commit never touched: a certified worktree commit was
+# refused, and an uncertified one walked through whenever the primary happened
+# to be certified. This fixes WHERE the gate looks. WHAT it checks is unchanged.
+#
+# The default, a command carrying no relocation token, is the hook's cwd, so
+# every shape the detector above accepts behaves as before apart from being
+# read at the repository's toplevel rather than a subdirectory of it.
+#
+# A command that DOES relocate must be exactly this shape, or it is refused:
+#
+#   [cd DIR (&& | ;)]...  git [-C DIR | -c VALUE]...  commit  REST
+#
+# with DIR a literal path — bare, '...' or "..." with no expansion inside — so
+# the hook resolves it the way the shell will, without evaluating anything. It
+# is read twice: on MASKED_COMMAND, so REST is seen with its quoted prose
+# collapsed, and on the raw COMMAND_VALUE, for the path text itself. REST may
+# not relocate again or commit again, because either would put a commit
+# somewhere this hook did not look. Anything else that relocates — a subshell,
+# a variable, `env -C`, --git-dir, --work-tree, GIT_DIR — FAILS CLOSED: the
+# cost of a false match is a refusal and a rephrase, never an allow.
+#
+# `cd` is followed the way bash follows it, which is NOT the way `git -C` is:
+#   - LOGICAL: bash resolves `..` against the path text, so `cd link/..` lands
+#     in the directory holding `link`, not in the symlink target's parent.
+#     `git -C` uses chdir and resolves physically. Each is modelled as itself;
+#     where the two readings could differ in whether the directory exists at
+#     all, the hook refuses rather than guess which one bash took.
+#   - A FAILED `cd` before `;` leaves the shell where it was and the commit
+#     still runs there, so a `;`-separated cd to a directory that is not there
+#     is skipped, not joined. Before `&&` a failed cd means no commit at all,
+#     so it is refused, which costs nothing.
+#   - CDPATH can send a relative `cd name` elsewhere. When the hook's own
+#     environment sets CDPATH, a relative operand not starting with `.` or `..`
+#     is refused. ACCEPTED LIMIT: a CDPATH set only in the calling shell's
+#     profile is invisible here. Write `cd ./name` or an absolute path.
+GATE_RELOC_TRIGGER="(^|[[:space:];&|(){}!\`])(cd|pushd|popd)([[:space:];&|)]|\$)|(^|[[:space:]])-C([[:space:]]|\$)|--chdir|--git-dir|--work-tree|(^|[^A-Za-z0-9_])GIT_(DIR|WORK_TREE|INDEX_FILE|COMMON_DIR)="
+GATE_RELOC_AFTER="(^|[[:space:];&|(){}!\`])(cd|pushd|popd)([[:space:];&|)]|\$)|--git-dir|--work-tree|(^|[^A-Za-z0-9_])GIT_(DIR|WORK_TREE|INDEX_FILE|COMMON_DIR)="
+GATE_DIR_BARE="[^][[:space:];&|(){}<>'\"\\\\\$\`*?]+"
+GATE_DIR_RAW="('[^']*'|\\\\\"[^\"\\\\\$\`]*\\\\\"|${GATE_DIR_BARE})"
+GATE_CVAL='[^[:space:];&|]+'
+# The target shape with $1 as every DIR operand. Built by concatenation, never
+# `${shape//DIR/$dir}`: bash 5.2+ enables patsub_replacement, which turns the
+# `&` in a dir class into the matched text and strips the backslash from `\\"`,
+# and quoting the replacement to stop that leaves the quotes in on bash 3.2.
+gate_target_shape() {
+    printf '%s' "^[[:space:]]*(cd[[:space:]]+$1[[:space:]]*(&&;?|;)[[:space:]]*)*git([[:space:]]+(-C[[:space:]]+$1|-c[[:space:]]+${GATE_CVAL}))*[[:space:]]+commit([[:space:]]|\$)"
+}
+
+refuse_target() {
+    echo "CROSS-MODEL REVIEW REQUIRED: could not resolve which repository this commit targets ($1), so there is no handoff to check it against. Relocate with a literal path only: 'git -C <dir> commit ...' or 'cd <dir> && git commit ...', one commit per command. $BYPASS_NOTE" >&2
+    exit 2
+}
+
+# Collapses `.` and `..` in an absolute path by its TEXT, as bash's logical
+# `cd` does — including bash's rule that the component a `..` backs out of
+# must exist, so `cd nope/..` FAILS rather than landing where it started.
+logical_path() {
+    local part out="" parts
+    IFS=/ read -ra parts <<< "$1"
+    for part in "${parts[@]}"; do
+        case "$part" in
+            ""|.) ;;
+            ..) [ -d "${out:-/}" ] || return 1; out="${out%/*}" ;;
+            *) out="$out/$part" ;;
+        esac
+    done
+    printf '%s' "${out:-/}"
+}
+
+# Joins one literal DIR operand onto TARGET_DIR. $2 is `-C` for git's
+# physical chdir, else the separator that followed a `cd`.
+join_target() {
+    local d="$1" how="$2" physical logical
+    case "$d" in
+        \'*\') d="${d#\'}"; d="${d%\'}" ;;
+        \\\"*\\\") d="${d#\\\"}"; d="${d%\\\"}" ;;
+        "~") d="$HOME" ;;
+        "~/"*) d="$HOME/${d#\~/}" ;;
+        "~"*) refuse_target "'$d' names another user's home" ;;
+    esac
+    case "$d" in
+        "") return ;; # `git -C ''` and `cd ''` both leave the directory as is
+        -) refuse_target "'cd -' depends on shell history" ;;
+        /*) physical="$d" ;;
+        *) physical="$TARGET_DIR/$d" ;;
+    esac
+    if [ "$how" = "-C" ]; then
+        TARGET_DIR="$physical"
+        return
+    fi
+    case "$d" in
+        /*|.|..|./*|../*) ;;
+        *) [ -z "${CDPATH:-}" ] || refuse_target "CDPATH is set, so 'cd $d' may not go where the path says" ;;
+    esac
+    logical=$(logical_path "$physical") || logical=""
+    if [ -d "$logical" ] && [ -x "$logical" ]; then
+        TARGET_DIR="$logical"
+    elif [ -d "$physical" ]; then
+        refuse_target "'cd $d' resolves differently logically and physically"
+    elif [ "$how" = ";" ]; then
+        : # cd fails, the shell stays put, and the commit runs here
+    else
+        refuse_target "'cd $d' would fail, so no commit would run there"
+    fi
+}
+
+TARGET_DIR="$PWD"
+if printf '%s' "$MASKED_COMMAND" | grep -qE "$GATE_RELOC_TRIGGER"; then
+    MASKED_SHAPE=$(gate_target_shape "$GATE_DIR_BARE")
+    RAW_SHAPE=$(gate_target_shape "$GATE_DIR_RAW")
+    TARGET_PREFIX=$(printf '%s' "$MASKED_COMMAND" | grep -oE "$MASKED_SHAPE" | head -1) || TARGET_PREFIX=""
+    RAW_PREFIX=$(printf '%s' "$COMMAND_VALUE" | grep -oE "$RAW_SHAPE" | head -1) || RAW_PREFIX=""
+    # The raw reading is of NORMALISED text: a JSON `\n` is already `;` and a
+    # `\t` a space, so a quoted path holding either would resolve to a path
+    # that is not the one the shell sees. Refuse both rather than un-normalise.
+    case "$COMMAND_VALUE_JSON" in
+        *'\t'*|*'\r'*) refuse_target "a tab or carriage return in a relocating command" ;;
+    esac
+    case "$RAW_PREFIX" in
+        *"'"*";"*"'"*|*'\"'*";"*'\"'*) refuse_target "a quoted path holds a newline or ';'" ;;
+    esac
+    [ -n "$TARGET_PREFIX" ] && [ -n "$RAW_PREFIX" ] \
+        || refuse_target "the relocation is not a literal leading 'cd <dir>' or 'git -C <dir>'"
+    TARGET_REST="${MASKED_COMMAND:${#TARGET_PREFIX}}"
+    if printf '%s' "$TARGET_REST" | grep -qE "$GATE_RELOC_AFTER"; then
+        refuse_target "the command relocates again after the commit"
+    fi
+    if printf '%s' "$TARGET_REST" | grep -qE \
+        "${GATE_ANCHOR}[[:space:]]*${GATE_PREFIX}(${GATE_WRAPPER}[[:space:]]+${GATE_SKIP})*${GATE_GIT}"; then
+        refuse_target "the command commits more than once"
+    fi
+
+    # Walk the raw prefix operand by operand, in the order the shell applies
+    # them: each leading cd, then each -C, every one relative to the last.
+    _rest="$RAW_PREFIX"
+    _cd_re="^[[:space:]]*cd[[:space:]]+${GATE_DIR_RAW}[[:space:]]*(&&;?|;)(.*)\$"
+    _joins=0
+    while [[ $_rest =~ $_cd_re ]]; do
+        join_target "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+        _joins=$((_joins + 1))
+        _rest="${BASH_REMATCH[3]}"
+    done
+    _rest="${_rest#"${_rest%%[![:space:]]*}"}"
+    _rest="${_rest#git}"
+    _opt_re="^[[:space:]]+(-C[[:space:]]+${GATE_DIR_RAW}|-c[[:space:]]+${GATE_CVAL})(.*)\$"
+    _optc_re="^-C[[:space:]]+(.*)\$"
+    _commit_re="^[[:space:]]+commit([[:space:]]|\$)"
+    while [[ $_rest =~ $_opt_re ]]; do
+        _opt="${BASH_REMATCH[1]}"
+        _rest="${BASH_REMATCH[3]}"
+        if [[ $_opt =~ $_optc_re ]]; then
+            join_target "${BASH_REMATCH[1]}" -C
+            _joins=$((_joins + 1))
+        elif [[ $_opt == -C* ]]; then
+            refuse_target "a -C operand could not be read"
+        fi
+    done
+    [[ $_rest =~ $_commit_re ]] \
+        || refuse_target "the git options before 'commit' could not be read"
+    # The two readings must agree on how many places the command moves to. A
+    # disagreement means masking and the raw text parsed differently, and the
+    # walk above cannot be trusted to have followed the shell.
+    _masked_moves=$(printf '%s' "$TARGET_PREFIX" | grep -oE '(^|[[:space:];&])(cd|-C)[[:space:]]' | wc -l | tr -d ' ')
+    [ "$_masked_moves" = "$_joins" ] \
+        || refuse_target "the relocation operands could not be read consistently"
+fi
+
+TARGET_TOP=$(git -C "$TARGET_DIR" rev-parse --show-toplevel 2>/dev/null) || TARGET_TOP=""
+[ -n "$TARGET_TOP" ] || refuse_target "'$TARGET_DIR' is not inside a git work tree"
+
 # #731: a green local test suite is commit authorization for development.
 # run-local.sh writes "TREE_SHA PASS" on exit 0. Cross-model review is
 # still required before merge (PR-level gate in scripts/merge-pr.sh).
 LOCAL_RESULT="${SDLC_LOCAL_TEST_RESULT:-.local-test-result}"
-LOCAL_TREE=$(git write-tree 2>/dev/null) || LOCAL_TREE=""
+case "$LOCAL_RESULT" in
+    /*) ;;
+    *) LOCAL_RESULT="$TARGET_TOP/$LOCAL_RESULT" ;;
+esac
+LOCAL_TREE=$(git -C "$TARGET_TOP" write-tree 2>/dev/null) || LOCAL_TREE=""
 if [ -n "$LOCAL_TREE" ] && grep -q "^${LOCAL_TREE} PASS$" "$LOCAL_RESULT" 2>/dev/null; then
     exit 0
 fi
 
-REVIEW_FILE=".reviews/handoff.json"
+REVIEW_FILE="$TARGET_TOP/.reviews/handoff.json"
 
 if [ ! -f "$REVIEW_FILE" ]; then
     echo "CROSS-MODEL REVIEW REQUIRED: No .reviews/handoff.json found. Run Codex cross-model review before committing. $BYPASS_NOTE" >&2
@@ -710,7 +893,7 @@ case "$STATUS" in
         # nothing unstaged, `git commit` and `git commit -a` commit the same
         # tree, and the index speaks for both. Untracked files are NOT
         # examined — they are not in the index and `-a` does not add them.
-        if ! git diff --quiet --ignore-submodules -- 2>/dev/null; then
+        if ! git -C "$TARGET_TOP" diff --quiet --ignore-submodules -- 2>/dev/null; then
             echo "CROSS-MODEL REVIEW REQUIRED: tracked files differ between the working tree and the index, so the tree that would be committed is not the one certified (git commit -a would sweep them in). Stage or revert them, then commit. $BYPASS_NOTE" >&2
             exit 2
         fi
@@ -719,7 +902,7 @@ case "$STATUS" in
         # `git write-tree` is exactly the tree the commit is about to carry.
         # It fails on an unmerged index, and that failure is left to fail
         # closed — a conflicted tree is not a reviewed tree.
-        INDEX_TREE=$(git write-tree 2>/dev/null) || INDEX_TREE=""
+        INDEX_TREE=$(git -C "$TARGET_TOP" write-tree 2>/dev/null) || INDEX_TREE=""
         if [ -z "$INDEX_TREE" ] || [ "$INDEX_TREE" != "$CANDIDATE_TREE" ]; then
             echo "CROSS-MODEL REVIEW REQUIRED: the staged content is not what was certified (index tree ${INDEX_TREE:-unreadable}, certified candidate_tree $CANDIDATE_TREE). A certification authorizes the content it was issued over, not the next commit on the branch. Re-run cross-model review on the current content. $BYPASS_NOTE" >&2
             exit 2
@@ -780,7 +963,7 @@ case "$STATUS" in
         DECLARED_BRANCH=$(grep -o '"branch"[[:space:]]*:[[:space:]]*"[^"]*"' "$REVIEW_FILE" \
             | head -1 \
             | sed 's/.*"branch"[[:space:]]*:[[:space:]]*"//; s/"$//')
-        CURRENT_BRANCH=$(git symbolic-ref --quiet --short HEAD 2>/dev/null) || CURRENT_BRANCH=""
+        CURRENT_BRANCH=$(git -C "$TARGET_TOP" symbolic-ref --quiet --short HEAD 2>/dev/null) || CURRENT_BRANCH=""
 
         # Fail closed on a handoff that declares nothing — otherwise a stale
         # PENDING_RECHECK would be a forever-pass on every branch. Same
@@ -820,10 +1003,11 @@ case "$STATUS" in
                 ;;
         esac
 
-        # (2) This lane compares the handoff against HEAD in the HOOK's cwd,
-        # so a command that relocates git elsewhere would be judged by a
-        # branch it will not commit to. Refusing a plain relocation token
-        # catches that accident. It is deliberately over-strict — the token
+        # (2) This lane predates target resolution, when it compared the
+        # handoff against HEAD in the HOOK's cwd, so a command that relocated
+        # git elsewhere was judged by a branch it would not commit to. The
+        # target is resolved above now; the refusal is kept unchanged, because
+        # this change fixes where the gate looks, not what it checks. It is deliberately over-strict — the token
         # can appear inside a commit message and refuse a legitimate commit —
         # because the cost of a false match is a refusal, never an allow.
         #

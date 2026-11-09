@@ -244,6 +244,105 @@ new_repo unrelated
 write_handoff "$REPO" "deadbeef" "" ""
 expect_allowed "unrelated command with a stale certification" "$REPO" "ls -la"
 
+# ---------------------------------------------------------------------------
+# 9. THE GATE JUDGES THE REPOSITORY THE COMMIT TARGETS, not the hook's cwd.
+#    The hook runs in the session's primary checkout. A commit issued as
+#    `git -C <worktree> commit` or `cd <worktree> && git commit` lands in the
+#    worktree, so the worktree's own handoff and index are what must agree.
+#    Reading the primary checkout's refused certified worktree commits, and
+#    worse, let an uncertified worktree commit through whenever the primary
+#    happened to be certified.
+# ---------------------------------------------------------------------------
+new_repo primary
+PRIMARY="$REPO"
+WT="$WORK/wt-DIR"
+git -C "$PRIMARY" worktree add -q "$WT" -b wt-branch
+mkdir -p "$WT/.reviews" "$WT/sub"
+printf 'worktree change\n' > "$WT/file.txt"
+git -C "$WT" add file.txt
+WT_TREE=$(git -C "$WT" write-tree)
+PRIMARY_TREE=$(git -C "$PRIMARY" write-tree)
+
+# Primary certifies some OTHER tree: the live-case shape, where the primary's
+# handoff is about different work entirely.
+write_handoff "$PRIMARY" "$(git -C "$PRIMARY" rev-parse HEAD)" "$WT_TREE" ""
+write_handoff "$WT" "$(git -C "$WT" rev-parse HEAD)" "$WT_TREE" ""
+# The primary's index is NOT the certified tree, so a gate reading it refuses.
+sed -i.bak "s/$WT_TREE/0000000000000000000000000000000000000000/" "$PRIMARY/.reviews/handoff.json"
+expect_allowed "git -C <worktree> commit, worktree certifies its own index" "$PRIMARY" "git -C $WT commit -m x"
+expect_allowed "cd <worktree> && git commit, worktree certifies its own index" "$PRIMARY" "cd $WT && git commit -m x"
+expect_allowed "cd <worktree>; git commit (semicolon form)" "$PRIMARY" "cd $WT; git commit -m x"
+expect_allowed "git -C '<worktree>' commit (single-quoted literal path)" "$PRIMARY" "git -C '$WT' commit -m x"
+expect_allowed "git -C \"<worktree>\" commit (double-quoted literal path)" "$PRIMARY" "git -C \"$WT\" commit -m x"
+expect_allowed "git -C <worktree>/sub commit resolves to the worktree's toplevel" "$PRIMARY" "git -C $WT/sub commit -m x"
+expect_allowed "cd <parent> && git -C <relative> commit chains like the shell does" "$PRIMARY" "cd $WORK && git -C wt-DIR commit -m x"
+expect_allowed "git commit -C <commit> is commit's own option, not a relocation" "$WT" "git commit -C HEAD"
+
+# Now the primary IS certified for its own index, and the worktree is not.
+write_handoff "$PRIMARY" "$(git -C "$PRIMARY" rev-parse HEAD)" "$PRIMARY_TREE" ""
+rm -f "$WT/.reviews/handoff.json"
+expect_refused "git -C <worktree> commit with no worktree handoff, primary certified" "$PRIMARY" "git -C $WT commit -m x"
+expect_refused "cd <worktree> && git commit with no worktree handoff, primary certified" "$PRIMARY" "cd $WT && git commit -m x"
+write_handoff "$WT" "$(git -C "$WT" rev-parse HEAD)" "$PRIMARY_TREE" ""
+expect_refused "git -C <worktree> commit when the worktree certifies a different tree" "$PRIMARY" "git -C $WT commit -m x"
+expect_refused "cd <worktree> && git commit when the worktree certifies a different tree" "$PRIMARY" "cd $WT && git commit -m x"
+
+# Unresolvable targets FAIL CLOSED, whatever the primary says.
+expect_refused "git -C <nonexistent> commit" "$PRIMARY" "git -C $WORK/no-such-dir commit -m x"
+expect_refused "git -C <dir that is not a repo> commit" "$PRIMARY" "git -C $WORK commit -m x"
+expect_refused "cd <nonexistent> && git commit" "$PRIMARY" "cd $WORK/no-such-dir && git commit -m x"
+expect_refused "git -C \$VAR commit (unexpanded variable)" "$PRIMARY" "git -C \$WT commit -m x"
+expect_refused "git -C \"\$VAR\" commit (quoted variable)" "$PRIMARY" "git -C \"\$WT\" commit -m x"
+expect_refused "git -C <worktree>/.git commit (not a work tree)" "$PRIMARY" "git -C $PRIMARY/.git commit -m x"
+expect_refused "subshell relocation the gate cannot follow" "$PRIMARY" "(cd $WT && git commit -m x)"
+expect_refused "a second commit after a relocated one" "$PRIMARY" "git -C $PRIMARY commit -m x && git -C $WT commit -m y"
+expect_refused "a cd after the commit in the same command" "$PRIMARY" "git -C $PRIMARY commit -m x && cd $WT && git commit -m y"
+expect_refused "--work-tree= relocation in the CERTIFIED lane" "$PRIMARY" "git --work-tree=$WT commit -m x"
+
+# The local-test-result shortcut binds to the TARGET too: a PASS for the
+# primary's tree must not authorize a worktree commit of different content.
+printf '%s PASS\n' "$PRIMARY_TREE" > "$PRIMARY/.local-test-result"
+expect_refused "primary's local PASS does not authorize a worktree commit" "$PRIMARY" "git -C $WT commit -m x"
+rm -f "$PRIMARY/.local-test-result"
+# A RELATIVE override is read at the target too, never at the hook's cwd.
+printf '%s PASS\n' "$WT_TREE" > "$PRIMARY/.local-test-result"
+export SDLC_LOCAL_TEST_RESULT=.local-test-result
+expect_refused "relative SDLC_LOCAL_TEST_RESULT is read at the target, not the hook cwd" "$PRIMARY" "git -C $WT commit -m x"
+unset SDLC_LOCAL_TEST_RESULT
+rm -f "$PRIMARY/.local-test-result"
+
+# Shell semantics of cd, round 1 of review (Sol and Fable). Primary is
+# certified for its own index here; the worktree is not.
+expect_allowed "a failed cd before ';' leaves the commit in the certified cwd" "$PRIMARY" "cd $WORK/no-such-dir; git commit -m x"
+expect_refused "cd <worktree> &&<newline> git commit, uncertified worktree" "$PRIMARY" "cd $WT &&
+git commit -m x"
+# Logical cd: `cd link/..` lands in the dir HOLDING link, not the target's parent.
+mkdir -p "$WT/holder"
+ln -s "$PRIMARY/.git" "$WT/holder/link"
+expect_refused "cd link/.. is resolved logically (bash), not physically (git -C)" "$WT" "cd ./holder/link/.. && git commit -m x"
+# CDPATH can send a relative cd elsewhere.
+mkdir -p "$WORK/cdp"; ln -s "$WT" "$WORK/cdp/primary"
+export CDPATH="$WORK/cdp"
+expect_refused "relative cd with CDPATH set in the hook env" "$WORK" "cd primary && git commit -m x"
+unset CDPATH
+expect_refused "env --chdir relocation the trigger names" "$PRIMARY" "env --chdir=$WT git commit -m x"
+
+# Same rows, worktree certified: the allow side must survive the fixes.
+write_handoff "$WT" "$(git -C "$WT" rev-parse HEAD)" "$WT_TREE" ""
+expect_allowed "cd <worktree> &&<newline> git commit, certified worktree" "$PRIMARY" "cd $WT &&
+git commit -m x"
+expect_allowed "cd <worktree>/sub/.. resolves logically to the worktree" "$PRIMARY" "cd $WT/sub/.. && git commit -m x"
+
+# Round 2 of review. Primary certified, worktree certified.
+expect_allowed "git -C '' commit is git's no-op relocation" "$PRIMARY" "git -C '' commit -m x"
+# A quoted path holding a tab: the hook's normalisation would read it as a space.
+mkdir -p "$WORK/tab dir"; ln -s "$WT" "$WORK/tab dir/r"
+mkdir -p "$WORK/tab	dir"; ln -s "$PRIMARY" "$WORK/tab	dir/r"
+write_handoff "$PRIMARY" "$(git -C "$PRIMARY" rev-parse HEAD)" "0000000000000000000000000000000000000000" ""
+expect_refused "a quoted -C path holding a tab is not read as a space" "$PRIMARY" "git -C '$WORK/tab	dir/r' commit -m x"
+# bash refuses `cd nope/..`, so the commit lands in the (uncertified) cwd.
+expect_refused "cd <worktree>/nope/..; git commit fails the cd like bash does" "$PRIMARY" "cd $WT/nope/..; git commit -m x"
+
 # Deliberate failure injection for the hoisted self-check above.
 if [ -n "${TREE_SUITE_FORCE_FAILURE:-}" ]; then
     fail "forced failure (self-check)"
