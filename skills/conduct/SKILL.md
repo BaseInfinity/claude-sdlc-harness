@@ -340,7 +340,7 @@ checkout.
 | 5 | Never stall on the human. Rewrite to pass the guard, climb the brain ladder (Sol at high first, then Fable on a split), then dispatch. A blocker no model can clear is a P0 to engineer away. Only the user's own calls go to the user. |
 | 6 | Work headless and never steal focus. Use connectors and files before any GUI. |
 | 7 | Relayed reports carry a fixed text label per controller: `[CONDUCTOR]` `[HARNESS]` `[MEESEEKS]` `[ANTICHEAT]` `[CODEX]` `[ROBBIE]` `[WINDOWS]`. Use color only where the medium supports it. |
-| 8 | Run `/sdlc` before code. A skill gate that enforces it is in progress and not yet shipped. |
+| 8 | Run the SDLC skill before code, and prove it loaded: Claude `Skill(sdlc)` or `/sdlc`, Codex `$sdlc` with the skill actually read. Never invent a CLI alias. Claude Code enforces this with a pre-edit and pre-commit skill gate where the repo's hooks are current. |
 | 9 | Hand computer use over by ending the holder session. Never delete the lock. |
 | 10 | Auto-trust only a workspace the conductor itself opens in the user's own repo. Never press Trust for any other folder. |
 | 11 | Fleet progress: `status.cjs` (lands with feat/conduct-status). Each controller updates its own rows when a workstream changes state, never another controller's. |

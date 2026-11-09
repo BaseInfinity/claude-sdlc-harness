@@ -980,6 +980,10 @@ for label in '[CONDUCTOR]' '[HARNESS]' '[MEESEEKS]' '[ANTICHEAT]' '[CODEX]' '[RO
     check_row 7 "$label"
 done
 check_row 8 '/sdlc'
+check_row 8 'Skill(sdlc)'
+check_row 8 '$sdlc'
+check_row 8 'Never invent a CLI alias.'
+check_row 8 'pre-edit and pre-commit skill gate'
 check_row 9 'never delete the lock'
 check_row 10 'any other folder'
 check_row 11 'status.cjs'
