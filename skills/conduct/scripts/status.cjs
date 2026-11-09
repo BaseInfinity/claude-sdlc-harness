@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 // Fleet status: one row per controller workstream in <root>/.brain/fleet.json,
-// rendered as a plain-text view. Sibling of conduct.cjs, which stays
+// rendered as a plain-text view, under a [USAGE] section built from the
+// account-usage rows that collectors append to <root>/.brain/usage/*.jsonl. Sibling of conduct.cjs, which stays
 // byte-identical to the Codex upstream helper.
 
 const fs = require("node:fs");
@@ -11,6 +12,9 @@ const LABELS = ["CONDUCTOR", "HARNESS", "MEESEEKS", "ANTICHEAT", "CODEX", "ROBBI
 const STATES = ["in_flight", "blocked", "planned", "done"];
 const COLORS = { HARNESS: "38;5;208", CONDUCTOR: "31", ANTICHEAT: "38;5;213", CODEX: "32" };
 const STALE_MS = 24 * 60 * 60 * 1000;
+const USAGE_STALE_MS = 6 * 60 * 60 * 1000;
+const BASE_ACCOUNTS = ["claude-main", "codex-main"];
+const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function fail(message) {
   process.stderr.write(`status: ${message}\n`);
@@ -27,6 +31,9 @@ function usage() {
 Labels: ${LABELS.join(", ")}
 set replaces the whole row keyed LABEL/slug(workstream) and stamps updated_at.
 --blocker-owner is required with --state blocked and refused otherwise.
+The full view opens with [USAGE]: the newest row per account/provider/window
+from <root>/.brain/usage/*.jsonl, STALE past 6h, and "unknown" for an account
+with no row.
 `);
 }
 
@@ -142,6 +149,67 @@ function age(ms) {
   return hours >= 48 ? `${Math.floor(hours / 24)}d` : `${hours}h`;
 }
 
+function loadUsage(root) {
+  const dir = path.join(path.resolve(root || process.cwd()), ".brain", "usage");
+  const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((name) => name.endsWith(".jsonl")).sort() : [];
+  return files.map((name) => ({
+    account: name.slice(0, -".jsonl".length),
+    lines: fs.readFileSync(path.join(dir, name), "utf8").split("\n")
+  }));
+}
+
+function parseUsage(text) {
+  try {
+    const row = JSON.parse(text);
+    const valid = row && typeof row.account === "string" && typeof row.provider === "string"
+      && typeof row.window === "string" && typeof row.used === "number"
+      && !Number.isNaN(Date.parse(row.observed_at));
+    return valid ? row : null;
+  } catch {
+    return null;
+  }
+}
+
+// Newest observed_at per account/provider/window. A file named for an account
+// that holds no valid row still lists that account, so it renders as unknown.
+function latestUsage(files) {
+  const accounts = new Set(BASE_ACCOUNTS);
+  const latest = new Map();
+  for (const file of files) {
+    accounts.add(file.account);
+    for (const row of file.lines.map(parseUsage).filter(Boolean)) {
+      accounts.add(row.account);
+      const key = `${row.account}\u0000${row.provider}\u0000${row.window}`;
+      const held = latest.get(key);
+      if (!held || Date.parse(row.observed_at) > Date.parse(held.observed_at)) latest.set(key, row);
+    }
+  }
+  return { accounts: [...accounts].sort(), rows: [...latest.values()] };
+}
+
+function localTime(iso) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "unknown";
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${DAYS[date.getDay()]} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function renderUsage({ accounts, rows }, now) {
+  const lines = ["[USAGE]"];
+  for (const account of accounts) {
+    const own = rows.filter((row) => row.account === account)
+      .sort((a, b) => a.provider.localeCompare(b.provider) || a.window.localeCompare(b.window));
+    if (own.length === 0) lines.push(`  ${account} unknown`);
+    for (const row of own) {
+      const used = Math.max(0, Math.min(100, Math.floor(row.used)));
+      const old = now - Date.parse(row.observed_at);
+      const stale = old > USAGE_STALE_MS ? `  STALE ${age(old)}` : "";
+      lines.push(`  ${account} ${row.provider} ${row.window}  ${bar(used)} ${used}% · resets ${localTime(row.resets_at)}${stale}`);
+    }
+  }
+  return `${lines.join("\n")}\n`;
+}
+
 function render(data, { controller, now, color }) {
   const paint = (code, text) => (color && code ? `\u001b[${code}m${text}\u001b[0m` : text);
   const rows = Object.values(data.rows);
@@ -182,7 +250,9 @@ function main() {
   const now = args.now ? Date.parse(args.now) : Date.now();
   if (Number.isNaN(now)) throw new Error("--now must be an ISO timestamp");
   const color = Boolean(process.stdout.isTTY) && !process.env.NO_COLOR;
-  process.stdout.write(render(load(fleetPath(args.root)), { controller: args.controller, now, color }));
+  const fleet = render(load(fleetPath(args.root)), { controller: args.controller, now, color });
+  const usage = args.controller ? "" : `${renderUsage(latestUsage(loadUsage(args.root)), now)}\n`;
+  process.stdout.write(usage + fleet);
 }
 
 try {

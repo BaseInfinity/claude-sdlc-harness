@@ -492,7 +492,7 @@ sset --controller CODEX --workstream "c-flight" --percent 50 --state in_flight -
 sset --controller HARNESS --workstream "h" --percent 1 --state planned
 sset --controller CONDUCTOR --workstream "k" --percent 1 --state planned
 got=$(sview | grep -oE '^\[[A-Z]+\]|c-(done|planned|blocked|flight)' | tr '\n' ' ')
-[ "$got" = "[CONDUCTOR] [HARNESS] [CODEX] c-flight c-blocked c-planned c-done " ] \
+[ "$got" = "[USAGE] [CONDUCTOR] [HARNESS] [CODEX] c-flight c-blocked c-planned c-done " ] \
     && pass "sections in label order, rows in flight > blocked > planned > done, empty sections skipped" \
     || fail "sections in label order, rows in flight > blocked > planned > done (got: $got)"
 sview | grep -qF 'blocked on Stefan' && pass "blocked rows name who they wait on" \
@@ -518,6 +518,90 @@ on_tty() { # run a command under a pseudo-terminal (BSD or util-linux script)
     && pass "a TTY gets ANSI color" || fail "a TTY gets ANSI color"
 NO_COLOR=1 on_tty node "$STATUS" --root "$FROOT" | grep -q "$ESC" \
     && fail "NO_COLOR suppresses ANSI on a TTY" || pass "NO_COLOR suppresses ANSI on a TTY"
+
+echo "=== fleet usage ==="
+UROOT="$TMPDIR_T/usage"; UDIR="$UROOT/.brain/usage"; mkdir -p "$UDIR"
+UNOW="2026-11-08T12:00:00Z"
+uview() { TZ=UTC node "$STATUS" --root "$UROOT" --now "$UNOW" "$@" 2>&1; }
+row() { # account provider window used resets observed
+    printf '{"account":"%s","provider":"%s","window":"%s","used":%s,"limit":100,"unit":"pct","resets_at":"%s","source":"t","accuracy":"server","observed_at":"%s"}\n' "$@"
+}
+uview | grep -qxF '[USAGE]' && pass "an empty usage dir still renders [USAGE]" || fail "an empty usage dir still renders [USAGE]"
+for acct in claude-main codex-main; do
+    uview | grep -qxF "  $acct unknown" && pass "$acct with no row prints unknown" \
+        || fail "$acct with no row prints unknown (got: $(uview))"
+done
+{ row codex-main codex 7d 40 2026-11-10T18:00:00Z 2026-11-08T10:00:00Z
+  row codex-main codex 7d 50.9 2026-11-10T18:00:00Z 2026-11-08T11:00:00Z
+  row codex-main codex 7d 10 2026-11-10T18:00:00Z 2026-11-08T09:00:00Z; } > "$UDIR/codex-main.jsonl"
+{ row claude-main claude 5h 3 2026-11-08T14:30:00Z 2026-11-08T05:00:00Z
+  echo 'not json'
+  row claude-main claude 7d 100 2026-11-13T09:05:00Z 2026-11-08T07:00:00Z; } > "$UDIR/claude-main.jsonl"
+echo 'not json' > "$UDIR/claude-b.jsonl"
+uview | grep -qxF '  codex-main codex 7d  █████░░░░░ 50% · resets Tue 18:00' \
+    && pass "newest observed_at wins, bar and used% floor, reset in local time" \
+    || fail "newest observed_at wins, bar and used% floor, reset in local time (got: $(uview))"
+[ "$(uview | grep -c '^  codex-main')" = 1 ] && pass "one line per account/provider/window" \
+    || fail "one line per account/provider/window (got: $(uview))"
+uview | grep -qxF '  claude-main claude 5h  █░░░░░░░░░ 3% · resets Sun 14:30  STALE 7h' \
+    && pass "a usage row over 6h old is marked STALE" || fail "a usage row over 6h old is marked STALE (got: $(uview))"
+uview | grep -qxF '  claude-main claude 7d  ██████████ 100% · resets Fri 09:05' \
+    && pass "a usage row under 6h old is not STALE" || fail "a usage row under 6h old is not STALE (got: $(uview))"
+uview | grep -qxF '  claude-b unknown' && pass "a usage file with no valid row prints unknown" \
+    || fail "a usage file with no valid row prints unknown (got: $(uview))"
+got=$(uview | grep -oE '^  [a-z-]+ ' | tr -d ' ' | tr '\n' ' ')
+[ "$got" = "claude-b claude-main claude-main codex-main " ] && pass "usage lines sort by account, then window" \
+    || fail "usage lines sort by account, then window (got: $got)"
+node "$STATUS" set --root "$UROOT" --controller HARNESS --workstream w --percent 1 --state planned >/dev/null
+got=$(uview | grep -nE '^\[(USAGE|HARNESS)\]' | tr '\n' ' ')
+case "$got" in 1:\[USAGE\]*\[HARNESS\]*) pass "[USAGE] renders above the controllers" ;;
+    *) fail "[USAGE] renders above the controllers (got: $got)" ;; esac
+
+echo "=== codex usage collector ==="
+COLLECT="$REPO_ROOT/scripts/usage-codex.cjs"
+CHOME="$TMPDIR_T/codex-home/.codex"; CROOT="$TMPDIR_T/collect"
+mkdir -p "$CHOME/sessions/2026/11/07" "$CHOME/sessions/2026/11/08" "$CROOT"
+tc() { # timestamp limit_id primary secondary
+    printf '{"timestamp":"%s","type":"event_msg","payload":{"type":"token_count","info":null,"rate_limits":{"limit_id":"%s","limit_name":null,"primary":%s,"secondary":%s,"credits":null,"plan_type":"prolite"}}}\n' "$@"
+}
+W7='{"used_percent":50.0,"window_minutes":10080,"resets_at":1794387895}'
+W5='{"used_percent":12.5,"window_minutes":300,"resets_at":1794300000}'
+# The mtime-newest file holds an OLDER event, and so does the last line of the
+# other file: selection must go by event time. Later-stamped non-token_count
+# lines that mention rate_limits, and a premium limit, must be ignored.
+{ tc 2026-11-08T20:00:00.000Z codex "$W7" "$W5"
+  echo '{"timestamp":"2026-11-08T23:00:00.000Z","type":"response_item","payload":{"type":"message","text":"rate_limits"}}'
+  echo "{\"timestamp\":\"2026-11-08T23:30:00.000Z\",\"type\":\"response_item\",\"payload\":{\"type\":\"token_count\",\"rate_limits\":{\"limit_id\":\"codex\",\"primary\":$W7}}}"
+  tc 2026-11-08T22:00:00.000Z premium null null
+  tc 2026-11-08T18:00:00.000Z codex "$W7" null; } > "$CHOME/sessions/2026/11/07/rollout-old.jsonl"
+tc 2026-11-08T19:00:00.000Z codex '{"used_percent":9.0,"window_minutes":10080,"resets_at":1794387895}' null \
+    > "$CHOME/sessions/2026/11/08/rollout-new.jsonl"
+touch -t 202611082100 "$CHOME/sessions/2026/11/07/rollout-old.jsonl"
+touch -t 202611082300 "$CHOME/sessions/2026/11/08/rollout-new.jsonl"
+CODEX_HOME="$CHOME" node "$COLLECT" --root "$CROOT" >/dev/null 2>&1 \
+    && pass "collector runs against a fixture CODEX_HOME" || fail "collector runs against a fixture CODEX_HOME"
+got=$(python3 - "$CROOT/.brain/usage/codex-main.jsonl" <<'PY'
+import json, sys
+for r in (json.loads(l) for l in open(sys.argv[1])):
+    print(r["account"], r["provider"], r["window"], r["used"], r["limit"], r["unit"], r["resets_at"],
+          r["accuracy"], r["observed_at"], r["source"])
+PY
+)
+want="codex-main codex 5h 12.5 100 pct 2026-11-10T08:40:00.000Z server 2026-11-08T20:00:00.000Z codex-rollout plan=prolite
+codex-main codex 7d 50 100 pct 2026-11-11T09:04:55.000Z server 2026-11-08T20:00:00.000Z codex-rollout plan=prolite"
+[ "$got" = "$want" ] \
+    && pass "collector takes the newest codex token_count by event time, one row per window" \
+    || fail "collector takes the newest codex token_count by event time, one row per window (got: $got)"
+OTHER="$TMPDIR_T/codex-home/codex-b"; mkdir -p "$OTHER"; cp -Rp "$CHOME/sessions" "$OTHER/"
+CODEX_HOME="$OTHER" node "$COLLECT" --root "$CROOT" >/dev/null 2>&1
+grep -q '"account":"codex-b"' "$CROOT/.brain/usage/codex-b.jsonl" 2>/dev/null \
+    && pass "a non-default CODEX_HOME is labelled by its basename" \
+    || fail "a non-default CODEX_HOME is labelled by its basename"
+EMPTY="$TMPDIR_T/codex-home/empty"; mkdir -p "$EMPTY/sessions"
+CODEX_HOME="$EMPTY" node "$COLLECT" --root "$CROOT" >/dev/null 2>&1 \
+    && fail "collector fails when no rate_limits event exists" || pass "collector fails when no rate_limits event exists"
+[ ! -e "$CROOT/.brain/usage/empty.jsonl" ] && pass "a failed collect writes no file" \
+    || fail "a failed collect writes no file"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
