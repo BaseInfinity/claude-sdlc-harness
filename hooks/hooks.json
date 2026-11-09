@@ -17,7 +17,6 @@
         "hooks": [
           {
             "type": "command",
-            "if": "Write(**/src/**) Edit(**/src/**) MultiEdit(**/src/**)",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/tdd-pretool-check.sh"
           }
         ]
@@ -52,6 +51,10 @@
           {
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/token-spike-check.sh"
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/sdlc-prompt-check.sh"
           }
         ]
       }

@@ -60,6 +60,7 @@ Thank you for your interest in improving the SDLC Harness!
    ./tests/test-prompt-hook-fires-once.sh && \
    ./tests/test-baseline-fires-once.sh && \
    ./tests/test-tdd-pretool-fires-once.sh && \
+   ./tests/test-sdlc-skill-gate.sh && \
    ./tests/test-community-scanner.sh && \
    ./tests/test-community-fetch.sh && \
    ./tests/test-ground-truth.sh && \
