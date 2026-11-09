@@ -48,31 +48,34 @@ test_builder_is_opus() {
         fail "claude CLI not installed — builder unobservable"
         return
     fi
-    local init_out="$TEST_HOME/builder-init.json"
+    local init_out="$TEST_HOME/builder-init.ndjson"
     local rc=0 model
     # perl's alarm bounds the child, since stock macOS has no timeout(1). It
     # survives exec, so a hung session exits 142 instead of blocking the suite.
     perl -e 'alarm shift; exec @ARGV or die "exec: $!"' 180 \
         claude -p "Say only: OK" \
         --settings "$TEST_HOME/.claude/settings.json" \
-        --output-format json > "$init_out" 2> "$init_out.err" < /dev/null || rc=$?
+        --output-format stream-json --verbose > "$init_out" 2> "$init_out.err" < /dev/null || rc=$?
     if [ "$rc" -ne 0 ]; then
         fail "Builder session exited $rc (142 = no answer within 180s)"
         info "stderr: $(tail -c 300 "$init_out.err")"
         return
     fi
+    # json prints one result object, which names no model, unless the config
+    # sets verbose. stream-json --verbose always emits the init event as NDJSON.
     # The init event names the model before any work happens, so a session
     # that then failed would still report it. Require a successful result too.
     model=$(python3 -c "
 import json, sys
-try:
-    events = json.load(open(sys.argv[1]))
-except ValueError:
-    print('UNPARSEABLE OUTPUT')
-    sys.exit()
-if not isinstance(events, list):
-    print('NO EVENT LIST')
-    sys.exit()
+events = []
+for line in open(sys.argv[1]):
+    if not line.strip():
+        continue
+    try:
+        events.append(json.loads(line))
+    except ValueError:
+        print('UNPARSEABLE OUTPUT')
+        sys.exit()
 ok = any(e.get('type') == 'result' and e.get('subtype') == 'success'
          and e.get('is_error') is False for e in events)
 if not ok:
