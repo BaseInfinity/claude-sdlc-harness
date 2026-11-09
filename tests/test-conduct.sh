@@ -582,6 +582,14 @@ sset() { node "$STATUS" set --root "$FROOT" "$@" >/dev/null 2>&1; }
 sview() { node "$STATUS" --root "$FROOT" "$@" 2>&1; }
 fleet_hash() { sha "$FLEET"; }
 
+for flag in --help -h; do
+    got=$(node "$STATUS" "$flag" 2>&1); rc=$?
+    [ "$rc" = 0 ] && pass "status $flag exits 0" || fail "status $flag exits 0 (rc=$rc, got: $got)"
+    printf '%s\n' "$got" | head -1 | grep -qx 'Usage:' \
+        && printf '%s\n' "$got" | grep -qF 'status.cjs set --root R --controller LABEL' \
+        && pass "status $flag prints the usage text" || fail "status $flag prints the usage text (got: $got)"
+done
+
 sset --controller harness --workstream "Fleet Tracker!" --percent 5 --state in_flight \
     --next "design, then Sol" --evidence "scratchpad/x.md" \
     && pass "status set creates a row" || fail "status set creates a row"

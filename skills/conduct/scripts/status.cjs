@@ -280,8 +280,8 @@ function main() {
   if (Number.isNaN(now)) throw new Error("--now must be an ISO timestamp");
   const color = Boolean(process.stdout.isTTY) && !process.env.NO_COLOR;
   const fleet = render(load(fleetPath(args.root)), { controller: args.controller, now, color });
-  const usage = args.controller ? "" : `${renderUsage(latestUsage(loadUsage(args.root)), now)}\n`;
-  process.stdout.write(usage + fleet);
+  const usageText = args.controller ? "" : `${renderUsage(latestUsage(loadUsage(args.root)), now)}\n`;
+  process.stdout.write(usageText + fleet);
 }
 
 try {
