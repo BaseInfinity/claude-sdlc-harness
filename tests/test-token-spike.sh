@@ -400,7 +400,7 @@ test_concurrent_ingest_no_duplicate_session() {
     tmp=$(make_tmp_workspace)
     make_transcript "$tmp/transcripts/sess-conc.jsonl" "sess-conc" 10 100 50 1000 5
 
-    # Fire two ingests simultaneously. Without the mkdir lock, both can
+    # Fire two ingests simultaneously. Without the lock, both can
     # observe an empty seen_file and both append → 2 records for 1 session.
     "$ANALYTICS" --history "$tmp/.metrics/token-history.jsonl" \
         --transcript-dir "$tmp/transcripts" \
@@ -421,6 +421,43 @@ test_concurrent_ingest_no_duplicate_session() {
         pass "concurrent ingest is serialized — 1 record per session under simultaneous append"
     else
         fail "concurrent ingest race: $count lines, $uniq_count unique session_ids (want 1/1)"
+    fi
+    rm -rf "$tmp"
+}
+
+# The race above is intermittent: it only fails where `mkdir` is not atomic.
+# uutils mkdir 0.10.0 (Ubuntu 26.04 CI runners) checks path.exists(), then
+# maps a create_dir error to success when the path is a directory — so two
+# writers that both pass the exists-check both "acquire" a mkdir lock. Model
+# that mkdir with a shim, and slow jq so the two ingests always overlap.
+test_concurrent_ingest_lock_survives_non_atomic_mkdir() {
+    local tmp real_mkdir real_jq
+    tmp=$(make_tmp_workspace)
+    make_transcript "$tmp/transcripts/sess-shim.jsonl" "sess-shim" 10 100 50 1000 5
+    real_mkdir=$(command -v mkdir)
+    real_jq=$(command -v jq)
+    mkdir -p "$tmp/shim"
+    printf '#!/bin/bash\nexec "%s" -p "$@"\n' "$real_mkdir" > "$tmp/shim/mkdir"
+    printf '#!/bin/bash\nsleep 0.3\nexec "%s" "$@"\n' "$real_jq" > "$tmp/shim/jq"
+    chmod +x "$tmp/shim/mkdir" "$tmp/shim/jq"
+
+    PATH="$tmp/shim:$PATH" "$ANALYTICS" --history "$tmp/.metrics/token-history.jsonl" \
+        --transcript-dir "$tmp/transcripts" \
+        --ingest --no-skip-recent > /dev/null 2>&1 &
+    local p1=$!
+    PATH="$tmp/shim:$PATH" "$ANALYTICS" --history "$tmp/.metrics/token-history.jsonl" \
+        --transcript-dir "$tmp/transcripts" \
+        --ingest --no-skip-recent > /dev/null 2>&1 &
+    local p2=$!
+    wait "$p1" 2>/dev/null || true
+    wait "$p2" 2>/dev/null || true
+
+    local count
+    count=$(wc -l < "$tmp/.metrics/token-history.jsonl" | tr -d ' ')
+    if [ "$count" = "1" ]; then
+        pass "concurrent ingest stays serialized when mkdir is not atomic (uutils)"
+    else
+        fail "lock depends on mkdir atomicity: $count lines for 1 session (want 1)"
     fi
     rm -rf "$tmp"
 }
@@ -626,6 +663,7 @@ test_flat_baseline_small_uptick_does_not_fire
 test_flat_baseline_large_jump_still_fires
 test_privacy_string_values_coerced_to_zero
 test_concurrent_ingest_no_duplicate_session
+test_concurrent_ingest_lock_survives_non_atomic_mkdir
 test_hook_silent_without_metrics_dir
 test_hook_warns_on_spike
 test_cache_miss_pattern_triggers_spike_warning
