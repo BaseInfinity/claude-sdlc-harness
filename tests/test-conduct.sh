@@ -574,6 +574,265 @@ grep -q 'outbox/<req-id>.json' "$SKILL" && pass "SKILL.md transports the outbox 
 grep -qi 'agent input' "$SKILL" && pass "SKILL.md requires an agent input before it2api send" \
     || fail "SKILL.md requires an agent input before it2api send"
 
+echo "=== fleet status ==="
+STATUS="$SKILL_DIR/scripts/status.cjs"
+FROOT="$TMPDIR_T/fleet"; mkdir -p "$FROOT"
+FLEET="$FROOT/.brain/fleet.json"
+sset() { node "$STATUS" set --root "$FROOT" "$@" >/dev/null 2>&1; }
+sview() { node "$STATUS" --root "$FROOT" "$@" 2>&1; }
+fleet_hash() { sha "$FLEET"; }
+
+sset --controller harness --workstream "Fleet Tracker!" --percent 5 --state in_flight \
+    --next "design, then Sol" --evidence "scratchpad/x.md" \
+    && pass "status set creates a row" || fail "status set creates a row"
+got=$(python3 - "$FLEET" <<'PY'
+import json, sys, datetime
+rows = json.load(open(sys.argv[1]))["rows"]
+r = rows.get("HARNESS/fleet-tracker", {})
+datetime.datetime.fromisoformat(r.get("updated_at", "x").replace("Z", "+00:00"))
+print(sorted(rows), r["controller"], r["workstream"], r["percent"], r["state"],
+      repr(r["blocker_owner"]), r["next_step"], r["evidence"])
+PY
+)
+[ "$got" = "['HARNESS/fleet-tracker'] HARNESS Fleet Tracker! 5 in_flight '' design, then Sol scratchpad/x.md" ] \
+    && pass "row is keyed CONTROLLER/slug with every field and an ISO updated_at" \
+    || fail "row is keyed CONTROLLER/slug with every field and an ISO updated_at (got: $got)"
+sset --controller HARNESS --workstream "fleet tracker" --percent 40 --state blocked --blocker-owner Stefan
+got=$(python3 -c 'import json,sys; r=json.load(open(sys.argv[1]))["rows"]; print(len(r), r["HARNESS/fleet-tracker"]["percent"], r["HARNESS/fleet-tracker"]["blocker_owner"], repr(r["HARNESS/fleet-tracker"]["next_step"]))' "$FLEET")
+[ "$got" = "1 40 Stefan ''" ] && pass "set upserts the same slug, replacing the row" \
+    || fail "set upserts the same slug, replacing the row (got: $got)"
+ls "$FROOT/.brain" | grep -qv '^fleet.json$' \
+    && fail "atomic write leaves no temp file behind" || pass "atomic write leaves no temp file behind"
+
+before=$(fleet_hash)
+for bad in \
+    "unknown state|--controller HARNESS --workstream w --percent 1 --state stalled" \
+    "percent below 0|--controller HARNESS --workstream w --percent -1 --state planned" \
+    "percent above 100|--controller HARNESS --workstream w --percent 101 --state planned" \
+    "fractional percent|--controller HARNESS --workstream w --percent 5.5 --state planned" \
+    "non-numeric percent|--controller HARNESS --workstream w --percent abc --state planned" \
+    "blocked without an owner|--controller HARNESS --workstream w --percent 1 --state blocked" \
+    "an owner when not blocked|--controller HARNESS --workstream w --percent 1 --state done --blocker-owner Stefan" \
+    "unknown controller|--controller NOBODY --workstream w --percent 1 --state planned" \
+    "a workstream with no slug|--controller HARNESS --workstream !!! --percent 1 --state planned"; do
+    # shellcheck disable=SC2086
+    sset ${bad#*|} && fail "status set refuses ${bad%%|*}" || pass "status set refuses ${bad%%|*}"
+done
+[ "$(fleet_hash)" = "$before" ] && pass "refused sets leave fleet.json unchanged" \
+    || fail "refused sets leave fleet.json unchanged"
+(cd "$FROOT" && node "$STATUS" set --controller HARNESS --workstream w --percent 1 --state planned >/dev/null 2>&1) \
+    && fail "status set refuses a missing --root" || pass "status set refuses a missing --root"
+LROOT="$TMPDIR_T/linked"; OUTSIDE="$TMPDIR_T/outside"; mkdir -p "$LROOT" "$OUTSIDE"
+ln -s "$OUTSIDE" "$LROOT/.brain"
+node "$STATUS" set --root "$LROOT" --controller HARNESS --workstream w --percent 1 --state planned >/dev/null 2>&1 \
+    && fail "status set refuses a symlinked .brain" || pass "status set refuses a symlinked .brain"
+[ ! -e "$OUTSIDE/fleet.json" ] && pass "symlinked .brain target stays untouched" \
+    || fail "symlinked .brain target stays untouched"
+
+for case in "0|░░░░░░░░░░   0%" "5|█░░░░░░░░░   5%" "50|█████░░░░░  50%" "95|█████████░  95%" "99|█████████░  99%" \
+    "100|██████████ 100%"; do
+    sset --controller WINDOWS --workstream "bar" --percent "${case%%|*}" --state in_flight
+    sview --controller WINDOWS | grep -qF "${case#*|} bar" \
+        && pass "bar renders ${case%%|*}%" || fail "bar renders ${case%%|*}% (got: $(sview --controller WINDOWS))"
+done
+
+rm -f "$FLEET"
+sset --controller CODEX --workstream "c-done" --percent 100 --state done
+sset --controller CODEX --workstream "c-planned" --percent 0 --state planned
+sset --controller CODEX --workstream "c-blocked" --percent 9 --state blocked --blocker-owner Stefan
+sset --controller CODEX --workstream "c-flight" --percent 50 --state in_flight --next "ship it"
+sset --controller HARNESS --workstream "h" --percent 1 --state planned
+sset --controller CONDUCTOR --workstream "k" --percent 1 --state planned
+got=$(sview | grep -oE '^\[[A-Z]+\]|c-(done|planned|blocked|flight)' | tr '\n' ' ')
+[ "$got" = "[USAGE] [CONDUCTOR] [HARNESS] [CODEX] c-flight c-blocked c-planned c-done " ] \
+    && pass "sections in label order, rows in flight > blocked > planned > done, empty sections skipped" \
+    || fail "sections in label order, rows in flight > blocked > planned > done (got: $got)"
+sview | grep -qF 'blocked on Stefan' && pass "blocked rows name who they wait on" \
+    || fail "blocked rows name who they wait on"
+sview | grep -qF 'next: ship it' && pass "rows show the next step" || fail "rows show the next step"
+got=$(sview --controller codex | grep -c '^\[')
+[ "$got" = 1 ] && pass "--controller filters to one section" || fail "--controller filters to one section (got: $got)"
+
+STAMP=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["rows"]["HARNESS/h"]["updated_at"])' "$FLEET")
+later() { python3 -c 'import datetime,sys; t=datetime.datetime.fromisoformat(sys.argv[1].replace("Z","+00:00")); print((t+datetime.timedelta(hours=float(sys.argv[2]))).isoformat())' "$STAMP" "$1"; }
+sview --controller HARNESS --now "$(later 25)" | grep -qF 'STALE' \
+    && pass "a row over 24h old is marked STALE" || fail "a row over 24h old is marked STALE"
+sview --controller HARNESS --now "$(later 23)" | grep -qF 'STALE' \
+    && fail "a row under 24h old is not STALE" || pass "a row under 24h old is not STALE"
+
+ESC=$(printf '\033')
+sview | grep -q "$ESC" && fail "piped output carries no ANSI" || pass "piped output carries no ANSI"
+on_tty() { # run a command under a pseudo-terminal (BSD or util-linux script)
+    # stdin is /dev/null because BSD script exits 1 on a socket stdin
+    # ("tcgetattr/ioctl: Operation not supported on socket") before running anything.
+    if script --version >/dev/null 2>&1; then script -qec "$*" /dev/null < /dev/null
+    else script -q /dev/null "$@" < /dev/null; fi
+}
+export -f on_tty
+# The TTY rows run with a socket on stdin, which is what the Claude Code Bash
+# tool hands its commands; it is the case that made these rows flake.
+socket_stdin() {
+    python3 -c 'import socket, subprocess, sys
+a, b = socket.socketpair()
+sys.exit(subprocess.run(sys.argv[1:], stdin=a).returncode)' "$@"
+}
+tty_view() { socket_stdin bash -c 'on_tty node "$0" --root "$1"' "$STATUS" "$FROOT"; }
+(unset NO_COLOR; tty_view) | grep -q "$ESC" \
+    && pass "a TTY gets ANSI color" || fail "a TTY gets ANSI color"
+got=$(NO_COLOR=1 tty_view)
+case "$got" in *"$ESC"*) fail "NO_COLOR suppresses ANSI on a TTY" ;;
+    *"[HARNESS]"*) pass "NO_COLOR suppresses ANSI on a TTY" ;;
+    *) fail "NO_COLOR suppresses ANSI on a TTY (no view rendered: $got)" ;; esac
+
+LROOT="$TMPDIR_T/fleet-link"; mkdir -p "$LROOT/.brain"; printf 'sentinel\n' > "$TMPDIR_T/link-target"
+ROOT="$LROOT" TARGET="$TMPDIR_T/link-target" STATUS="$STATUS" bash -c \
+    'ln -s "$TARGET" "$ROOT/.brain/fleet.json.$BASHPID.tmp"; exec node "$STATUS" set --root "$ROOT" --controller HARNESS --workstream w --percent 1 --state planned' >/dev/null 2>&1
+[ "$(cat "$TMPDIR_T/link-target")" = sentinel ] && pass "set never writes through a symlink planted at a PID temp path" \
+    || fail "set never writes through a symlink planted at a PID temp path"
+[ -L "$LROOT/.brain/fleet.json" ] && fail "set never installs a planted symlink as fleet.json" \
+    || pass "set never installs a planted symlink as fleet.json"
+
+echo "=== fleet usage ==="
+UROOT="$TMPDIR_T/usage"; UDIR="$UROOT/.brain/usage"; mkdir -p "$UDIR"
+UNOW="2026-11-08T12:00:00Z"
+uview() { TZ=UTC node "$STATUS" --root "$UROOT" --now "$UNOW" "$@" 2>&1; }
+row() { # account provider window used resets observed
+    printf '{"account":"%s","provider":"%s","window":"%s","used":%s,"limit":100,"unit":"pct","resets_at":"%s","source":"t","accuracy":"server","observed_at":"%s"}\n' "$@"
+}
+uview | grep -qxF '[USAGE]' && pass "an empty usage dir still renders [USAGE]" || fail "an empty usage dir still renders [USAGE]"
+[ "$(uview | sed -n 2,3p)" = "  claude-main unknown" ] && pass "with no rows and no aliases only claude-main prints, unknown" \
+    || fail "with no rows and no aliases only claude-main prints, unknown (got: $(uview))"
+{ row codex-56c919 codex 7d 40 2026-11-10T18:00:00Z 2026-11-08T10:00:00Z
+  row codex-56c919 codex 7d 50.9 2026-11-10T18:00:00Z 2026-11-08T11:00:00Z
+  row codex-56c919 codex 7d 10 2026-11-10T18:00:00Z 2026-11-08T09:00:00Z; } > "$UDIR/codex-56c919.jsonl"
+{ row claude-main claude 5h 3 2026-11-08T14:30:00Z 2026-11-08T05:00:00Z
+  echo 'not json'
+  row claude-main claude 7d 100 2026-11-13T09:05:00Z 2026-11-08T07:00:00Z; } > "$UDIR/claude-main.jsonl"
+echo 'not json' > "$UDIR/claude-b.jsonl"
+uview | grep -qxF '  codex-56c919 codex 7d  █████░░░░░ 50% · resets Tue 18:00' \
+    && pass "an unaliased account prints its raw label" || fail "an unaliased account prints its raw label (got: $(uview))"
+echo '{"codex-56c919": "codex-main", "codex-ffffff": "codex-spare"}' > "$UDIR/accounts.json"
+uview | grep -qxF '  codex-main codex 7d  █████░░░░░ 50% · resets Tue 18:00' \
+    && pass "newest observed_at wins, aliased, bar and used% floor, reset in local time" \
+    || fail "newest observed_at wins, aliased, bar and used% floor, reset in local time (got: $(uview))"
+uview | grep -q 'codex-56c919' && fail "an aliased raw label is not printed" || pass "an aliased raw label is not printed"
+uview | grep -qxF '  codex-spare unknown' && pass "an alias with no row prints unknown" \
+    || fail "an alias with no row prints unknown (got: $(uview))"
+[ "$(uview | grep -c '^  codex-main')" = 1 ] && pass "one line per account/provider/window" \
+    || fail "one line per account/provider/window (got: $(uview))"
+uview | grep -qxF '  claude-main claude 5h  █░░░░░░░░░ 3% · resets Sun 14:30  STALE 7h' \
+    && pass "a usage row over 6h old is marked STALE" || fail "a usage row over 6h old is marked STALE (got: $(uview))"
+uview | grep -qxF '  claude-main claude 7d  ██████████ 100% · resets Fri 09:05' \
+    && pass "a usage row under 6h old is not STALE" || fail "a usage row under 6h old is not STALE (got: $(uview))"
+uview | grep -qxF '  claude-b unknown' && pass "a usage file with no valid row prints unknown" \
+    || fail "a usage file with no valid row prints unknown (got: $(uview))"
+got=$(uview | grep -oE '^  [a-z0-9-]+ ' | tr -d ' ' | tr '\n' ' ')
+[ "$got" = "claude-b claude-main claude-main codex-main codex-spare " ] && pass "usage lines sort by account, then window" \
+    || fail "usage lines sort by account, then window (got: $got)"
+echo '{"codex-56c919": ' > "$UDIR/accounts.json"
+uview | grep -q 'accounts.json' && pass "a malformed accounts.json is reported by name" \
+    || fail "a malformed accounts.json is reported by name (got: $(uview))"
+echo '{"codex-56c919": "codex-main"}' > "$UDIR/accounts.json"
+node "$STATUS" set --root "$UROOT" --controller HARNESS --workstream w --percent 1 --state planned >/dev/null
+got=$(uview | grep -nE '^\[(USAGE|HARNESS)\]' | tr '\n' ' ')
+case "$got" in 1:\[USAGE\]*\[HARNESS\]*) pass "[USAGE] renders above the controllers" ;;
+    *) fail "[USAGE] renders above the controllers (got: $got)" ;; esac
+NROOT="$TMPDIR_T/usage-units"; mkdir -p "$NROOT/.brain/usage"
+nrow() { # account window used unit accuracy
+    printf '{"account":"%s","provider":"p","window":"%s","used":%s,"limit":100,"unit":"%s","resets_at":"2026-11-10T18:00:00Z","source":"t","accuracy":"%s","observed_at":"2026-11-08T11:00:00Z"}\n' "$@"
+}
+{ nrow claude-main 5h 40 pct server; nrow claude-main tok 12345 tokens server
+  nrow claude-main 5h 777 tokens server | sed 's/T11:00/T11:30/'; } > "$NROOT/.brain/usage/claude-main.jsonl"
+nrow spend month 42.5 usd server > "$NROOT/.brain/usage/spend.jsonl"
+nrow codex-56c919 7d 30 pct unattributed > "$NROOT/.brain/usage/codex-56c919.jsonl"
+nview() { TZ=UTC node "$STATUS" --root "$NROOT" --now "$UNOW" 2>&1; }
+nview | grep -q ' tok ' && fail "a tokens row is not rendered (got: $(nview))" || pass "a tokens row is not rendered"
+nview | grep -qxF '  claude-main p 5h  ████░░░░░░ 40% · resets Tue 18:00' \
+    && pass "a pct row beside a newer tokens row of the same window still renders" \
+    || fail "a pct row beside a newer tokens row of the same window still renders (got: $(nview))"
+nview | grep -qxF '  spend unknown' && pass "an account with only a usd row prints unknown" \
+    || fail "an account with only a usd row prints unknown (got: $(nview))"
+nview | grep -qxF '  codex-56c919 p 7d  ███░░░░░░░ 30% · resets Tue 18:00 · unattributed' \
+    && pass "an unattributed row says so" || fail "an unattributed row says so (got: $(nview))"
+
+echo "=== codex usage collector ==="
+COLLECT="$REPO_ROOT/scripts/usage-codex.cjs"
+CHOME="$TMPDIR_T/codex-home/.codex"; CROOT="$TMPDIR_T/collect"; CS="$CHOME/sessions/2026/11"
+mkdir -p "$CS/07" "$CS/08" "$CHOME/sessions/2026/10/04" "$CROOT"
+meta() { # creator_account_id, or "" for a thread that carries none
+    if [ -n "$1" ]; then printf '{"timestamp":"2026-11-01T00:00:00.000Z","type":"session_meta","payload":{"id":"t","creator_account_id":"%s"}}\n' "$1"
+    else printf '{"timestamp":"2026-11-01T00:00:00.000Z","type":"session_meta","payload":{"id":"t"}}\n'; fi
+}
+tc() { # timestamp limit_id primary secondary [plan_type]
+    printf '{"timestamp":"%s","type":"event_msg","payload":{"type":"token_count","info":null,"rate_limits":{"limit_id":"%s","limit_name":null,"primary":%s,"secondary":%s,"credits":null,"plan_type":"%s"}}}\n' \
+        "$1" "$2" "$3" "$4" "${5:-prolite}"
+}
+W7='{"used_percent":50.0,"window_minutes":10080,"resets_at":1794387895}'
+W5='{"used_percent":12.5,"window_minutes":300,"resets_at":1794300000}'
+A=56c919aa-1111-2222-3333-444455556666; B=aed3bdbb-1111-2222-3333-444455556666
+# Account A: the mtime-newest file holds an OLDER event, and so does the last
+# line of the other file, so selection must go by event time. Later-stamped
+# non-token_count lines that mention rate_limits, and a premium limit, are noise.
+{ meta "$A"
+  tc 2026-11-08T20:00:00.000Z codex "$W7" "$W5"
+  echo '{"timestamp":"2026-11-08T23:00:00.000Z","type":"response_item","payload":{"type":"message","text":"rate_limits"}}'
+  echo "{\"timestamp\":\"2026-11-08T23:30:00.000Z\",\"type\":\"response_item\",\"payload\":{\"type\":\"token_count\",\"rate_limits\":{\"limit_id\":\"codex\",\"primary\":$W7}}}"
+  tc 2026-11-08T22:00:00.000Z premium null null
+  tc 2026-11-08T18:00:00.000Z codex "$W7" null; } > "$CS/07/rollout-old.jsonl"
+{ meta "$A"; tc 2026-11-08T19:00:00.000Z codex '{"used_percent":9.0,"window_minutes":10080,"resets_at":1794387895}' null; } \
+    > "$CS/08/rollout-new.jsonl"
+# A thread with no creator id holds the newest event of all: it names nobody.
+{ meta ""; tc 2026-11-08T23:45:00.000Z codex '{"used_percent":77.0,"window_minutes":10080,"resets_at":1794387895}' null; } \
+    > "$CS/08/rollout-anon.jsonl"
+# A thread created by A and resumed under another login: the plan changes
+# mid-thread, so its readings, newest of A's, belong to nobody provably.
+{ meta "$A"; tc 2026-11-08T21:00:00.000Z codex "$W7" null
+  tc 2026-11-08T21:30:00.000Z codex '{"used_percent":99.0,"window_minutes":10080,"resets_at":1794387895}' null plus; } \
+    > "$CS/08/rollout-resumed.jsonl"
+# Account B: one old thread, older than every file of A.
+{ meta "$B"; tc 2026-10-04T10:00:00.000Z codex '{"used_percent":30.0,"window_minutes":10080,"resets_at":1791580818}' null; } \
+    > "$CHOME/sessions/2026/10/04/rollout-b.jsonl"
+touch -t 202611082100 "$CS/07/rollout-old.jsonl"
+touch -t 202611082300 "$CS/08/rollout-new.jsonl"
+touch -t 202611082345 "$CS/08/rollout-anon.jsonl"
+touch -t 202611082130 "$CS/08/rollout-resumed.jsonl"
+touch -t 202610041000 "$CHOME/sessions/2026/10/04/rollout-b.jsonl"
+CODEX_HOME="$CHOME" node "$COLLECT" --root "$CROOT" >/dev/null 2>&1 \
+    && pass "collector runs against a fixture CODEX_HOME" || fail "collector runs against a fixture CODEX_HOME"
+rows_of() { python3 - "$1" <<'PY'
+import json, sys
+for r in (json.loads(l) for l in open(sys.argv[1])):
+    print(r["account"], r["provider"], r["window"], r["used"], r["limit"], r["unit"], r["resets_at"],
+          r["accuracy"], r["observed_at"], r["source"])
+PY
+}
+got=$(rows_of "$CROOT/.brain/usage/codex-56c919.jsonl" 2>&1)
+want="codex-56c919 codex 5h 12.5 100 pct 2026-11-10T08:40:00.000Z unattributed 2026-11-08T20:00:00.000Z codex-rollout plan=prolite
+codex-56c919 codex 7d 50 100 pct 2026-11-11T09:04:55.000Z unattributed 2026-11-08T20:00:00.000Z codex-rollout plan=prolite"
+[ "$got" = "$want" ] \
+    && pass "collector takes each account's newest codex token_count by event time, one row per window, skips a resumed-under-another-login thread, marks rows unattributed" \
+    || fail "collector takes each account's newest codex token_count by event time, one row per window, skips a resumed-under-another-login thread, marks rows unattributed (got: $got)"
+got=$(rows_of "$CROOT/.brain/usage/codex-aed3bd.jsonl" 2>&1)
+[ "$got" = "codex-aed3bd codex 7d 30 100 pct 2026-10-09T21:20:18.000Z unattributed 2026-10-04T10:00:00.000Z codex-rollout plan=prolite" ] \
+    && pass "a second creator_account_id gets its own rows, labelled by its prefix" \
+    || fail "a second creator_account_id gets its own rows, labelled by its prefix (got: $got)"
+[ "$(ls "$CROOT/.brain/usage")" = "codex-56c919.jsonl
+codex-aed3bd.jsonl" ] && pass "a thread with no creator_account_id is attributed to nobody" \
+    || fail "a thread with no creator_account_id is attributed to nobody (got: $(ls "$CROOT/.brain/usage"))"
+EMPTY="$TMPDIR_T/codex-home/empty"; EROOT="$TMPDIR_T/collect-empty"; mkdir -p "$EMPTY/sessions" "$EROOT"
+meta "" > "$EMPTY/sessions/rollout-anon.jsonl"; tc 2026-11-08T10:00:00.000Z codex "$W7" null >> "$EMPTY/sessions/rollout-anon.jsonl"
+CODEX_HOME="$EMPTY" node "$COLLECT" --root "$EROOT" >/dev/null 2>&1 \
+    && fail "collector fails when no attributable rate_limits event exists" \
+    || pass "collector fails when no attributable rate_limits event exists"
+[ ! -e "$EROOT/.brain" ] && pass "a failed collect writes nothing" || fail "a failed collect writes nothing"
+SROOT="$TMPDIR_T/collect-link"; mkdir -p "$SROOT/.brain/usage"; printf 'sentinel\n' > "$TMPDIR_T/collect-target"
+ln -s "$TMPDIR_T/collect-target" "$SROOT/.brain/usage/codex-56c919.jsonl"
+CODEX_HOME="$CHOME" node "$COLLECT" --root "$SROOT" >/dev/null 2>&1 \
+    && fail "collector refuses a symlinked output file" || pass "collector refuses a symlinked output file"
+[ "$(cat "$TMPDIR_T/collect-target")" = sentinel ] && pass "collector never appends through a symlink" \
+    || fail "collector never appends through a symlink"
+[ ! -e "$SROOT/.brain/usage/codex-aed3bd.jsonl" ] && pass "a refused collect writes no other account's file" \
+    || fail "a refused collect writes no other account's file"
 NS=$(awk '/^### Never stall on the human/{f=1;next} /^##/{f=0} f' "$SKILL" | tr '\n' ' ')
 awk '/^## Conductor, controllers and workers/{f=1;next} /^## /{f=0} f' "$SKILL" \
     | grep -q '^### Never stall on the human' \
