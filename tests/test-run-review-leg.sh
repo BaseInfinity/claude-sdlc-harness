@@ -80,6 +80,9 @@ for arg in "$@"; do
     prev="$arg"
 done
 [ -n "${STUB_MODEL_FILE:-}" ] && printf '%s' "$MODEL_ARG" > "$STUB_MODEL_FILE"
+# Full argv, one arg per line, so a row can count sandbox flags. Real codex
+# refuses a second `-s` outright, so the count is the observable that matters.
+[ -n "${STUB_ARGV_FILE:-}" ] && printf '%s\n' "$@" > "$STUB_ARGV_FILE"
 # Recorded so a row can pin that --output-schema was actually PASSED. Review
 # caught that nothing did: the stub ignored the flag, so deleting it from the
 # launcher left the whole suite green while every real leg lost the contract
@@ -536,6 +539,56 @@ if [ -s "$modelfile" ] && grep -qF 'gpt-5.6-sol' "$modelfile"; then
 else
     fail "REVIEW_MODEL override not passed (got: $(cat "$modelfile" 2>/dev/null))"
 fi
+
+# THE SANDBOX (review-leg-sandbox). The launcher passes `-s danger-full-access`
+# by default: a read-only leg starts and reads, but cannot write $TMPDIR, so no
+# suite with a mktemp guard can run (probed against codex 0.167.0). A caller
+# that passes its own sandbox flag must get exactly that one, because real
+# codex rejects a second `-s` and the leg never starts.
+#
+# sandbox_flags ARGVFILE -> prints "COUNT VALUE..." for every -s/--sandbox form.
+# The prompt is the arg right after the --output-last-message value; it is
+# skipped, so a prompt that reads like a flag is not counted as one.
+sandbox_flags() {
+    awk '
+        pp == "--output-last-message" { pp = prev; prev = "<prompt>"; next }
+        prev == "-s" || prev == "--sandbox" { vals = vals " " $0 }
+        $0 == "-s" || $0 == "--sandbox" { n++ }
+        /^--sandbox=/ { n++; vals = vals " " substr($0, 11) }
+        { pp = prev; prev = $0 }
+        END { printf "%d%s", n, vals }
+    ' "$1"
+}
+
+check_sandbox() {
+    local desc="$1" expected="$2"; shift 2
+    local out argvfile got
+    out=$(new_leg)
+    argvfile="$(dirname "$out")/argv"
+    set +e
+    STUB_ARGV_FILE="$argvfile" STUB_STDOUT='ok' STUB_EXIT=0 \
+        "$RUNNER" "$out" "$@" >/dev/null 2>&1
+    rc=$?
+    set -e
+    check_rc "$desc: leg completes" 0 "$rc"
+    got=$(sandbox_flags "$argvfile" 2>/dev/null)
+    if [ "$got" = "$expected" ]; then
+        pass "$desc: codex saw exactly '$expected'"
+    else
+        fail "$desc: expected sandbox flags '$expected', codex saw '$got'"
+    fi
+}
+
+check_sandbox "default sandbox" "1 danger-full-access" 'review this'
+check_sandbox "caller --sandbox read-only" "1 read-only" \
+    'review this' --sandbox read-only
+check_sandbox "caller -s read-only" "1 read-only" 'review this' -s read-only
+check_sandbox "caller --sandbox=read-only" "1 read-only" \
+    'review this' --sandbox=read-only
+# Negative fixture: the PROMPT is not a flag. A prompt that happens to read
+# `--sandbox` must not strip the default.
+check_sandbox "prompt text '--sandbox' is not a flag" "1 danger-full-access" \
+    '--sandbox'
 
 echo ""
 echo "=== Results ==="

@@ -5,6 +5,13 @@
 # Usage:
 #   scripts/run-review-leg.sh OUTPUT_FILE PROMPT [EXTRA_CODEX_ARGS...]
 #
+# The sandbox defaults to `danger-full-access`. Pass `--sandbox MODE` (or
+# `-s MODE`, `--sandbox=MODE`) in EXTRA_CODEX_ARGS to replace it; the launcher
+# then omits its own, because codex rejects a second sandbox flag. A
+# `read-only` leg starts, reads files and runs git, but every write is denied,
+# $TMPDIR included — so it cannot run a suite that makes a temp dir, and a
+# reviewer will see those suites fail with "Operation not permitted".
+#
 # Run it as a background task. The task's exit status IS the leg's verdict:
 # 0 completed, non-zero failed, nothing by your deadline means inspect and
 # relaunch. There is no separate waiter to consult and nothing to poll.
@@ -254,11 +261,20 @@ rm -f "$VERDICT"
 # and INT to the child first. `wait` returns >128 when interrupted by a signal,
 # so the status is re-taken after the trap fires to get codex's real one.
 # Written for bash 3.2 — macOS ships nothing newer.
+# The caller's sandbox flag, if any, replaces the default. $1 is the prompt,
+# never a flag, so the scan starts after it.
+SANDBOX_ARGS=(-s danger-full-access)
+for arg in "${@:2}"; do
+    case "$arg" in
+        -s|--sandbox|--sandbox=*) SANDBOX_ARGS=() ;;
+    esac
+done
+
 set +e
 codex exec \
     -m "${REVIEW_MODEL:-gpt-5.6-sol}" \
     -c 'model_reasoning_effort="high"' \
-    -s danger-full-access \
+    ${SANDBOX_ARGS[@]+"${SANDBOX_ARGS[@]}"} \
     --output-schema "$SCHEMA" \
     --output-last-message "$VERDICT" \
     "$@" \
