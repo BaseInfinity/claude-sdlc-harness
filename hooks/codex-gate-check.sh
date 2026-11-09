@@ -680,8 +680,13 @@ GATE_RELOC_AFTER="(^|[[:space:];&|(){}!\`])(cd|pushd|popd)([[:space:];&|)]|\$)|-
 GATE_DIR_BARE="[^][[:space:];&|(){}<>'\"\\\\\$\`*?]+"
 GATE_DIR_RAW="('[^']*'|\\\\\"[^\"\\\\\$\`]*\\\\\"|${GATE_DIR_BARE})"
 GATE_CVAL='[^[:space:];&|]+'
-GATE_TARGET_SHAPE_TAIL="git([[:space:]]+(-C[[:space:]]+DIR|-c[[:space:]]+${GATE_CVAL}))*[[:space:]]+commit([[:space:]]|\$)"
-GATE_TARGET_SHAPE="^[[:space:]]*(cd[[:space:]]+DIR[[:space:]]*(&&;?|;)[[:space:]]*)*${GATE_TARGET_SHAPE_TAIL}"
+# The target shape with $1 as every DIR operand. Built by concatenation, never
+# `${shape//DIR/$dir}`: bash 5.2+ enables patsub_replacement, which turns the
+# `&` in a dir class into the matched text and strips the backslash from `\\"`,
+# and quoting the replacement to stop that leaves the quotes in on bash 3.2.
+gate_target_shape() {
+    printf '%s' "^[[:space:]]*(cd[[:space:]]+$1[[:space:]]*(&&;?|;)[[:space:]]*)*git([[:space:]]+(-C[[:space:]]+$1|-c[[:space:]]+${GATE_CVAL}))*[[:space:]]+commit([[:space:]]|\$)"
+}
 
 refuse_target() {
     echo "CROSS-MODEL REVIEW REQUIRED: could not resolve which repository this commit targets ($1), so there is no handoff to check it against. Relocate with a literal path only: 'git -C <dir> commit ...' or 'cd <dir> && git commit ...', one commit per command. $BYPASS_NOTE" >&2
@@ -743,8 +748,8 @@ join_target() {
 
 TARGET_DIR="$PWD"
 if printf '%s' "$MASKED_COMMAND" | grep -qE "$GATE_RELOC_TRIGGER"; then
-    MASKED_SHAPE="${GATE_TARGET_SHAPE//DIR/${GATE_DIR_BARE}}"
-    RAW_SHAPE="${GATE_TARGET_SHAPE//DIR/${GATE_DIR_RAW}}"
+    MASKED_SHAPE=$(gate_target_shape "$GATE_DIR_BARE")
+    RAW_SHAPE=$(gate_target_shape "$GATE_DIR_RAW")
     TARGET_PREFIX=$(printf '%s' "$MASKED_COMMAND" | grep -oE "$MASKED_SHAPE" | head -1) || TARGET_PREFIX=""
     RAW_PREFIX=$(printf '%s' "$COMMAND_VALUE" | grep -oE "$RAW_SHAPE" | head -1) || RAW_PREFIX=""
     # The raw reading is of NORMALISED text: a JSON `\n` is already `;` and a

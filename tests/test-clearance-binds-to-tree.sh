@@ -255,7 +255,7 @@ expect_allowed "unrelated command with a stale certification" "$REPO" "ls -la"
 # ---------------------------------------------------------------------------
 new_repo primary
 PRIMARY="$REPO"
-WT="$WORK/wt"
+WT="$WORK/wt-DIR"
 git -C "$PRIMARY" worktree add -q "$WT" -b wt-branch
 mkdir -p "$WT/.reviews" "$WT/sub"
 printf 'worktree change\n' > "$WT/file.txt"
@@ -275,7 +275,7 @@ expect_allowed "cd <worktree>; git commit (semicolon form)" "$PRIMARY" "cd $WT; 
 expect_allowed "git -C '<worktree>' commit (single-quoted literal path)" "$PRIMARY" "git -C '$WT' commit -m x"
 expect_allowed "git -C \"<worktree>\" commit (double-quoted literal path)" "$PRIMARY" "git -C \"$WT\" commit -m x"
 expect_allowed "git -C <worktree>/sub commit resolves to the worktree's toplevel" "$PRIMARY" "git -C $WT/sub commit -m x"
-expect_allowed "cd <parent> && git -C <relative> commit chains like the shell does" "$PRIMARY" "cd $WORK && git -C wt commit -m x"
+expect_allowed "cd <parent> && git -C <relative> commit chains like the shell does" "$PRIMARY" "cd $WORK && git -C wt-DIR commit -m x"
 expect_allowed "git commit -C <commit> is commit's own option, not a relocation" "$WT" "git commit -C HEAD"
 
 # Now the primary IS certified for its own index, and the worktree is not.
