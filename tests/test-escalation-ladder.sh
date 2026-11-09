@@ -39,6 +39,37 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Read a stream-json transcript, one JSON event per line. Prints the answer to
+# QUERY, or why there is none. "model" names the init event's model; "advisor"
+# names the advisor_tool_result block. Both require a successful result first.
+read_events() {
+    python3 -c "
+import json, sys
+events = []
+for line in open(sys.argv[1]):
+    if not line.strip():
+        continue
+    try:
+        events.append(json.loads(line))
+    except ValueError:
+        print('UNPARSEABLE OUTPUT')
+        sys.exit()
+ok = any(e.get('type') == 'result' and e.get('subtype') == 'success'
+         and e.get('is_error') is False for e in events)
+if not ok:
+    print('NO SUCCESSFUL RESULT')
+    sys.exit()
+if sys.argv[2] == 'model':
+    print(next((e.get('model', '') for e in events
+                if e.get('type') == 'system' and e.get('subtype') == 'init'), 'NO INIT EVENT'))
+else:
+    blocks = [b for e in events if e.get('type') == 'assistant'
+              for b in (e.get('message') or {}).get('content') or [] if isinstance(b, dict)]
+    print(next((b['type'] for b in blocks if b.get('type') == 'advisor_tool_result'),
+               'NO ADVISOR RESULT'))
+" "$1" "$2"
+}
+
 # --- Rung 1: Opus builder (observed from a live session) ---
 
 test_builder_is_opus() {
@@ -65,25 +96,7 @@ test_builder_is_opus() {
     # sets verbose. stream-json --verbose always emits the init event as NDJSON.
     # The init event names the model before any work happens, so a session
     # that then failed would still report it. Require a successful result too.
-    model=$(python3 -c "
-import json, sys
-events = []
-for line in open(sys.argv[1]):
-    if not line.strip():
-        continue
-    try:
-        events.append(json.loads(line))
-    except ValueError:
-        print('UNPARSEABLE OUTPUT')
-        sys.exit()
-ok = any(e.get('type') == 'result' and e.get('subtype') == 'success'
-         and e.get('is_error') is False for e in events)
-if not ok:
-    print('NO SUCCESSFUL RESULT')
-    sys.exit()
-print(next((e.get('model', '') for e in events
-            if e.get('type') == 'system' and e.get('subtype') == 'init'), 'NO INIT EVENT'))
-" "$init_out")
+    model=$(read_events "$init_out" model)
     if [[ "$model" == *"opus"* ]]; then
         pass "Builder session runs Opus: $model"
     else
@@ -173,23 +186,25 @@ test_advisor_reachable() {
         return
     fi
     info "Calling advisor() in isolated session (Fable 5)..."
-    local advisor_out="$TEST_HOME/advisor-response.json"
-    claude -p "Call advisor() now. Say only: ADVISOR_OK" \
+    local advisor_out="$TEST_HOME/advisor-response.ndjson"
+    local rc=0 answer
+    perl -e 'alarm shift; exec @ARGV or die "exec: $!"' 180 \
+        claude -p "Call advisor() now. Say only: ADVISOR_OK" \
         --settings "$TEST_HOME/.claude/settings.json" \
-        --output-format json > "$advisor_out" 2>&1 || true
-
-    if [ ! -s "$advisor_out" ]; then
-        fail "advisor() produced no output"
-        return
+        --output-format stream-json --verbose > "$advisor_out" 2> "$advisor_out.err" < /dev/null || rc=$?
+    if [ "$rc" -eq 0 ]; then
+        answer=$(read_events "$advisor_out" advisor)
+    else
+        answer="session exited $rc (142 = no answer within 180s)"
     fi
 
-    if grep -q '"advisor_tool_result"\|"advisor_redacted_result"' "$advisor_out"; then
+    if [ "$answer" = "advisor_tool_result" ]; then
         pass "advisor() returned an advisor_tool_result (Fable 5 responded)"
-    elif grep -q 'authentication_failed\|Not logged in' "$advisor_out"; then
+    elif grep -q 'authentication_failed\|Not logged in' "$advisor_out" "$advisor_out.err"; then
         fail "advisor() auth failed — check Max subscription"
     else
-        fail "advisor() output missing advisor_tool_result"
-        info "Output: $(tail -3 "$advisor_out")"
+        fail "advisor() returned no advisor_tool_result: $answer"
+        info "Output: $(tail -c 300 "$advisor_out") stderr: $(tail -c 300 "$advisor_out.err")"
     fi
 }
 
