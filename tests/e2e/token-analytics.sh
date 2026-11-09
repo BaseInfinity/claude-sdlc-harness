@@ -97,29 +97,32 @@ fi
 ingest_transcripts() {
     [ -d "$TRANSCRIPT_DIR" ] || return 0
 
-    # Atomic lock (mkdir is atomic on POSIX) to serialize concurrent ingests
-    # against shared $HISTORY_FILE. Two CC sessions starting simultaneously
-    # both call this hook; without a lock they race the seen-file → append
-    # window and can double-write the same session_id (Codex finding #4).
-    local lock_dir lock_acquired=false
-    lock_dir="$HISTORY_FILE.lock.d"
+    # Lock to serialize concurrent ingests against shared $HISTORY_FILE. Two
+    # CC sessions starting simultaneously both call this hook; without a lock
+    # they race the seen-file → append window and can double-write the same
+    # session_id (Codex finding #4). noclobber makes bash itself open the
+    # lock file with O_EXCL, so the kernel decides. Do not use `mkdir`: uutils
+    # mkdir 0.10.0 (Ubuntu 26.04) reports success when the directory already
+    # exists after a lost race, so two writers both took the lock.
+    local lock_file lock_acquired=false
+    lock_file="$HISTORY_FILE.lock"
     local lock_attempts=0
     while [ "$lock_attempts" -lt 50 ]; do
-        if mkdir "$lock_dir" 2>/dev/null; then
+        if (set -C; : > "$lock_file") 2>/dev/null; then
             lock_acquired=true
             break
         fi
-        # Stale lock detection: if the lock dir is older than 5 minutes,
+        # Stale lock detection: if the lock file is older than 5 minutes,
         # something crashed mid-ingest. Take it over.
-        if [ -d "$lock_dir" ]; then
+        if [ -f "$lock_file" ]; then
             local lock_mtime
-            if stat -f %m "$lock_dir" > /dev/null 2>&1; then
-                lock_mtime=$(stat -f %m "$lock_dir")
+            if stat -f %m "$lock_file" > /dev/null 2>&1; then
+                lock_mtime=$(stat -f %m "$lock_file")
             else
-                lock_mtime=$(stat -c %Y "$lock_dir" 2>/dev/null || echo 0)
+                lock_mtime=$(stat -c %Y "$lock_file" 2>/dev/null || echo 0)
             fi
             if [ "$(($(date +%s) - lock_mtime))" -gt 300 ]; then
-                rm -rf "$lock_dir" 2>/dev/null || true
+                rm -f "$lock_file" 2>/dev/null || true
             fi
         fi
         sleep 0.1
@@ -130,7 +133,7 @@ ingest_transcripts() {
         return 0
     fi
     # shellcheck disable=SC2064
-    trap "rm -rf '$lock_dir' 2>/dev/null || true" RETURN
+    trap "rm -f '$lock_file' 2>/dev/null || true" RETURN
 
     # Existing session_ids in history (idempotency keys)
     local seen_file

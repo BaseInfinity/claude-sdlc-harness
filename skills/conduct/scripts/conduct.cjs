@@ -15,7 +15,7 @@ function fail(message) {
 
 function usage() {
   process.stdout.write(`Usage:
-  conduct.cjs emit --from ADDRESS --to ADDRESS --type TYPE --prompt TEXT [options]
+  conduct.cjs emit --from ADDRESS --to ADDRESS --type TYPE (--prompt TEXT | --prompt-file PATH) [options]
   conduct.cjs mark --run ID --id ID --status STATE [--root PATH] [--transport NAME]
 
 Options:
@@ -25,6 +25,7 @@ Options:
   --id ID           Message ID (default: generated UUID)
   --cwd PATH        Receiver working directory (default: root)
   --ref ID          Request ID for a result envelope
+  --prompt-file PATH Read the prompt as UTF-8 from PATH, or from stdin with -
   --transport NAME  Ledger transport label (default: pending)
   --status STATE    Initial: queued, sent, delivered, failed; results also received
                     Use mark for answered after a correlated result exists
@@ -35,7 +36,7 @@ function parseArgs(argv, command) {
   const args = {};
   const allowed = new Set(command === "mark"
     ? ["root", "run", "id", "transport", "status"]
-    : ["root", "run", "box", "id", "cwd", "ref", "from", "to", "type", "prompt", "transport", "status"]);
+    : ["root", "run", "box", "id", "cwd", "ref", "from", "to", "type", "prompt", "prompt-file", "transport", "status"]);
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (!arg.startsWith("--")) {
@@ -74,6 +75,24 @@ function requiredText(value, label, max = 100000) {
     throw new Error(`${label} exceeds ${max} characters`);
   }
   return value;
+}
+
+function promptText(args) {
+  const hasPrompt = Object.hasOwn(args, "prompt");
+  const hasPromptFile = Object.hasOwn(args, "prompt-file");
+  if (hasPrompt === hasPromptFile) {
+    throw new Error("provide exactly one of --prompt or --prompt-file");
+  }
+  if (hasPrompt) return requiredText(args.prompt, "prompt");
+
+  const promptFile = requiredText(args["prompt-file"], "prompt file", 32768);
+  let value;
+  try {
+    value = fs.readFileSync(promptFile === "-" ? 0 : promptFile, "utf8");
+  } catch (error) {
+    throw new Error(`cannot read prompt file: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  return requiredText(value, "prompt");
 }
 
 function loadTurns(ledgerPath) {
@@ -175,7 +194,7 @@ function emit(args) {
     throw new Error("requests require outbox and results require inbox");
   }
 
-  const prompt = requiredText(args.prompt, "prompt");
+  const prompt = promptText(args);
   const cwd = path.resolve(args.cwd || root);
   const ref = args.ref ? safeId(args.ref, "ref") : null;
   if (type === "result" && ref === null) throw new Error("result envelopes require --ref");
@@ -209,8 +228,17 @@ function emit(args) {
       }
     }
 
+    const serializedEnvelope = `${JSON.stringify(envelope, null, 2)}\n`;
+    let createdMessage = false;
     fs.mkdirSync(path.dirname(messagePath), { recursive: true });
-    fs.writeFileSync(messagePath, `${JSON.stringify(envelope, null, 2)}\n`, { flag: "wx" });
+    if (fs.existsSync(messagePath)) {
+      if (fs.readFileSync(messagePath, "utf8") !== serializedEnvelope) {
+        throw new Error(`message path already exists with different content: ${messagePath}`);
+      }
+    } else {
+      fs.writeFileSync(messagePath, serializedEnvelope, { flag: "wx" });
+      createdMessage = true;
+    }
     const turn = {
       ts: new Date().toISOString(),
       envelope,
@@ -220,7 +248,7 @@ function emit(args) {
     try {
       fs.appendFileSync(ledgerPath, `${JSON.stringify(turn)}\n`);
     } catch (error) {
-      fs.unlinkSync(messagePath);
+      if (createdMessage) fs.unlinkSync(messagePath);
       throw error;
     }
     return { run_id: runId, path: messagePath, envelope };
