@@ -631,6 +631,41 @@ if ! printf '%s' "$MASKED_COMMAND" | grep -qE \
     exit 0
 fi
 
+# sdlc-skill gate, commit-time late catch (Fable ruling 2026-11-08). The edit
+# gate in tdd-pretool-check.sh sees Write/Edit/MultiEdit only; a gated file
+# written through Bash surfaces here, once it is staged. It sits BEFORE every
+# review-state allow below on purpose: a green local run or a certified review
+# never substitutes for the skill having been loaded. Same predicate, same
+# gated paths (SDLC_TDD_SRC_PATTERN), same opt-out (SDLC_SKILL_GATE=off).
+# Limits, documented rather than modelled: it reads the index of the hook's
+# cwd, so `git commit -a` (unstaged edits) and `git -C <other>` are not seen.
+if [ "${SDLC_SKILL_GATE:-}" != "off" ] && find_sdlc_root; then
+    SDLC_GATED_STAGED=0
+    while IFS= read -r _staged; do
+        if sdlc_path_is_gated "$_staged"; then
+            SDLC_GATED_STAGED=1
+            break
+        fi
+    done <<< "$(git diff --cached --name-only 2>/dev/null || true)"
+    if [ "$SDLC_GATED_STAGED" -eq 1 ]; then
+        _sid=$(sdlc_json_field "$TOOL_INPUT" session_id)
+        _aid=$(sdlc_json_field "$TOOL_INPUT" agent_id)
+        _tp=$(sdlc_json_field "$TOOL_INPUT" transcript_path)
+        if ! sdlc_skill_on_record "$_sid" "$_aid" "$_tp"; then
+            case "$SDLC_RECORD" in
+                miss)
+                    echo "$SDLC_SKILL_BLOCK (Late catch at commit: gated files are staged and no sdlc invocation is on record for this context.)" >&2
+                    exit 2
+                    ;;
+                unreadable)
+                    printf '{"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": "%s"}}\n' \
+                        "$(sdlc_json_escape "$(sdlc_degraded_notice "$_tp")")"
+                    ;;
+            esac
+        fi
+    fi
+fi
+
 # #731: a green local test suite is commit authorization for development.
 # run-local.sh writes "TREE_SHA PASS" on exit 0. Cross-model review is
 # still required before merge (PR-level gate in scripts/merge-pr.sh).

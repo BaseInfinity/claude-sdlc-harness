@@ -1607,15 +1607,18 @@ test_if_field_targets_workflows() {
     fi
 }
 
-# Test: CLI template settings.json also has if field
+# Test: CLI template settings.json carries NO if field on the TDD hook.
+# sdlc-skill-gate ruling (2026-11-08): the script is the one path filter. A
+# consumer's `if: Write(src/**)` copy of it is what kept that consumer's TDD
+# hook from ever firing on code outside root src/; the template used to ship it.
 test_template_settings_has_if_field() {
     local template="$SCRIPT_DIR/../cli/templates/settings.json"
     local if_value
     if_value=$(jq -r '.hooks.PreToolUse[0].hooks[0].if // empty' "$template")
-    if [ -n "$if_value" ]; then
-        pass "CLI template settings.json PreToolUse hook has 'if' field"
+    if [ -z "$if_value" ]; then
+        pass "CLI template settings.json TDD hook has no 'if' pre-filter (the script filters)"
     else
-        fail "CLI template settings.json should have 'if' field matching repo settings"
+        fail "CLI template settings.json TDD hook carries an 'if' pre-filter again: $if_value"
     fi
 }
 
@@ -1640,28 +1643,11 @@ test_wizard_settings_example_has_if() {
     fi
 }
 
-# Test: if field in repo settings matches template settings (parity)
-test_if_field_parity() {
-    local settings="$SCRIPT_DIR/../.claude/settings.json"
-    local template="$SCRIPT_DIR/../cli/templates/settings.json"
-    local repo_if template_if
-    repo_if=$(jq -r '.hooks.PreToolUse[0].hooks[0].if // empty' "$settings")
-    template_if=$(jq -r '.hooks.PreToolUse[0].hooks[0].if // empty' "$template")
-    # Template uses /src/ pattern, repo uses .github/workflows/ — both should have if field
-    # but values differ because repo is customized for this meta-project
-    if [ -n "$repo_if" ] && [ -n "$template_if" ]; then
-        pass "Both repo and template settings have if field (parity check)"
-    else
-        fail "Both repo ($repo_if) and template ($template_if) should have if field"
-    fi
-}
-
 test_settings_has_if_field
 test_if_field_targets_workflows
 test_template_settings_has_if_field
 test_wizard_documents_if_field
 test_wizard_settings_example_has_if
-test_if_field_parity
 
 echo ""
 echo "--- CWD walk-up tests (#171: monorepo / nested project support) ---"
@@ -4714,54 +4700,41 @@ test_stop_hook_fires_once_per_session
 # GH #475 — the TDD hook shipped SILENTLY DEAD for monorepo consumers.
 #
 # Claude Code 2.1.214 changed single-segment `dir/**` hook `if:` conditions to
-# match only <cwd>/dir; any-depth matching now needs `**/dir/**`. hooks/hooks.json
-# gated the TDD hook on `Write(src/**)`, and hooks/ is in package.json's `files`,
-# so every consumer whose source is not at repo-root src/ — every monorepo,
-# packages/*/src/, apps/web/src/ — lost the gate with no error. This repo did not
-# notice because its own paths genuinely sit at the root.
+# match only <cwd>/dir. hooks/hooks.json gated the TDD hook on `Write(src/**)`,
+# so every consumer whose source is not at repo-root src/ lost the gate with no
+# error. The sdlc-skill-gate ruling (2026-11-08) closed the class instead of the
+# instance: the shipped manifests carry NO `if:` pre-filter at all, and the one
+# path filter lives in the script. A second copy of the filter is what killed a
+# consumer's TDD hook when its code did not live where the `if:` assumed.
 #
-# EXECUTES glob semantics against a real monorepo-shaped tree rather than
-# grepping hooks.json for a string, per AGENTS.md Code Review Rule 1.
+# Two halves, both executed: no shipped registration of the TDD hook has an
+# `if:`, and the script itself gates a nested monorepo src/ path.
 test_tdd_hook_matcher_covers_nested_src() {
-    local manifest="$SCRIPT_DIR/../hooks/hooks.json"
-    [ -f "$manifest" ] || { fail "hooks/hooks.json not found"; return; }
-
-    local result
-    result=$(python3 - "$manifest" <<'PYEOF'
-import glob, json, os, sys, tempfile, re
-manifest = json.load(open(sys.argv[1]))
-conds = []
-def walk(o):
-    if isinstance(o, dict):
-        if "if" in o and isinstance(o["if"], str): conds.append(o["if"])
-        for v in o.values(): walk(v)
-    elif isinstance(o, list):
-        for v in o: walk(v)
-walk(manifest)
-pats = sorted({m for c in conds for m in re.findall(r"\((.*?)\)", c)})
-if not pats:
-    print("NO_PATTERNS"); sys.exit()
-
-root = tempfile.mkdtemp()
-for d in ["src", "packages/api/src", "apps/web/src"]:
-    os.makedirs(os.path.join(root, d), exist_ok=True)
-    open(os.path.join(root, d, "widget.ts"), "w").close()
-os.chdir(root)
-
-bad = []
-for pat in pats:
-    hits = [h for h in glob.glob(pat, recursive=True) if h.endswith("widget.ts")]
-    nested = [h for h in hits if "/" in h.rstrip("widget.ts").rstrip("/").replace("src", "", 1)]
-    if not any(h.startswith(("packages/", "apps/")) for h in hits):
-        bad.append(f"{pat} matched only {sorted(hits)}")
-print("OK" if not bad else "BAD:" + "; ".join(bad))
+    local f bad=""
+    for f in "$SCRIPT_DIR/../hooks/hooks.json" "$SCRIPT_DIR/../cli/templates/settings.json"; do
+        [ -f "$f" ] || { fail "$f not found"; return; }
+        python3 - "$f" <<'PYEOF' || bad="$bad ${f##*/..}"
+import json, sys
+d = json.load(open(sys.argv[1]))["hooks"]
+tdd = [h for e in d.get("PreToolUse", []) for h in e.get("hooks", [])
+       if h.get("command", "").endswith("tdd-pretool-check.sh")]
+assert tdd and all("if" not in h for h in tdd)
 PYEOF
-)
-    case "$result" in
-        OK) pass "TDD hook if: patterns match nested source dirs (monorepo consumers keep the gate)" ;;
-        NO_PATTERNS) fail "no if: patterns found in hooks/hooks.json — the extractor broke, not the manifest" ;;
-        *) fail "GH #475: a shipped hook if: pattern does NOT match nested source — the gate is silently dead for monorepo consumers. $result" ;;
-    esac
+    done
+    if [ -z "$bad" ]; then
+        pass "GH #475: no shipped TDD hook registration carries an if: pre-filter"
+    else
+        fail "GH #475: an if: pre-filter is back on the TDD hook in:$bad"
+    fi
+
+    local out
+    out=$(echo '{"tool_input":{"file_path":"/repo/packages/api/src/widget.ts"}}' \
+        | SDLC_TDD_SRC_PATTERN= "$HOOKS_DIR/tdd-pretool-check.sh" 2>/dev/null || true)
+    if echo "$out" | grep -q "TDD CHECK"; then
+        pass "GH #475: the script's default pattern gates packages/api/src/ (monorepo consumers keep the gate)"
+    else
+        fail "GH #475: nested src/ is not gated by the script's default pattern. Output: $out"
+    fi
 }
 test_tdd_hook_matcher_covers_nested_src
 

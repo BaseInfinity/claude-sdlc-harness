@@ -555,9 +555,9 @@ CC 2.1.118 introduced `type: "mcp_tool"` for hooks — a hook can now directly i
 
 **Per-hook decision** (each row applies at least one criterion explicitly):
 
-- **`sdlc-prompt-check.sh`** (UserPromptSubmit, ~137 lines) — emits the SDLC BASELINE text on every prompt (fires-once-per-session sentinel), plus a claude-setup-wizard redirect when SDLC.md/TESTING.md are missing. Decision: **Stay bash.** Portability criterion: same script ships to Codex sibling unchanged. Local-state criterion: sentinel cache is local-only. **#236(b) 2026-07-06:** the ROADMAP #195 effort-bump signal log described here previously was removed — never fired in ~2 months of live use.
+- **`sdlc-prompt-check.sh`** (UserPromptSubmit, ~163 lines) — emits the SDLC BASELINE text on every prompt (fires-once-per-session sentinel, re-armed on SessionStart `compact`; it also writes the sdlc-skill gate memo on PostToolUse `Skill`), plus a claude-setup-wizard redirect when SDLC.md/TESTING.md are missing. Decision: **Stay bash.** Portability criterion: same script ships to Codex sibling unchanged. Local-state criterion: sentinel cache is local-only. **#236(b) 2026-07-06:** the ROADMAP #195 effort-bump signal log described here previously was removed — never fired in ~2 months of live use.
 - **`instructions-loaded-check.sh`** (~291 lines) — InstructionsLoaded event; wizard-version + CC-version staleness nudges (both npm-cached daily), cross-model-review staleness check, autocompact compound-misconfig check, dual-channel-install check. Decision: **Stay bash.** Portability criterion: Codex sibling has its own equivalent of session-start validation; bash port is direct. Local-state criterion: cache files are local. **#236(b) 2026-07-06:** the SDLC.md/TESTING.md missing-file warning previously described here was removed (redundant with `sdlc-prompt-check.sh`'s louder version).
-- **`tdd-pretool-check.sh`** (~129 lines) — PreToolUse on Write/Edit/MultiEdit; emits a TDD reminder, and (since #436) **blocks** with `exit 2` when a `src/**` write (or `SDLC_TDD_SRC_PATTERN`-overridden path, added #236(b) for this repo's own `src/`-less dogfooding) happens before any test file was touched this session (an edit-ordering proxy for TDD RED, session-scoped via a cache-dir sentinel). Decision: **Stay bash.** Fail-closed gating criterion applies now that this hook blocks: bash `exit 2` fails closed by definition, whereas an `mcp_tool` hook's block decision is lost if the MCP server errors — wrong default for a gate. Portability criterion: still trivially portable.
+- **`tdd-pretool-check.sh`** (~147 lines) — PreToolUse on Write/Edit/MultiEdit; blocks a gated edit with no `sdlc` invocation on record (the sdlc-skill gate), emits a TDD reminder, and (since #436) **blocks** with `exit 2` when a `src/**` write (or `SDLC_TDD_SRC_PATTERN`-overridden path, added #236(b) for this repo's own `src/`-less dogfooding) happens before any test file was touched this session (an edit-ordering proxy for TDD RED, session-scoped via a cache-dir sentinel). Decision: **Stay bash.** Fail-closed gating criterion applies now that this hook blocks: bash `exit 2` fails closed by definition, whereas an `mcp_tool` hook's block decision is lost if the MCP server errors — wrong default for a gate. Portability criterion: still trivially portable.
 - **`model-effort-check.sh`** (~87 lines) — SessionStart event; reads `CLAUDE_CODE_EFFORT_LEVEL` env var (falling back to `effortLevel` in the settings cascade), emits nothing when effort is `high`/`xhigh`/`max`/unset, otherwise a loud warning. Decision: **Stay bash.** Portability criterion: env-var read maps 1:1 to any agent runtime. Local-state criterion: not applicable, hook is stateless. **#236(b) 2026-07-06:** unset used to loud-warn too (CC's own default state) — now silent; only an explicit low-effort value or the settings-only-`max` quirk warns.
 - **`precompact-seam-check.sh`** (~101 lines) — PreCompact event (matcher: `manual`); blocks manual `/compact` with exit 2 + stderr message when a git rebase/merge/cherry-pick is in progress. Decision: **Stay bash.** Fail-closed gating criterion: bash exit 2 fails closed by definition; an MCP `mcp_tool` hook returning `decision: "block"` works on the happy path, but if the MCP server crashes/times out the action proceeds — that flips the safety property from fail-closed to fail-open. For a hook whose entire job is to prevent context loss at bad seams, fail-open is the wrong default. **#236(b) 2026-07-06:** this hook used to also block on `.reviews/handoff.json` being `PENDING_*` (mid cross-model-review-round), with 3 self-heal paths mitigating that branch's false-positive rate — removed; every real firing on record was a false positive, never a true positive.
 
@@ -1296,7 +1296,7 @@ jq '.candidates' digest.json
 
 CC 2.1.118 shipped a fix for `prompt` hooks double-firing when an agent-hook verifier subagent itself made tool calls. The bug would manifest as duplicate `SDLC BASELINE` injections per `UserPromptSubmit` — context bloat plus possible confusion. The dual-channel (project + plugin) double-print is already handled by `dedupe_plugin_or_project` in v1.37.1; this section is the runtime check for the *CC-internal* double-fire case.
 
-`hooks/sdlc-prompt-check.sh` ships an opt-in instrumentation: when the env var `SDLC_HOOK_FIRE_LOG` is set, every post-dedupe invocation appends one tab-separated record (`<unix-ts>\t<pid>\tsdlc-prompt-check`) to that log. Counting lines per prompt tells you whether CC fired the hook once or twice.
+`hooks/sdlc-prompt-check.sh` ships an opt-in instrumentation: when the env var `SDLC_HOOK_FIRE_LOG` is set, every post-dedupe prompt appends one tab-separated record (its `PostToolUse` and `SessionStart` runs log nothing) (`<unix-ts>\t<pid>\tsdlc-prompt-check`) to that log. Counting lines per prompt tells you whether CC fired the hook once or twice.
 
 **Maintainer procedure (real session):**
 
@@ -2285,9 +2285,10 @@ The `permissions.allow` array is auto-generated based on your stack detected in 
 | Hook | When It Fires | Purpose |
 |------|---------------|---------|
 | `UserPromptSubmit` | Every message you send | Baseline SDLC reminder, skill auto-invoke |
-| `PreToolUse` | Before Claude edits files | TDD check: "Did you write the test first?" Uses `if` field to only fire on source files |
+| `PreToolUse` | Before Claude edits files | sdlc-skill gate, then TDD check: "Did you write the test first?" The script filters to source files (`SDLC_TDD_SRC_PATTERN`); the shipped manifests carry no `if` pre-filter |
+| `PostToolUse` (matcher `Skill`) | After a Skill tool call | Records that `sdlc` was invoked in this context, for the sdlc-skill gate |
 | `InstructionsLoaded` | On first SDLC.md/CLAUDE.md load | Staleness nudges (wizard version, review-protocol reminders, CC release alerts) |
-| `SessionStart` | On `claude` startup | Detect stale effort setting / model upgrades |
+| `SessionStart` | On `claude` startup, and after compaction | Detect stale effort setting / model upgrades; after a compaction, re-arm the BASELINE reminder |
 | `PreCompact` (manual only) | When user runs `/compact` | **Seam gate** — blocks manual compact when `.reviews/handoff.json` is `PENDING_REVIEW`/`PENDING_RECHECK` or a git rebase/merge/cherry-pick is in progress. Auto-compact is NOT gated (blocking it risks pushing past 100% context and losing everything). Requires Claude Code v2.1.105+ |
 
 ### How Skill Auto-Invoke Works
@@ -2301,13 +2302,31 @@ AUTO-INVOKE SKILL (Claude MUST do this FIRST):
 
 **This is text-based, not programmatic.** Claude reads this instruction and follows it. When Claude sees your message is an implementation task, it invokes the sdlc skill using the Skill tool. This loads the full SDLC guidance into context.
 
-**Why text-based works:** Claude Code's hook system allows hooks to add context that Claude reads. Claude is instructed to follow the AUTO-INVOKE rules, and it does. The skills then load detailed guidance only when needed.
+**Why text-based is not enough:** the instruction is prose, and in practice it was not followed — sessions edited code without ever loading the skill. So a gate backs it.
 
-### Why No PostToolUse Hook?
+### The sdlc-skill gate
 
-**PostToolUse fires after EVERY individual edit.** If Claude makes 10 edits, it fires 10 times.
+A Write/Edit/MultiEdit to a gated path (the same paths the TDD gate uses, `SDLC_TDD_SRC_PATTERN`, default `src/`) is blocked unless this context has an `sdlc` invocation on record:
 
-Running lint/typecheck after every edit is wasteful. Instead, lint/typecheck is a checklist step in the SDLC skill - run once after all edits, before tests.
+```
+SDLC SKILL REQUIRED: invoke Skill(skill="sdlc") once this session, then retry.
+```
+
+"On record" means a memo written by the `PostToolUse` `Skill` hook, or else the session transcript: a `Skill(sdlc)` call, a typed `/sdlc` or `/<plugin>:sdlc`, or the `invoked_skills` re-attachment Claude Code writes after every compaction. Compaction therefore does not re-block a session that loaded the skill. The same check runs at `git commit` (in `codex-gate-check.sh`, before any review-state allow) when gated files are staged.
+
+**What it guarantees, and its limits:** gated at edit for Write/Edit/MultiEdit (Claude) and apply_patch (Codex); gated at commit for anything staged; a Bash write never committed is not covered. The Codex half belongs to `codex-sdlc-wizard` and is not part of this package.
+
+- The gate proves the skill was loaded before the first code edit. It cannot reach planning: only the BASELINE reminder does that, and it is re-armed after each compaction.
+- Subagents: a subagent's hook payload names the **parent's** transcript (observed on Claude Code 2.1.289), so a subagent inherits the parent's invocation. A subagent that loads the skill itself is recorded by its own memo. What happens to a skill inside a subagent that compacts is unobserved, and no compact event is hookable there.
+- Active only inside an SDLC project (`SDLC.md` + `TESTING.md`). A payload with no `transcript_path` is allowed silently. An unreadable transcript is allowed with a model-visible notice: `SDLC gate degraded: cannot read <path>; invoke Skill(sdlc) now if not loaded`.
+- At commit it reads the index of the hook's working directory: `git commit -a` with unstaged edits, and `git -C <other repo>`, are not seen. `CODEX_GATE_SKIP=1` skips that whole hook, this check included.
+- Opt-out: `SDLC_SKILL_GATE=off`, set in the hook's own environment (a settings `env` block), as with `CODEX_GATE_SKIP`.
+
+### Why Only One PostToolUse Hook?
+
+**PostToolUse fires after EVERY matching tool call.** Matched on edits, it would fire after every individual edit.
+
+Running lint/typecheck after every edit is wasteful. Instead, lint/typecheck is a checklist step in the SDLC skill - run once after all edits, before tests. The one shipped `PostToolUse` hook matches only `Skill`, so it fires on skill calls, not on edits.
 
 ---
 

@@ -155,7 +155,7 @@ test_hooks_json_uses_plugin_root() {
     fi
 }
 
-test_hooks_json_six_events() {
+test_hooks_json_seven_events() {
     local file="$REPO_ROOT/hooks/hooks.json"
     [ -f "$file" ] || { fail "hooks.json missing"; return; }
     local count
@@ -166,10 +166,10 @@ with open('$file') as f:
 hooks = d.get('hooks', {})
 print(len(hooks))
 " 2>/dev/null)
-    if [ "$count" = "6" ]; then
-        pass "hooks.json has 6 hook events"
+    if [ "$count" = "7" ]; then
+        pass "hooks.json has 7 hook events"
     else
-        fail "hooks.json should have 6 hook events (added Stop, #436), got $count"
+        fail "hooks.json should have 7 hook events (added PostToolUse for the sdlc-skill gate memo), got $count"
     fi
 }
 
@@ -483,7 +483,7 @@ test_plugin_json_kebab_case_name
 test_hooks_json_exists
 test_hooks_json_valid
 test_hooks_json_uses_plugin_root
-test_hooks_json_six_events
+test_hooks_json_seven_events
 test_hooks_json_event_parity
 test_hooks_json_script_parity
 test_plugin_skills_exist

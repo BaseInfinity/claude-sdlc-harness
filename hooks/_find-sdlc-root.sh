@@ -186,3 +186,124 @@ read_stdin_bounded() {
         return 0                # returned early — clean EOF, COMPLETE
     done
 }
+
+# ---------------------------------------------------------------------------
+# The sdlc-skill gate (Fable ruling 2026-11-08). Shared by tdd-pretool-check.sh
+# (edit time), codex-gate-check.sh (commit time) and sdlc-prompt-check.sh (the
+# PostToolUse memo writer), so the three cannot drift apart.
+# ---------------------------------------------------------------------------
+
+# sdlc_json_field <json> <key> — first string value of KEY, jq-free, the same
+# extraction the hooks already use for session_id. An occurrence quoted inside
+# another field's string value is JSON-escaped (\"key\") and cannot match.
+sdlc_json_field() {
+    printf '%s' "$1" \
+        | grep -o "\"$2\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" \
+        | head -1 \
+        | sed 's/.*"\([^"]*\)"$/\1/'
+}
+
+# sdlc_json_escape <text> — escape \ and " for embedding in a JSON string.
+sdlc_json_escape() {
+    printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+# sdlc_is_test_path <path> — the TDD hook's test-file convention.
+sdlc_is_test_path() {
+    [[ "$1" =~ (\.test\.|\.spec\.|/__tests__/|/tests?/|/test_|^test_) ]]
+}
+
+# sdlc_path_is_gated <path> — a non-test path matching SDLC_TDD_SRC_PATTERN
+# (a "|"-separated substring list, #236(b)) or, when unset, the generic src/
+# rule. Absolute (edit payloads) and repo-relative (staged paths) both match.
+sdlc_path_is_gated() {
+    local path="$1" _p _patterns
+    [ -n "$path" ] || return 1
+    sdlc_is_test_path "$path" && return 1
+    if [ -n "${SDLC_TDD_SRC_PATTERN:-}" ]; then
+        IFS='|' read -ra _patterns <<< "$SDLC_TDD_SRC_PATTERN"
+        for _p in "${_patterns[@]}"; do
+            [ -n "$_p" ] && [[ "$path" == *"$_p"* ]] && return 0
+        done
+        return 1
+    fi
+    [[ "$path" == *"/src/"* || "$path" == "src/"* ]]
+}
+
+# sdlc_memo_path <session_id> [agent_id] — the per-context memo, or empty.
+sdlc_memo_path() {
+    local sid aid
+    sid=$(printf '%s' "$1" | tr -cd 'A-Za-z0-9._-')
+    aid=$(printf '%s' "${2:-}" | tr -cd 'A-Za-z0-9._-')
+    [ -n "$sid" ] || return 0
+    printf '%s/sdlc-invoked-%s%s' "${SDLC_WIZARD_CACHE_DIR:-$HOME/.cache/sdlc-wizard}" "$sid" "${aid:+-$aid}"
+}
+
+# sdlc_memo_write <session_id> [agent_id] — best effort. An unwritable cache
+# costs a transcript grep on the next check, never a wrong answer.
+sdlc_memo_write() {
+    local memo
+    memo=$(sdlc_memo_path "$1" "${2:-}")
+    [ -n "$memo" ] || return 0
+    mkdir -p "${memo%/*}" 2>/dev/null || return 0
+    : > "$memo" 2>/dev/null || true
+}
+
+# The transcript records that count as "sdlc was invoked in this context":
+#   - a Skill tool_use naming sdlc or <ns>:sdlc
+#   - a typed /sdlc or /<ns>:sdlc: a user record whose content OPENS with the
+#     command tags (either tag order), not prose that merely quotes them
+#   - an invoked_skills attachment naming sdlc, which Claude Code re-attaches,
+#     skill body included, after every compact_boundary
+# A Read of SKILL.md does not count: it is not re-attached after compaction.
+# Text quoted inside any other string field is JSON-escaped, so none of these
+# unescaped shapes can match it.
+SDLC_SKILL_RE='"name":"Skill","input":\{[^{}]*"skill":"([A-Za-z0-9_.-]+:)?sdlc"'
+SDLC_SLASH_RE='"role":"user","content":"(<command-message>[^"<]*</command-message>\\n)?<command-name>/([A-Za-z0-9_.-]+:)?sdlc</command-name>'
+SDLC_ATTACH_RE='"type":"invoked_skills","skills":\[.*\{"name":"([A-Za-z0-9_.-]+:)?sdlc","path":"'
+
+# sdlc_skill_on_record <session_id> <agent_id> <transcript_path>
+# Memo first, transcript on a miss; a transcript hit writes the memo.
+# Sets SDLC_RECORD to hit | miss | nopath | unreadable. Returns 0 only on hit.
+#
+# Subagents (observed live, CC 2.1.289): a subagent's payload carries its
+# agent_id but the PARENT's transcript_path, so the grep below lets it inherit
+# the parent's invocation. The memo follows the same rule — a subagent accepts
+# its own memo or the parent's, never a sibling's, and the parent never
+# accepts a subagent's. A subagent's own Skill call is written to its own
+# subagents/agent-*.jsonl, which no payload names; its memo is the record.
+sdlc_skill_on_record() {
+    local sid="$1" aid="$2" tp="$3" memo
+    SDLC_RECORD=miss
+    for memo in "$(sdlc_memo_path "$sid" "$aid")" "$(sdlc_memo_path "$sid")"; do
+        if [ -n "$memo" ] && [ -f "$memo" ]; then
+            SDLC_RECORD=hit
+            return 0
+        fi
+    done
+    if [ -z "$tp" ]; then
+        SDLC_RECORD=nopath
+        return 1
+    fi
+    if [ ! -f "$tp" ] || [ ! -r "$tp" ]; then
+        SDLC_RECORD=unreadable
+        return 1
+    fi
+    # The fixed-string prefilter keeps a 75 MB transcript near 1.5 s; the
+    # regexes then run only on candidate lines.
+    if LC_ALL=C grep -F -e '"name":"Skill"' -e '<command-name>/' -e '"type":"invoked_skills"' -- "$tp" 2>/dev/null \
+        | LC_ALL=C grep -qE -e "$SDLC_SKILL_RE" -e "$SDLC_SLASH_RE" -e "$SDLC_ATTACH_RE"; then
+        SDLC_RECORD=hit
+        sdlc_memo_write "$sid" "$aid"
+        return 0
+    fi
+    return 1
+}
+
+# The one block line, verbatim from the ruling.
+SDLC_SKILL_BLOCK='SDLC SKILL REQUIRED: invoke Skill(skill="sdlc") once this session, then retry.'
+
+# sdlc_degraded_notice <transcript_path> — the model-visible fail-open text.
+sdlc_degraded_notice() {
+    printf 'SDLC gate degraded: cannot read %s; invoke Skill(sdlc) now if not loaded' "$1"
+}
