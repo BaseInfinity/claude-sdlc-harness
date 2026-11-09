@@ -12,8 +12,11 @@
 # Observed on Claude.app 4.23118.0. Requires the terminal to hold the macOS
 # Accessibility permission. Exit codes: 0 sent, 1 usage, 2 control not found
 # or script error, 3 wrong folder or composer does not hold this prompt
-# (refuses to send), 4 folder needs Trust and --no-trust was given. Prints
-# TRUSTED_SENT instead of SENT when it pressed Trust.
+# (refuses to send), 4 folder needs Trust and --no-trust was given, 5 Send
+# was pressed but no new transcript under ~/.claude/projects/ held the prompt
+# within 30 s (not proven sent). Prints
+# TRUSTED_SENT instead of SENT when it pressed Trust. A prompt with a blank
+# line, or an empty prompt, is refused with exit 1 before Desktop opens.
 set -e
 
 DRY=0
@@ -40,7 +43,13 @@ fi
 URL=$(python3 - "$FOLDER" "$PROMPT_FILE" <<'PY'
 import sys, urllib.parse
 folder = sys.argv[1]
-prompt = open(sys.argv[2], encoding="utf-8").read().rstrip("\n")
+raw = open(sys.argv[2], encoding="utf-8").read()
+# Validate the raw text minus only its final line terminator.
+prompt = raw[:-1] if raw.endswith("\n") else raw
+if not prompt.strip():
+    sys.exit("claude-desktop: PROMPT_FILE is empty")
+if any(not line.strip() for line in prompt.split("\n")):
+    sys.exit("claude-desktop: PROMPT_FILE has a blank line; a live run with one failed the exact-prompt check")
 q = urllib.parse.quote
 print("claude://code/new?folder=" + q(folder, safe="") + "&q=" + q(prompt, safe="") + "&source=services")
 PY
@@ -59,6 +68,7 @@ if [ -z "$PID" ]; then
 fi
 if [ -z "$PID" ]; then echo "claude-desktop: Claude is not running" >&2; exit 2; fi
 
+LAUNCH=$(date +%s)
 open "$URL"
 sleep 5
 
@@ -68,10 +78,10 @@ sleep 5
 HERE=$(cd "$(dirname "$0")" && pwd)
 # claude-desktop.py owns the result-to-exit-code table; a crash becomes 2.
 RC=0
-RESULT=$(python3 "$HERE/claude-desktop.py" "$PID" "$FOLDER" "$PROMPT_FILE" "$TRUST") || RC=$?
+RESULT=$(python3 "$HERE/claude-desktop.py" "$PID" "$FOLDER" "$PROMPT_FILE" "$TRUST" "$LAUNCH") || RC=$?
 
 echo "claude-desktop: ${RESULT:-ERROR}"
 case "$RC" in
-    0|3|4) exit "$RC" ;;
+    0|3|4|5) exit "$RC" ;;
     *) exit 2 ;;
 esac
