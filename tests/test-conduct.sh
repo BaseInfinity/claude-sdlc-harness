@@ -22,6 +22,10 @@
 #   show; 5 (never stall); 6 (headless, no focus steal); 7 (report labels);
 #   9 (computer-use handoff); 10 (auto-trust scope). Each needs a real
 #   multi-session fleet, a GUI, or a human-only dialog to observe.
+# - Worker-tab launcher (between the conduct-launcher markers): runs the
+#   shipped send-text lines and launcher with stub it2api and claude, under
+#   bash and zsh, with metacharacters and spaces in every value. A control
+#   row proves the canaries fire on the old interpolated line.
 # - Cross-machine route (Routes, "Another machine"): wording assertions only.
 #   No behavioral test: nothing in this repo parses a ListAgents row or a
 #   reply, so a fixture row plus a fake reply would only test the fixture.
@@ -575,7 +579,7 @@ awk '/^## Conductor, controllers and workers/{f=1;next} /^## /{f=0} f' "$SKILL" 
     | grep -q '^### Never stall on the human' \
     && pass "roles section has the never-stall subsection" \
     || fail "roles section has the never-stall subsection"
-for term in optional money credentials push PRs 'issue closes' settings permissions 'sending messages' \
+for term in optional money credentials push PRs merges 'issue closes' settings permissions 'sending messages' \
     'product values' 'git -C' '${VAR:?}' Sol Fable; do
     printf '%s' "$NS" | grep -qiF -- "$term" && pass "never-stall names: $term" \
         || fail "never-stall names: $term"
@@ -593,6 +597,77 @@ for term in optional 'one-off' 'worker tab' 'CLAUDE SDLC: <task>' 'own git workt
     printf '%s' "$WT" | grep -qiF -- "$term" && pass "worker-tab names: $term" \
         || fail "worker-tab names: $term"
 done
+
+echo "=== worker-tab launcher ==="
+# Runs the shipped recipe, between the conduct-launcher markers: the send-text
+# lines and the launcher script. Stub it2api records what would be typed; the
+# typed line then runs in a real shell with a stub claude that records $PWD and
+# argv. Every value carries quotes, ;, $(...), backticks and a space. Canaries
+# are relative files, so any command that runs creates one in the leg dir.
+WL_BEGIN='<!-- conduct-launcher:begin -->'
+WL_END='<!-- conduct-launcher:end -->'
+[ "$(grep -cxF -- "$WL_BEGIN" "$SKILL")" -eq 1 ] && [ "$(grep -cxF -- "$WL_END" "$SKILL")" -eq 1 ] \
+    && pass "launcher recipe has one begin and one end marker" \
+    || fail "launcher recipe has one begin and one end marker"
+WL=$(awk -v b="$WL_BEGIN" -v e="$WL_END" '$0==b{f=1;next} $0==e{f=0} f' "$SKILL")
+printf '%s\n' "$WL" | grep '^it2api send-text <id> ' > "$TMPDIR_T/wl-send.txt"
+printf '%s\n' "$WL" | awk '/^#!\/bin\/bash$/{f=1} f&&/^```$/{f=0} f' > "$TMPDIR_T/wl-launcher.txt"
+[ "$(wc -l < "$TMPDIR_T/wl-send.txt")" -eq 2 ] && pass "launcher recipe has two send-text lines" \
+    || fail "launcher recipe has two send-text lines"
+[ -s "$TMPDIR_T/wl-launcher.txt" ] && pass "launcher recipe has a launcher script" \
+    || fail "launcher recipe has a launcher script"
+WL_SHELLS=bash
+command -v zsh >/dev/null 2>&1 && WL_SHELLS="bash zsh"
+WL_TASK='t "dq" '"'sq'"'; touch pwned3 $(touch pwned4) `touch pwned5`'
+WL_PROMPT=$(printf '%s\n%s' 'line "1"; touch pwned6' "it's \$(touch pwned7) \`touch pwned8\`")
+# One leg: $1 send shell, $2 typing shell, $3 typed text (empty = use recipe).
+# Prints the leg dir.
+wl_leg() {
+    local d wt
+    d=$(mktemp -d "$TMPDIR_T/wl.XXXXXX") && d=$(cd "$d" && pwd -P)
+    wt="$d/wt dir \"dq\" 'sq'; \$(touch pwned1) \`touch pwned2\`"
+    mkdir -p "$d/bin" "$wt" "$d/launch dir" "$d/spec dir" "$d/plugin dir"
+    printf '%s\n' "$wt" > "$d/wt.txt"
+    printf '#!/bin/bash\nn=$(ls "%s"/typed.* 2>/dev/null | wc -l | tr -d " ")\nprintf "%%s" "$3" > "%s/typed.$n"\n' \
+        "$d" "$d" > "$d/bin/it2api"
+    printf '#!/bin/bash\nprintf "%%s\\0" "$PWD" "$@" > "%s/argv"\n' "$d" > "$d/bin/claude"
+    sed "s|<plugin dir>|'$d/plugin dir'|" "$TMPDIR_T/wl-launcher.txt" > "$d/launch dir/launch-worker-tab.sh"
+    chmod +x "$d/bin/it2api" "$d/bin/claude" "$d/launch dir/launch-worker-tab.sh"
+    printf '%s\n%s\n%s' "$wt" "$WL_TASK" "$WL_PROMPT" > "$d/spec dir/spec 'x'.txt"
+    if [ -z "$3" ]; then
+        (cd "$d" && PATH="$d/bin:$PATH" LAUNCHER="$d/launch dir/launch-worker-tab.sh" \
+            SPEC="$d/spec dir/spec 'x'.txt" "$1" -c "$(sed 's/<id>/S1/' "$TMPDIR_T/wl-send.txt")")
+    else
+        printf '%s' "$3" > "$d/typed.0"
+    fi
+    (cd "$d" && PATH="$d/bin:$PATH" "$2" -c "$(cat "$d/typed.0")" > "$d/tab.out" 2>&1)
+    echo "$d"
+}
+wl_expect() {
+    printf '%s\0' "$(cat "$1/wt.txt")" --dangerously-skip-permissions --plugin-dir "$1/plugin dir" \
+        -n "CLAUDE SDLC: $WL_TASK" "$WL_PROMPT"
+}
+for s1 in $WL_SHELLS; do
+    for s2 in $WL_SHELLS; do
+        D=$(wl_leg "$s1" "$s2" "")
+        [ "$(cat "$D/typed.1" 2>/dev/null)" = $'\r' ] && [ ! -e "$D/typed.2" ] \
+            && pass "launcher ($s1 sends, $s2 types): second send is Return alone" \
+            || fail "launcher ($s1 sends, $s2 types): second send is Return alone ($D)"
+        ls "$D" | grep -qx "pwned[0-9]" && fail "launcher ($s1 sends, $s2 types): nothing executes ($D)" \
+            || pass "launcher ($s1 sends, $s2 types): nothing executes"
+        wl_expect "$D" > "$D/expect"
+        cmp -s "$D/expect" "$D/argv" \
+            && pass "launcher ($s1 sends, $s2 types): worktree, name and prompt arrive intact" \
+            || fail "launcher ($s1 sends, $s2 types): worktree, name and prompt arrive intact ($D)"
+    done
+done
+# Positive control: the old interpolated line must trip the same canaries, or
+# the stubs prove nothing.
+D=$(wl_leg bash bash "x")
+OLD="'$D/launch dir/launch-worker-tab.sh' $(cat "$D/wt.txt") '$WL_TASK' x"
+D=$(wl_leg bash bash "$OLD")
+ls "$D" | grep -qx "pwned[0-9]" && pass "control: the interpolated launch line executes injected commands" \
+    || fail "control: the interpolated launch line executes injected commands ($D)"
 
 XM=$(awk '/^### Another machine: Remote Control/{f=1;next} /^##/{f=0} f' "$SKILL" | tr '\n' ' ')
 awk '/^## Routes \(native first\)/{f=1;next} /^## /{f=0} f' "$SKILL" \
@@ -651,7 +726,7 @@ check_row 10 'any other folder'
 check_row 11 'status.cjs'
 check_row 11 'feat/conduct-status'
 check_row 11 "Each controller updates its own rows when a workstream changes state, never another controller's."
-HUMAN_ONLY='money, credentials, pushes, PRs, issue closes, settings and permissions (for example OS privacy toggles (TCC)), sending messages, and product values'
+HUMAN_ONLY='money, credentials, pushes, PRs, merges, issue closes, settings and permissions (for example OS privacy toggles (TCC)), sending messages, and product values'
 NS_SQ=$(printf '%s' "$NS" | tr -s ' ')
 printf '%s' "$NS_SQ" | grep -qF -- "$HUMAN_ONLY" \
     && pass "never-stall keeps the full human-only list" \

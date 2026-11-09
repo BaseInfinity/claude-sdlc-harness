@@ -367,7 +367,7 @@ waits on the user for something a model can answer.
 2. **It needs a decision:** climb the brain ladder, Sol at high first, then
    Fable on a split, and dispatch on the verdict.
 3. **Ask the user only for what only they own:** money, credentials, pushes,
-   PRs, issue closes, settings and permissions (for example OS privacy
+   PRs, merges, issue closes, settings and permissions (for example OS privacy
    toggles (TCC)), sending messages, and product values.
 
 Writing commands that pass the guards:
@@ -406,25 +406,40 @@ it2api create-tab --window <controller window id>
 ```
 
 The tab opened in the controller's window at a `-zsh` prompt. This is the one
-send that goes to a shell prompt: check that `it2api get-buffer <id>` shows only
-the new tab's shell prompt, then send the launcher line and the Return key as
-two separate calls. Use literal values with no `$` or backticks, because the
-double quotes let your shell expand them:
+send that goes to a shell prompt, so it carries no values: only the launcher's
+path and the path of a spec file. Make the spec the way you make a message
+file (seed, Read, Edit), so its text never touches a shell. Line 1 is the
+worktree, line 2 the task name, and the rest the prompt.
+The launcher reads all three as data, so quotes, `;`, `$(...)` and spaces in
+them never reach a shell. Trailing newlines at the end of the prompt are
+dropped.
 
+Check that `it2api get-buffer <id>` shows only the new tab's shell prompt. Set
+`LAUNCHER` to the launcher's path and `SPEC` to the spec file's, then send the
+launch line and the Return key as two separate calls. `printf '%q'` quotes the
+two paths, so a space in either still arrives as one argument:
+
+<!-- conduct-launcher:begin -->
 ```bash
-it2api send-text <id> "<scratchpad>/launch-worker-tab.sh <worktree> '<task>' <prompt file>"
+it2api send-text <id> "$(printf '%q %q' "$LAUNCHER" "$SPEC")"
 it2api send-text <id> $'\r'
 ```
 
-`launch-worker-tab.sh` was a three-line script in the controller's scratchpad.
-Its OSC 6 escapes set the tab color before `claude` starts. Put your own
-controller's profile `tab_color` in the three brightness values; the
-controller's was 245,205,60:
+`launch-worker-tab.sh` lives in the controller's scratchpad. Its OSC 6
+escapes set the tab color before `claude` starts. Put your own controller's
+profile `tab_color` in the three brightness values; the controller's was
+245,205,60:
 
 ```bash
 #!/bin/bash
-set -e; printf '\033]6;1;bg;red;brightness;245\a\033]6;1;bg;green;brightness;205\a\033]6;1;bg;blue;brightness;60\a'; cd "$1"; exec claude --dangerously-skip-permissions --plugin-dir <plugin dir> -n "CLAUDE SDLC: $2" "$(cat "$3")"
+# usage: launch-worker-tab.sh SPEC. Line 1: worktree. Line 2: task name. Rest: prompt.
+set -e
+{ IFS= read -r worktree; IFS= read -r task; prompt=$(cat); } < "$1"
+printf '\033]6;1;bg;red;brightness;245\a\033]6;1;bg;green;brightness;205\a\033]6;1;bg;blue;brightness;60\a'
+cd -- "$worktree"
+exec claude --dangerously-skip-permissions --plugin-dir <plugin dir> -n "CLAUDE SDLC: $task" "$prompt"
 ```
+<!-- conduct-launcher:end -->
 
 `--dangerously-skip-permissions` is how this user runs their own sessions. It
 is the user's choice, not a default; drop it unless the user runs that way.
