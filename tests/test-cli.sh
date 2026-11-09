@@ -360,12 +360,15 @@ test_skill_frontmatter() {
     rm -rf "$d"
 }
 
-# Test 15: Template tdd hook uses /src/ pattern (not .github/workflows/)
+# Test 15: Template tdd hook uses /src/ pattern (not .github/workflows/).
+# The default pattern lives in the shipped helper since the sdlc-skill gate,
+# so the commit-time check in codex-gate-check.sh gates the same paths.
 test_tdd_hook_generic() {
     local d
     d=$(make_temp)
     (cd "$d" && node "$CLI" init > /dev/null 2>&1)
-    if grep -q '"/src/"' "$d/.claude/hooks/tdd-pretool-check.sh"; then
+    if grep -q '"/src/"' "$d/.claude/hooks/_find-sdlc-root.sh" \
+        && grep -q 'sdlc_path_is_gated' "$d/.claude/hooks/tdd-pretool-check.sh"; then
         if ! grep -q '.github/workflows/' "$d/.claude/hooks/tdd-pretool-check.sh"; then
             pass "Template tdd hook uses /src/ pattern (generic)"
         else
@@ -820,10 +823,12 @@ test_merge_idempotent() {
 FIXTURE
     (cd "$d" && node "$CLI" init > /dev/null 2>&1)
     (cd "$d" && node "$CLI" init > /dev/null 2>&1)
-    # Count occurrences of sdlc-prompt-check — should be exactly 1
-    local count
+    # sdlc-prompt-check is registered once per event it serves (UserPromptSubmit,
+    # SessionStart) — exactly as many times as the template, no more
+    local count want
     count=$(grep -c "sdlc-prompt-check" "$d/.claude/settings.json")
-    if [ "$count" -eq 1 ]; then
+    want=$(grep -c "sdlc-prompt-check" "$SCRIPT_DIR/../cli/templates/settings.json")
+    if [ "$count" -eq "$want" ]; then
         pass "merge is idempotent — no duplicate wizard hooks"
     else
         fail "merge should not duplicate wizard hooks (found $count occurrences)"
@@ -867,7 +872,7 @@ FIXTURE
     # Not duplicated
     local sdlc_count
     sdlc_count=$(grep -c "sdlc-prompt-check" "$d/.claude/settings.json")
-    [ "$sdlc_count" -eq 1 ] || ok=false
+    [ "$sdlc_count" -eq "$(grep -c "sdlc-prompt-check" "$SCRIPT_DIR/../cli/templates/settings.json")" ] || ok=false
     if [ "$ok" = true ]; then
         pass "--force updates wizard hooks but preserves custom keys"
     else

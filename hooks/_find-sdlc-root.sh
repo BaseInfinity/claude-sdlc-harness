@@ -186,3 +186,101 @@ read_stdin_bounded() {
         return 0                # returned early — clean EOF, COMPLETE
     done
 }
+
+# ---------------------------------------------------------------------------
+# The sdlc-skill gate (Fable ruling 2026-11-08). Shared by tdd-pretool-check.sh
+# (edit time) and codex-gate-check.sh (commit time), so the two cannot drift
+# apart.
+# ---------------------------------------------------------------------------
+
+# sdlc_json_field <json> <key> — first string value of KEY, jq-free, the same
+# extraction the hooks already use for session_id. An occurrence quoted inside
+# another field's string value is JSON-escaped (\"key\") and cannot match.
+sdlc_json_field() {
+    printf '%s' "$1" \
+        | grep -o "\"$2\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" \
+        | head -1 \
+        | sed 's/.*"\([^"]*\)"$/\1/'
+}
+
+# sdlc_json_escape <text> — escape \ and " for embedding in a JSON string.
+sdlc_json_escape() {
+    printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+# sdlc_is_test_path <path> — the TDD hook's test-file convention.
+sdlc_is_test_path() {
+    [[ "$1" =~ (\.test\.|\.spec\.|/__tests__/|/tests?/|/test_|^test_) ]]
+}
+
+# sdlc_path_is_gated <path> — a non-test path matching SDLC_TDD_SRC_PATTERN
+# (a "|"-separated substring list, #236(b)) or, when unset, the generic src/
+# rule. Absolute (edit payloads) and repo-relative (staged paths) both match.
+sdlc_path_is_gated() {
+    local path="$1" _p _patterns
+    [ -n "$path" ] || return 1
+    sdlc_is_test_path "$path" && return 1
+    if [ -n "${SDLC_TDD_SRC_PATTERN:-}" ]; then
+        IFS='|' read -ra _patterns <<< "$SDLC_TDD_SRC_PATTERN"
+        for _p in "${_patterns[@]}"; do
+            [ -n "$_p" ] && [[ "$path" == *"$_p"* ]] && return 0
+        done
+        return 1
+    fi
+    [[ "$path" == *"/src/"* || "$path" == "src/"* ]]
+}
+
+# The transcript records that count as "sdlc was invoked in this context":
+#   - a Skill tool_use naming sdlc or <ns>:sdlc
+#   - a typed /sdlc or /<ns>:sdlc: a user record whose content OPENS with the
+#     command tags (either tag order), not prose that merely quotes them
+#   - an invoked_skills attachment naming sdlc, which Claude Code re-attaches,
+#     skill body included, after every compact_boundary
+# A Read of SKILL.md does not count: it is not re-attached after compaction.
+# Text quoted inside any other string field is JSON-escaped, so none of these
+# unescaped shapes can match it.
+SDLC_SKILL_RE='"name":"Skill","input":\{[^{}]*"skill":"([A-Za-z0-9_.-]+:)?sdlc"'
+SDLC_SLASH_RE='"role":"user","content":"(<command-message>[^"<]*</command-message>\\n)?<command-name>/([A-Za-z0-9_.-]+:)?sdlc</command-name>'
+SDLC_ATTACH_RE='"type":"invoked_skills","skills":\[.*\{"name":"([A-Za-z0-9_.-]+:)?sdlc","path":"'
+
+# sdlc_skill_on_record <agent_id> <transcript_path>
+# Greps THIS context's own transcript: the payload's transcript_path for the
+# main session, or for a subagent ${transcript_path%.jsonl}/subagents/
+# agent-<agent_id>.jsonl. A subagent's payload names the PARENT's transcript
+# (observed live, CC 2.1.289), but it does not get the parent's skill body,
+# so the parent's record never counts for it, nor a subagent's for the parent.
+# The Skill tool_use line is on disk by the next tool's PreToolUse (observed
+# live, 5/5 main and 4/4 subagent), so no other record is kept.
+# Sets SDLC_RECORD to hit | miss | nopath | unreadable and SDLC_RECORD_PATH to
+# the file read. Returns 0 only on hit.
+sdlc_skill_on_record() {
+    local aid tp="$2"
+    aid=$(printf '%s' "$1" | tr -cd 'A-Za-z0-9._-')
+    SDLC_RECORD=miss
+    SDLC_RECORD_PATH="$tp"
+    if [ -z "$tp" ]; then
+        SDLC_RECORD=nopath
+        return 1
+    fi
+    [ -z "$aid" ] || SDLC_RECORD_PATH="${tp%.jsonl}/subagents/agent-${aid}.jsonl"
+    if [ ! -f "$SDLC_RECORD_PATH" ] || [ ! -r "$SDLC_RECORD_PATH" ]; then
+        SDLC_RECORD=unreadable
+        return 1
+    fi
+    # The fixed-string prefilter keeps a 75 MB transcript near 1.5 s; the
+    # regexes then run only on candidate lines.
+    if LC_ALL=C grep -F -e '"name":"Skill"' -e '<command-name>/' -e '"type":"invoked_skills"' -- "$SDLC_RECORD_PATH" 2>/dev/null \
+        | LC_ALL=C grep -qE -e "$SDLC_SKILL_RE" -e "$SDLC_SLASH_RE" -e "$SDLC_ATTACH_RE"; then
+        SDLC_RECORD=hit
+        return 0
+    fi
+    return 1
+}
+
+# The one block line, verbatim from the ruling.
+SDLC_SKILL_BLOCK='SDLC SKILL REQUIRED: invoke Skill(skill="sdlc") once this session, then retry.'
+
+# sdlc_degraded_notice <transcript_path> — the model-visible fail-open text.
+sdlc_degraded_notice() {
+    printf 'SDLC gate degraded: cannot read %s; invoke Skill(sdlc) now if not loaded' "$1"
+}

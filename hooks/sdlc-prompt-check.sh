@@ -1,12 +1,41 @@
 #!/bin/bash
 # Light SDLC hook - baseline reminder every prompt (~100 tokens)
 # Full guidance in skill: .claude/skills/sdlc/
+# Also registered on SessionStart (re-arms BASELINE after compaction); see
+# below.
 
 # Walk up from CWD to find nearest SDLC.md + TESTING.md (#171: monorepo support)
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HOOK_DIR/_find-sdlc-root.sh"
 
+# Read stdin once, up front: the event decides what this hook does.
+# Advisory hook, not a gate: degrade to empty rather than block a prompt.
+STDIN_JSON=""
+if [ ! -t 0 ]; then
+    STDIN_JSON=$(read_stdin_bounded) || STDIN_JSON=""
+fi
+# session_id is a UUID-shaped string with no escapable content in CC's stdin
+# contract, so regex extraction is sufficient; `tr -cd` later strips anything
+# filename-unsafe, so a malformed input cannot escape the cache dir.
+SESSION_ID=$(sdlc_json_field "$STDIN_JSON" session_id)
+HOOK_EVENT=$(sdlc_json_field "$STDIN_JSON" hook_event_name)
+
+# SessionStart is silent: its stdout would land in context.
+case "$HOOK_EVENT" in
+    SessionStart)
+        # Nudge repair. Compaction drops hook text, so BASELINE is gone from
+        # context while its fires-once sentinel says it was shown: re-arm it.
+        if [ "$(sdlc_json_field "$STDIN_JSON" source)" = "compact" ]; then
+            SAFE_SID=$(printf '%s' "$SESSION_ID" | tr -cd 'A-Za-z0-9._-')
+            [ -n "$SAFE_SID" ] && rm -f "${SDLC_WIZARD_CACHE_DIR:-$HOME/.cache/sdlc-wizard}/baseline-shown-${SAFE_SID}" 2>/dev/null
+        fi
+        exit 0
+        ;;
+esac
+
 # Token-bloat fix: when both project + plugin register this hook, plugin yields.
+# Prompt path only: the SessionStart branch above is idempotent, and an older
+# project registration may cover UserPromptSubmit alone (Sol r1 P1).
 # Prevents 2× SDLC BASELINE print per UserPromptSubmit (~300 tokens doubled).
 # Pass real script path explicitly (not $0) so the dedupe heuristic recognizes
 # plugin paths even when the script is sourced or invoked via aliases.
@@ -15,8 +44,9 @@ dedupe_plugin_or_project "${BASH_SOURCE[0]}" || exit 0
 # Roadmap #224: opt-in fires-once instrumentation. CC 2.1.118 shipped a fix for
 # prompt hooks double-firing when a verifier subagent itself made tool calls.
 # When SDLC_HOOK_FIRE_LOG is set, append one tab-separated record per real
-# invocation (post-dedupe). Maintainer can compare line count against prompt
-# count to verify the CC fix in real sessions. See CLAUDE_CODE_SDLC_WIZARD.md →
+# prompt (post-dedupe; SessionStart runs are not counted).
+# Maintainer can compare line count against prompt count to verify the CC fix
+# in real sessions. See CLAUDE_CODE_SDLC_WIZARD.md →
 # "Verifying Prompt-Hook-Fires-Once" for the procedure.
 if [ -n "${SDLC_HOOK_FIRE_LOG:-}" ]; then
     {
@@ -39,22 +69,7 @@ fi
 # (phrase-matching low-confidence signals, loud '/effort xhigh' nudge after
 # ≥2 in 30 min) was removed — never fired in ~2 months of live use, the
 # largest unproven component in this file. SESSION_ID is still needed below
-# for the BASELINE fires-once sentinel, so stdin is still read for it.
-SESSION_ID=""
-if [ ! -t 0 ]; then
-    # Advisory hook, not a gate: degrade to empty rather than block a prompt.
-    STDIN_JSON=$(read_stdin_bounded) || STDIN_JSON=""
-    if [ -n "$STDIN_JSON" ]; then
-        # session_id is a UUID-shaped string with no escapable content
-        # in CC's stdin contract — regex extraction is sufficient.
-        # `tr -cd` later strips anything filename-unsafe, so a malformed
-        # input cannot escape the cache dir.
-        SESSION_ID=$(printf '%s' "$STDIN_JSON" \
-            | grep -o '"session_id"[[:space:]]*:[[:space:]]*"[^"]*"' \
-            | head -1 \
-            | sed 's/.*"\([^"]*\)"$/\1/')
-    fi
-fi
+# for the BASELINE fires-once sentinel; it was read from stdin above.
 
 if [ ! -s "$PROJECT_DIR/SDLC.md" ] || [ ! -s "$PROJECT_DIR/TESTING.md" ]; then
     cat << 'SETUP_REQUIRED'

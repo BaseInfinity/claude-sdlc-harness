@@ -276,6 +276,9 @@ jobs:
       - name: Run tdd-pretool-fires-once tests (token bloat audit)
         run: ./tests/test-tdd-pretool-fires-once.sh
 
+      - name: Run sdlc skill gate tests
+        run: ./tests/test-sdlc-skill-gate.sh
+
       - name: Run community scanner tests (#207)
         run: ./tests/test-community-scanner.sh
 
