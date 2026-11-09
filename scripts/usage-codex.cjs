@@ -10,8 +10,15 @@
 // creator_account_id; status.cjs maps it to a name via accounts.json.
 //
 // creator_account_id is fixed when a thread is created. A thread resumed
-// under a different login keeps its creator, so its readings are attributed
-// to the creator. Threads that carry no creator_account_id are skipped.
+// under a different login keeps its creator but reports the new login's
+// rate_limits, and no line in a rollout names the login that wrote it. So a
+// reading can never be proven to be its creator's: every row is marked
+// accuracy "unattributed". A thread whose readings change plan_type shows a
+// login change and is skipped, as is a thread with no creator_account_id.
+//
+// Follow-up: Codex's app-server `account/rateLimits/read` returns an
+// accountId with its limits. That is the account-bound source, but it needs a
+// live app-server call, which this file-only collector does not make.
 
 const fs = require("node:fs");
 const os = require("node:os");
@@ -63,8 +70,10 @@ function creator(file) {
   }
 }
 
+// Null when the thread's codex readings span more than one plan_type.
 function newestIn(file) {
   let best = null;
+  const plans = new Set();
   for (const line of fs.readFileSync(file, "utf8").split("\n")) {
     if (!line.includes('"rate_limits"')) continue;
     let event;
@@ -75,9 +84,10 @@ function newestIn(file) {
     }
     const limits = event.type === "event_msg" && event.payload?.type === "token_count" && event.payload.rate_limits;
     if (!limits || limits.limit_id !== "codex" || Number.isNaN(Date.parse(event.timestamp))) continue;
+    plans.add(limits.plan_type);
     if (!best || Date.parse(event.timestamp) > Date.parse(best.timestamp)) best = { timestamp: event.timestamp, limits };
   }
-  return best;
+  return plans.size > 1 ? null : best;
 }
 
 // Newest `codex` rate_limits event per account, by the event's own timestamp.
@@ -108,7 +118,7 @@ function rows(account, { timestamp, limits }) {
       unit: "pct",
       resets_at: new Date(window.resets_at * 1000).toISOString(),
       source: `codex-rollout plan=${limits.plan_type}`,
-      accuracy: "server",
+      accuracy: "unattributed",
       observed_at: new Date(timestamp).toISOString()
     }))
     .sort((a, b) => a.window.localeCompare(b.window));

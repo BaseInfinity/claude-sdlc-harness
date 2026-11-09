@@ -33,7 +33,8 @@ set replaces the whole row keyed LABEL/slug(workstream) and stamps updated_at.
 --blocker-owner is required with --state blocked and refused otherwise.
 The full view opens with [USAGE]: the newest row per account/provider/window
 from <root>/.brain/usage/*.jsonl, STALE past 6h, and "unknown" for an account
-with no row. <root>/.brain/usage/accounts.json renames raw labels, e.g.
+with no pct row. Rows in any other unit are not rendered; a row with accuracy
+"unattributed" says so. <root>/.brain/usage/accounts.json renames raw labels, e.g.
 {"codex-56c919": "codex-main"}; every name it maps to is expected.
 `);
 }
@@ -189,7 +190,8 @@ function parseUsage(text) {
   }
 }
 
-// Newest observed_at per account/provider/window, after aliasing. A file
+// Newest pct row per account/provider/window, after aliasing; rows in any
+// other unit are dropped unconverted, and their account still lists. A file
 // named for an account that holds no valid row still lists that account, as
 // does every alias target, so each renders as unknown.
 function latestUsage({ files, aliases }) {
@@ -201,6 +203,7 @@ function latestUsage({ files, aliases }) {
     for (const parsed of file.lines.map(parseUsage).filter(Boolean)) {
       const row = { ...parsed, account: name(parsed.account) };
       accounts.add(row.account);
+      if (row.unit !== "pct") continue;
       const key = `${row.account}\u0000${row.provider}\u0000${row.window}`;
       const held = latest.get(key);
       if (!held || Date.parse(row.observed_at) > Date.parse(held.observed_at)) latest.set(key, row);
@@ -226,7 +229,8 @@ function renderUsage({ accounts, rows }, now) {
       const used = Math.max(0, Math.min(100, Math.floor(row.used)));
       const old = now - Date.parse(row.observed_at);
       const stale = old > USAGE_STALE_MS ? `  STALE ${age(old)}` : "";
-      lines.push(`  ${account} ${row.provider} ${row.window}  ${bar(used)} ${used}% · resets ${localTime(row.resets_at)}${stale}`);
+      const unattributed = row.accuracy === "unattributed" ? " · unattributed" : "";
+      lines.push(`  ${account} ${row.provider} ${row.window}  ${bar(used)} ${used}% · resets ${localTime(row.resets_at)}${unattributed}${stale}`);
     }
   }
   return `${lines.join("\n")}\n`;

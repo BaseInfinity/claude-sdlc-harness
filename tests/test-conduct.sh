@@ -729,6 +729,23 @@ node "$STATUS" set --root "$UROOT" --controller HARNESS --workstream w --percent
 got=$(uview | grep -nE '^\[(USAGE|HARNESS)\]' | tr '\n' ' ')
 case "$got" in 1:\[USAGE\]*\[HARNESS\]*) pass "[USAGE] renders above the controllers" ;;
     *) fail "[USAGE] renders above the controllers (got: $got)" ;; esac
+NROOT="$TMPDIR_T/usage-units"; mkdir -p "$NROOT/.brain/usage"
+nrow() { # account window used unit accuracy
+    printf '{"account":"%s","provider":"p","window":"%s","used":%s,"limit":100,"unit":"%s","resets_at":"2026-11-10T18:00:00Z","source":"t","accuracy":"%s","observed_at":"2026-11-08T11:00:00Z"}\n' "$@"
+}
+{ nrow claude-main 5h 40 pct server; nrow claude-main tok 12345 tokens server
+  nrow claude-main 5h 777 tokens server | sed 's/T11:00/T11:30/'; } > "$NROOT/.brain/usage/claude-main.jsonl"
+nrow spend month 42.5 usd server > "$NROOT/.brain/usage/spend.jsonl"
+nrow codex-56c919 7d 30 pct unattributed > "$NROOT/.brain/usage/codex-56c919.jsonl"
+nview() { TZ=UTC node "$STATUS" --root "$NROOT" --now "$UNOW" 2>&1; }
+nview | grep -q ' tok ' && fail "a tokens row is not rendered (got: $(nview))" || pass "a tokens row is not rendered"
+nview | grep -qxF '  claude-main p 5h  ████░░░░░░ 40% · resets Tue 18:00' \
+    && pass "a pct row beside a newer tokens row of the same window still renders" \
+    || fail "a pct row beside a newer tokens row of the same window still renders (got: $(nview))"
+nview | grep -qxF '  spend unknown' && pass "an account with only a usd row prints unknown" \
+    || fail "an account with only a usd row prints unknown (got: $(nview))"
+nview | grep -qxF '  codex-56c919 p 7d  ███░░░░░░░ 30% · resets Tue 18:00 · unattributed' \
+    && pass "an unattributed row says so" || fail "an unattributed row says so (got: $(nview))"
 
 echo "=== codex usage collector ==="
 COLLECT="$REPO_ROOT/scripts/usage-codex.cjs"
@@ -738,8 +755,9 @@ meta() { # creator_account_id, or "" for a thread that carries none
     if [ -n "$1" ]; then printf '{"timestamp":"2026-11-01T00:00:00.000Z","type":"session_meta","payload":{"id":"t","creator_account_id":"%s"}}\n' "$1"
     else printf '{"timestamp":"2026-11-01T00:00:00.000Z","type":"session_meta","payload":{"id":"t"}}\n'; fi
 }
-tc() { # timestamp limit_id primary secondary
-    printf '{"timestamp":"%s","type":"event_msg","payload":{"type":"token_count","info":null,"rate_limits":{"limit_id":"%s","limit_name":null,"primary":%s,"secondary":%s,"credits":null,"plan_type":"prolite"}}}\n' "$@"
+tc() { # timestamp limit_id primary secondary [plan_type]
+    printf '{"timestamp":"%s","type":"event_msg","payload":{"type":"token_count","info":null,"rate_limits":{"limit_id":"%s","limit_name":null,"primary":%s,"secondary":%s,"credits":null,"plan_type":"%s"}}}\n' \
+        "$1" "$2" "$3" "$4" "${5:-prolite}"
 }
 W7='{"used_percent":50.0,"window_minutes":10080,"resets_at":1794387895}'
 W5='{"used_percent":12.5,"window_minutes":300,"resets_at":1794300000}'
@@ -758,12 +776,18 @@ A=56c919aa-1111-2222-3333-444455556666; B=aed3bdbb-1111-2222-3333-444455556666
 # A thread with no creator id holds the newest event of all: it names nobody.
 { meta ""; tc 2026-11-08T23:45:00.000Z codex '{"used_percent":77.0,"window_minutes":10080,"resets_at":1794387895}' null; } \
     > "$CS/08/rollout-anon.jsonl"
+# A thread created by A and resumed under another login: the plan changes
+# mid-thread, so its readings, newest of A's, belong to nobody provably.
+{ meta "$A"; tc 2026-11-08T21:00:00.000Z codex "$W7" null
+  tc 2026-11-08T21:30:00.000Z codex '{"used_percent":99.0,"window_minutes":10080,"resets_at":1794387895}' null plus; } \
+    > "$CS/08/rollout-resumed.jsonl"
 # Account B: one old thread, older than every file of A.
 { meta "$B"; tc 2026-10-04T10:00:00.000Z codex '{"used_percent":30.0,"window_minutes":10080,"resets_at":1791580818}' null; } \
     > "$CHOME/sessions/2026/10/04/rollout-b.jsonl"
 touch -t 202611082100 "$CS/07/rollout-old.jsonl"
 touch -t 202611082300 "$CS/08/rollout-new.jsonl"
 touch -t 202611082345 "$CS/08/rollout-anon.jsonl"
+touch -t 202611082130 "$CS/08/rollout-resumed.jsonl"
 touch -t 202610041000 "$CHOME/sessions/2026/10/04/rollout-b.jsonl"
 CODEX_HOME="$CHOME" node "$COLLECT" --root "$CROOT" >/dev/null 2>&1 \
     && pass "collector runs against a fixture CODEX_HOME" || fail "collector runs against a fixture CODEX_HOME"
@@ -775,13 +799,13 @@ for r in (json.loads(l) for l in open(sys.argv[1])):
 PY
 }
 got=$(rows_of "$CROOT/.brain/usage/codex-56c919.jsonl" 2>&1)
-want="codex-56c919 codex 5h 12.5 100 pct 2026-11-10T08:40:00.000Z server 2026-11-08T20:00:00.000Z codex-rollout plan=prolite
-codex-56c919 codex 7d 50 100 pct 2026-11-11T09:04:55.000Z server 2026-11-08T20:00:00.000Z codex-rollout plan=prolite"
+want="codex-56c919 codex 5h 12.5 100 pct 2026-11-10T08:40:00.000Z unattributed 2026-11-08T20:00:00.000Z codex-rollout plan=prolite
+codex-56c919 codex 7d 50 100 pct 2026-11-11T09:04:55.000Z unattributed 2026-11-08T20:00:00.000Z codex-rollout plan=prolite"
 [ "$got" = "$want" ] \
-    && pass "collector takes each account's newest codex token_count by event time, one row per window" \
-    || fail "collector takes each account's newest codex token_count by event time, one row per window (got: $got)"
+    && pass "collector takes each account's newest codex token_count by event time, one row per window, skips a resumed-under-another-login thread, marks rows unattributed" \
+    || fail "collector takes each account's newest codex token_count by event time, one row per window, skips a resumed-under-another-login thread, marks rows unattributed (got: $got)"
 got=$(rows_of "$CROOT/.brain/usage/codex-aed3bd.jsonl" 2>&1)
-[ "$got" = "codex-aed3bd codex 7d 30 100 pct 2026-10-09T21:20:18.000Z server 2026-10-04T10:00:00.000Z codex-rollout plan=prolite" ] \
+[ "$got" = "codex-aed3bd codex 7d 30 100 pct 2026-10-09T21:20:18.000Z unattributed 2026-10-04T10:00:00.000Z codex-rollout plan=prolite" ] \
     && pass "a second creator_account_id gets its own rows, labelled by its prefix" \
     || fail "a second creator_account_id gets its own rows, labelled by its prefix (got: $got)"
 [ "$(ls "$CROOT/.brain/usage")" = "codex-56c919.jsonl
