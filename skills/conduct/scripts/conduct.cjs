@@ -3,6 +3,7 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
+const { spawnSync } = require("node:child_process");
 
 const REQUEST_TYPES = new Set(["task", "review", "design", "question"]);
 const BOXES = new Set(["outbox", "inbox"]);
@@ -17,6 +18,7 @@ function usage() {
   process.stdout.write(`Usage:
   conduct.cjs emit --from ADDRESS --to ADDRESS --type TYPE (--prompt TEXT | --prompt-file PATH) [options]
   conduct.cjs mark --run ID --id ID --status STATE [--root PATH] [--transport NAME]
+  conduct.cjs status [status.cjs arguments]
 
 Options:
   --root PATH       Repository root (default: current directory)
@@ -30,6 +32,20 @@ Options:
   --status STATE    Initial: queued, sent, delivered, failed; results also received
                     Use mark for answered after a correlated result exists
 `);
+}
+
+function dispatchStatus(argv) {
+  const helper = path.join(__dirname, "status.cjs");
+  const result = spawnSync(process.execPath, [helper, ...argv], {
+    shell: false,
+    stdio: "inherit"
+  });
+  if (result.error) throw new Error(`cannot run status helper: ${result.error.message}`);
+  if (result.status === null) {
+    const reason = result.signal ? `signal ${result.signal}` : "no exit status";
+    throw new Error(`status helper terminated with ${reason}`);
+  }
+  process.exitCode = result.status;
 }
 
 function parseArgs(argv, command) {
@@ -259,6 +275,10 @@ function main() {
   const [command, ...rest] = process.argv.slice(2);
   if (!command || command === "--help" || command === "-h") {
     usage();
+    return;
+  }
+  if (command === "status") {
+    dispatchStatus(rest);
     return;
   }
   if (command !== "emit" && command !== "mark") throw new Error(`unknown command: ${command}`);

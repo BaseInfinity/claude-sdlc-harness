@@ -37,7 +37,7 @@ REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 SKILL_DIR="$REPO_ROOT/skills/conduct"
 HELPER="$SKILL_DIR/scripts/conduct.cjs"
 
-HELPER_SHA="e76ad7089fdd16f0db7fec2d48d9628f48a2ae6cd53253a97a5179e834b659c8"
+HELPER_SHA="e6f4ef3f26570eea31f6b011d2f1e6386d1280af801ceab024dcfbaa4dd5046e"
 PROTOCOL_SHA="9adfe0b425c9e48a6c89d72ddf4d0e0e24eae238611083b9b5adb98d73ac49f1"
 
 PASS=0
@@ -699,6 +699,32 @@ ROOT="$LROOT" TARGET="$TMPDIR_T/link-target" STATUS="$STATUS" bash -c \
     || fail "set never writes through a symlink planted at a PID temp path"
 [ -L "$LROOT/.brain/fleet.json" ] && fail "set never installs a planted symlink as fleet.json" \
     || pass "set never installs a planted symlink as fleet.json"
+
+echo "=== conduct.cjs status dispatch ==="
+got=$(node "$HELPER" status --help 2>&1); rc=$?
+[ "$rc" = 0 ] && pass "conduct.cjs status --help exits 0" \
+    || fail "conduct.cjs status --help exits 0 (rc=$rc, got: $got)"
+printf '%s\n' "$got" | head -1 | grep -qx 'Usage:' \
+    && printf '%s\n' "$got" | grep -qF 'status.cjs set --root R --controller LABEL' \
+    && pass "conduct.cjs status --help prints the status usage" \
+    || fail "conduct.cjs status --help prints the status usage (got: $got)"
+node "$STATUS" --now bogus >/dev/null 2>&1; want=$?
+got=$(node "$HELPER" status --now bogus 2>&1); rc=$?
+[ "$want" != 0 ] && [ "$rc" = "$want" ] \
+    && printf '%s\n' "$got" | grep -qF 'status: --now must be an ISO timestamp' \
+    && pass "conduct.cjs status passes on status.cjs's non-zero exit and error" \
+    || fail "conduct.cjs status passes on status.cjs's non-zero exit and error (want=$want rc=$rc, got: $got)"
+DROOT="$TMPDIR_T/dispatch"; mkdir -p "$DROOT"
+DWS='w $(touch c1); touch c2 `touch c3` | touch c4 & "q" '"'s'"
+(cd "$DROOT" && node "$HELPER" status set --root "$DROOT" --controller HARNESS \
+    --workstream "$DWS" --percent 1 --state planned >/dev/null 2>&1) \
+    && pass "conduct.cjs status set writes a row" || fail "conduct.cjs status set writes a row"
+got=$(python3 -c 'import json,sys; print([r["workstream"] for r in json.load(open(sys.argv[1]))["rows"].values()][0])' \
+    "$DROOT/.brain/fleet.json" 2>&1)
+[ "$got" = "$DWS" ] && pass "conduct.cjs status passes shell metacharacters through as literal argv" \
+    || fail "conduct.cjs status passes shell metacharacters through as literal argv (got: $got)"
+ls "$DROOT" | grep -q '^c[1-4]$' && fail "conduct.cjs status runs no shell (canary files created)" \
+    || pass "conduct.cjs status runs no shell"
 
 echo "=== fleet usage ==="
 UROOT="$TMPDIR_T/usage"; UDIR="$UROOT/.brain/usage"; mkdir -p "$UDIR"
