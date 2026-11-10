@@ -125,7 +125,12 @@ Triage: **31 open → 22, unmilestoned 12 → 0.** Closed with reasons on each i
 
 Row 485 is **superseded by #511 and #517** — do not action it. Analysis lives on the issues, not here: #513 (the embedded install path), #482 (why this file stops being a store), #489 (byte ceiling).
 
-**Last release: v1.100.0, 2026-09-19** (`agentic-sdlc-wizard`). Closes two gate holes that
+**Last release: v2.1.0, 2026-11-09** (`agentic-sdlc-wizard`). Ships the 38 commits since
+v2.0.0: the Claude adapter on Conduct protocol v1 and fleet status (#729, #738), the `/fleet`
+alias (#779), the sdlc skill gate (#739), merge-gate guards (#763, #768), the Fable rung on
+`claude-fable-5-2` (#762) and optional GitNexus guidance (#783). See `CHANGELOG.md`.
+
+**Earlier release: v1.99.2, 2026-08-17** (`agentic-sdlc-wizard`). Closes two gate holes that
 let a merge cite a review of something other than what was merged: certification now binds to
 a declared `candidate_tree` rather than to a SHA that is not guaranteed to be the reviewed one (#540), and
 ancestry binds with `base_sha`, because `base_tree` alone let a moved merge base carry content
@@ -234,7 +239,7 @@ Living tracker of projects shipped using this wizard. **Rule:** only list projec
 
 | Project | Repo | Status |
 |---------|------|--------|
-| SDLC Harness itself | BaseInfinity/claude-sdlc-harness | Dogfooded, v1.100.0 (living tracker — bump every release) |
+| SDLC Harness itself | BaseInfinity/claude-sdlc-harness | Dogfooded, v2.1.0 (living tracker — bump every release) |
 | Codex SDLC Adapter | BaseInfinity/codex-sdlc-wizard | v0.7.x, shipped with SDLC workflow |
 | GDLC Wizard (games sibling) | BaseInfinity/claude-gdlc-wizard | v0.2.x, persona-driven playtest cycles |
 | _(add as projects are marked)_ | | |
