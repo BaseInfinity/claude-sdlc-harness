@@ -2843,6 +2843,117 @@ test_dual_certified_refuses_a_no_verdict() {
 }
 test_dual_certified_refuses_a_no_verdict
 
+# --- GH #784: ACKABLE accepts one reviewer >=95 plus a YES below 95 with 0 P0/P1 ---
+#
+# PRs #774, #780 and #783 each had two YES verdicts and only P3 findings, and
+# each dead-ended because the second reviewer sat at 90-93: it cannot re-derive
+# observational claims in-session, so its number does not move however many P3
+# rounds are spent. On ACKABLE paths the second YES now qualifies below 95 when
+# its payload declares `"p0_p1": 0`. HARD paths keep two reviewers at >=95.
+STRICT_SOL='{"reviewer":"gpt-5.6-sol","verdict":"YES","confidence":99,"sha":"__FIXTURE_SHA__","p0_p1":0}'
+SOFT_FABLE='{"reviewer":"fable-5","verdict":"YES","confidence":93,"sha":"__FIXTURE_SHA__","p0_p1":0}'
+
+test_ackable_accepts_sub_threshold_yes_with_zero_blockers() {
+    local r
+    r=$(run_with_clearance "$STRICT_SOL
+$SOFT_FABLE")
+    if ! printf '%s' "$r" | grep -q "GH_MERGE_INVOKED"; then
+        fail "#784: ACKABLE PR with Sol 99 + Fable YES 93 at 0 P0/P1 did not merge: $r"
+    elif ! printf '%s' "$r" | grep -q "fable-5 at 93"; then
+        fail "#784: merged, but the record does not name the sub-95 reviewer and its confidence: $r"
+    else
+        pass "#784: ACKABLE clears on one reviewer >=95 plus a YES at 93 with 0 P0/P1, and records both"
+    fi
+}
+test_ackable_accepts_sub_threshold_yes_with_zero_blockers
+
+test_ackable_refuses_sub_threshold_yes_with_a_p1() {
+    refute_merge "$(run_with_clearance "$STRICT_SOL
+${SOFT_FABLE/\"p0_p1\":0/\"p0_p1\":1}")" \
+        "#784: ACKABLE, Sol 99 + Fable YES 93 reporting 1 P0/P1 does not merge"
+}
+test_ackable_refuses_sub_threshold_yes_with_a_p1
+
+test_ackable_refuses_sub_threshold_yes_without_a_count() {
+    # Fail closed: a sub-95 YES that does not declare its P0/P1 count has not
+    # said it has none.
+    refute_merge "$(run_with_clearance "$STRICT_SOL
+${SOFT_FABLE/,\"p0_p1\":0/}")" \
+        "#784: ACKABLE, a sub-95 YES with no p0_p1 field does not qualify"
+}
+test_ackable_refuses_sub_threshold_yes_without_a_count
+
+test_ackable_refuses_malformed_counts() {
+    local bad
+    for bad in '"0"' '-1' '0.5' 'null'; do
+        refute_merge "$(run_with_clearance "$STRICT_SOL
+${SOFT_FABLE/\"p0_p1\":0/\"p0_p1\":$bad}")" \
+            "#784: ACKABLE, p0_p1 of $bad does not qualify a sub-95 YES"
+    done
+}
+test_ackable_refuses_malformed_counts
+
+test_ackable_refuses_one_reviewer_posting_both_legs() {
+    # Distinctness is decided after every comment is read, so order cannot
+    # matter: one reviewer at 99 and again at 93 is still one reviewer.
+    local same='{"reviewer":"gpt-5.6-sol","verdict":"YES","confidence":93,"sha":"__FIXTURE_SHA__","p0_p1":0}'
+    refute_merge "$(run_with_clearance "$STRICT_SOL
+$same")" "#784: ACKABLE, the same reviewer at 99 then 93 is one reviewer"
+    refute_merge "$(run_with_clearance "$same
+$STRICT_SOL")" "#784: ACKABLE, the same reviewer at 93 then 99 is one reviewer"
+}
+test_ackable_refuses_one_reviewer_posting_both_legs
+
+test_ackable_refuses_two_sub_threshold_yeses() {
+    refute_merge "$(run_with_clearance "$SOFT_FABLE
+${SOFT_FABLE/fable-5/gemini-3}")" \
+        "#784: ACKABLE, two YES verdicts both below 95 do not merge — one must be >=95"
+}
+test_ackable_refuses_two_sub_threshold_yeses
+
+test_ackable_accepts_counted_payloads_at_strict_bar() {
+    # The field is allowed on a >=95 payload too, so a reviewer can always
+    # emit it. Non-vacuity control for the rows that add it.
+    if printf '%s' "$(run_with_clearance "$STRICT_SOL
+${SOFT_FABLE/:93/:97}")" | grep -q "GH_MERGE_INVOKED"; then
+        pass "#784: two >=95 payloads carrying p0_p1 still clear"
+    else
+        fail "#784: two >=95 payloads carrying p0_p1 were refused"
+    fi
+}
+test_ackable_accepts_counted_payloads_at_strict_bar
+
+test_hard_refuses_sub_threshold_yes_with_zero_blockers() {
+    local tmpdir
+    tmpdir=$(setup_dual_fixture)
+    printf 'CLEARANCE_PAYLOADS=%s\n' "$(printf '%q' "$STRICT_SOL
+$SOFT_FABLE")" >> "$tmpdir/.gh-stub-config"
+    refute_merge "$(run_dual_in "$tmpdir" --dual-certified)" \
+        "#784: HARD PR, Sol 99 + Fable YES 93 at 0 P0/P1 does not dual-certify"
+}
+test_hard_refuses_sub_threshold_yes_with_zero_blockers
+
+test_hard_and_ackable_refuses_sub_threshold_yes() {
+    local tmpdir r
+    # Control first: the mixed fixture merges at the strict bar, so the
+    # refusal below is about the bar and not about the fixture.
+    tmpdir=$(setup_dual_fixture)
+    printf 'DIFF_FILES=%s\n' "$(printf '%q' 'hooks/codex-gate-check.sh CLAUDE_CODE_SDLC_WIZARD.md')" >> "$tmpdir/.gh-stub-config"
+    r=$(run_dual_in "$tmpdir" --dual-certified)
+    if printf '%s' "$r" | grep -q "GH_MERGE_INVOKED"; then
+        pass "#784: HARD+ACKABLE PR at two >=95 YES verdicts merges (control)"
+    else
+        fail "#784: HARD+ACKABLE control fixture did not merge at the strict bar: $r"
+    fi
+    tmpdir=$(setup_dual_fixture)
+    printf 'DIFF_FILES=%s\n' "$(printf '%q' 'hooks/codex-gate-check.sh CLAUDE_CODE_SDLC_WIZARD.md')" >> "$tmpdir/.gh-stub-config"
+    printf 'CLEARANCE_PAYLOADS=%s\n' "$(printf '%q' "$STRICT_SOL
+$SOFT_FABLE")" >> "$tmpdir/.gh-stub-config"
+    refute_merge "$(run_dual_in "$tmpdir" --dual-certified)" \
+        "#784: HARD+ACKABLE PR, Sol 99 + Fable YES 93 at 0 P0/P1 does not merge — HARD wins"
+}
+test_hard_and_ackable_refuses_sub_threshold_yes
+
 # The staleness bar #511 asked for: round-1-only CERTIFIED is a rubber stamp.
 # --user-approved waives the artifact checks; --dual-certified must NOT, because
 # the artifact is the only evidence that a dialogue happened at all.

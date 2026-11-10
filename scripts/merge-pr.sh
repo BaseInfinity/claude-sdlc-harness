@@ -207,15 +207,19 @@ ACKABLE_DENY=(
 # should be read as claiming otherwise.
 #
 # Requires: at least two DISTINCT reviewers, each at confidence >= 95 (integer
-# 0..100), each bound to the exact head SHA. The author login of each comment
-# is recorded in the output so an auditor can see who actually posted it.
+# 0..100), each bound to the exact head SHA. ACKABLE paths only (GH #784): one
+# reviewer at >=95 plus a DISTINCT reviewer whose YES is below 95 and whose
+# payload declares "p0_p1": 0 also clears. HARD paths keep the two-at-95 bar.
+# The author login of each comment is recorded in the output so an auditor can
+# see who actually posted it.
 CLEARED_BY=""
 verify_cross_model_clearance() {
     if ! command -v jq >/dev/null 2>&1; then
         echo "FAILED CLOSED: jq is required to verify cross-model clearance." >&2
         return 1
     fi
-    local comments records who conf sha author reviewers="" count=0
+    local comments records who conf sha author verdict blockers line
+    local reviewers="" count=0 soft=""
     CLEARED_BY=""
     if ! comments=$(gh api --hostname github.com --paginate "repos/BaseInfinity/claude-sdlc-harness/issues/$PR_NUM/comments" 2>&1); then
         echo "FAILED CLOSED: could not fetch PR comments for #$PR_NUM: $comments" >&2
@@ -307,7 +311,11 @@ verify_cross_model_clearance() {
         # enumeration — the difference between naming what is allowed and
         # chasing what is forbidden.
         | select($payloads[0][0] | test("\\\\") | not)
-        | select(($p | keys) == ["confidence", "reviewer", "sha", "verdict"])
+        # GH #784: one optional fifth key, `p0_p1`: how many P0/P1 findings
+        # the reviewer left open. It lets a YES below 95 count as the second
+        # reviewer on an ACKABLE path, so it is pinned exactly like the others.
+        | select(($p | keys) == ["confidence", "reviewer", "sha", "verdict"]
+              or ($p | keys) == ["confidence", "p0_p1", "reviewer", "sha", "verdict"])
         # Raw-text counting is only sound BECAUSE the line above bans
         # backslashes: with no escapes possible, a key in the text is the key
         # the parser sees. It is still needed, since `keys` runs after the
@@ -316,6 +324,8 @@ verify_cross_model_clearance() {
         | select([$payloads[0][0] | scan("\"sha\"[[:space:]]*:")] | length == 1)
         | select([$payloads[0][0] | scan("\"confidence\"[[:space:]]*:")] | length == 1)
         | select([$payloads[0][0] | scan("\"reviewer\"[[:space:]]*:")] | length == 1)
+        | select([$payloads[0][0] | scan("\"p0_p1\"[[:space:]]*:")] | length <= 1)
+        | select(($p | has("p0_p1") | not) or ($p.p0_p1 | type == "number"))
         | select($p.reviewer != null and $p.confidence != null and $p.sha != null)
         | select($p.verdict != null)
         | select($p.verdict | type == "string")
@@ -326,7 +336,10 @@ verify_cross_model_clearance() {
         # exact-match check below — documented as strict — was not strict. A
         # verdict is a machine-written field; a reviewer that cannot emit the
         # exact token has not cleared anything.
-        | [($c.user.login // "unknown"), $p.reviewer, ($p.confidence|tostring), $p.sha, $p.verdict]
+        # Absent p0_p1 prints "-", never an empty column: tab is IFS
+        # whitespace, so `read` would collapse an empty field.
+        | [($c.user.login // "unknown"), $p.reviewer, ($p.confidence|tostring), $p.sha, $p.verdict,
+           (if $p | has("p0_p1") then ($p.p0_p1 | tostring) else "-" end)]
         | @tsv
     ' 2>/dev/null)
 
@@ -335,7 +348,7 @@ verify_cross_model_clearance() {
         return 1
     fi
 
-    while IFS=$'\t' read -r author who conf sha verdict; do
+    while IFS=$'\t' read -r author who conf sha verdict blockers; do
         [ -z "$who" ] && continue
         # GH #478: the verdict decides; confidence only qualifies a YES. Anything
         # that is not an explicit YES is refused, so a malformed or novel verdict
@@ -361,7 +374,19 @@ verify_cross_model_clearance() {
         case "$conf" in *[!0-9]*)
             echo "  ignored: $who gave a non-integer confidence '$conf'" >&2; continue ;;
         esac
-        if [ "$conf" -lt 95 ] || [ "$conf" -gt 100 ]; then
+        if [ "$conf" -gt 100 ]; then
+            echo "  ignored: $who gave confidence $conf, above 100" >&2; continue
+        fi
+        # GH #784: a YES below 95 that declares exactly 0 open P0/P1 findings
+        # is held as a possible SECOND reviewer, for ACKABLE paths only. The
+        # string compare is exact: "-", "0.0", "-1" and "1e-09" do not qualify.
+        if [ "$conf" -lt 95 ] && [ "$blockers" = "0" ]; then
+            echo "  noted: $who returned YES at confidence $conf with 0 P0/P1 — counts as the second reviewer on ACKABLE paths only" >&2
+            soft="$soft$who	$who at $conf with 0 P0/P1 (posted by @$author)
+"
+            continue
+        fi
+        if [ "$conf" -lt 95 ]; then
             # GH #478: a YES under the bar means a NAMED RESIDUAL, not a dead
             # end. v1.92.0 got YES/97 and YES/93 — both reviewers agreed it was
             # safe — and the gate simply refused, so the maintainer ran the
@@ -381,10 +406,16 @@ verify_cross_model_clearance() {
     done <<< "$records"
 
     # F1: count parsed RECORDS, never shell words.
-    if [ "$count" -lt 2 ]; then
-        echo "BLOCKED: cross-model clearance needs 2 distinct reviewers at >=95% bound to $HEAD_SHA; found $count." >&2
-        return 1
-    fi
+    CLEARANCE_STRICT=$count
+    # Distinctness is decided here, after every comment is read, so comment
+    # order cannot let one reviewer fill both legs.
+    CLEARANCE_SOFT=""
+    while IFS=$'\t' read -r who line; do
+        [ -z "$who" ] && continue
+        case " $reviewers " in *" $who "*) continue ;; esac
+        CLEARANCE_SOFT=$line
+        break
+    done <<< "$soft"
     return 0
 }
 
@@ -392,14 +423,35 @@ verify_cross_model_clearance() {
 # each call re-fetches every comment on the PR. The verdict cannot change within
 # a run, so compute it once and reuse it — including the reason text, which must
 # print exactly once rather than once per file.
+#
+# $1 is the tier being cleared. GH #784: `hard` needs 2 distinct reviewers at
+# >=95. `ackable` also accepts 1 at >=95 plus a distinct YES below 95 that
+# declares "p0_p1": 0. Each tier's refusal exits the run, so its reason prints
+# once.
 CLEARANCE_CHECKED=0
-CLEARANCE_OK=0
+CLEARANCE_PARSED=0
+CLEARANCE_STRICT=0
+CLEARANCE_SOFT=""
+CLEARANCE_STRICT_BY=""
 clearance_ok() {
     if [ "$CLEARANCE_CHECKED" -eq 0 ]; then
         CLEARANCE_CHECKED=1
-        if verify_cross_model_clearance; then CLEARANCE_OK=1; fi
+        if verify_cross_model_clearance; then CLEARANCE_PARSED=1; fi
+        CLEARANCE_STRICT_BY=$CLEARED_BY
     fi
-    [ "$CLEARANCE_OK" -eq 1 ]
+    [ "$CLEARANCE_PARSED" -eq 1 ] || return 1
+    CLEARED_BY=$CLEARANCE_STRICT_BY
+    [ "$CLEARANCE_STRICT" -ge 2 ] && return 0
+    if [ "$1" = "ackable" ]; then
+        if [ "$CLEARANCE_STRICT" -eq 1 ] && [ -n "$CLEARANCE_SOFT" ]; then
+            CLEARED_BY="$CLEARED_BY, $CLEARANCE_SOFT"
+            return 0
+        fi
+        echo "BLOCKED: cross-model clearance needs 2 distinct reviewers at >=95%, or 1 at >=95% plus a distinct YES below 95 declaring \"p0_p1\": 0, bound to $HEAD_SHA; found $CLEARANCE_STRICT at >=95%." >&2
+        return 1
+    fi
+    echo "BLOCKED: cross-model clearance needs 2 distinct reviewers at >=95% bound to $HEAD_SHA; found $CLEARANCE_STRICT. A YES below 95 does not count on a merge-evidence path, whatever its P0/P1 count." >&2
+    return 1
 }
 
 # --- Gate self-integrity, dual path only (GH #511) ---
@@ -688,7 +740,7 @@ fi
                 # decision always wins, and gate integrity BEFORE clearance so
                 # the first thing reported is the one condition the reviewers
                 # themselves cannot vouch for.
-                if [ "$DUAL_CERTIFIED" -eq 1 ] && gate_integrity_ok && clearance_ok; then
+                if [ "$DUAL_CERTIFIED" -eq 1 ] && gate_integrity_ok && clearance_ok hard; then
                     echo "DUAL-CERTIFIED: PR #$PR_NUM touches '$f' ($pattern), a merge-evidence path. Cleared by $CLEARED_BY, both bound to $HEAD_SHA, with this gate byte-matching origin/main. ATTESTED, NOT AUTHENTICATED — both clearances were posted by the same gh token, so this records that two reviewers said yes, not that two independent principals did." >&2
                     DUAL_PATHS="$DUAL_PATHS$f (merge-evidence path)
 "
@@ -717,7 +769,7 @@ fi
 "
                     continue
                 fi
-                if [ "$CROSS_MODEL_CLEARED" -eq 1 ] && clearance_ok; then
+                if [ "$CROSS_MODEL_CLEARED" -eq 1 ] && clearance_ok ackable; then
                     echo "DENYLIST ACKNOWLEDGED: '$f' matches $pattern, cleared by $CLEARED_BY. Every other check still ran." >&2
                     continue
                 fi
