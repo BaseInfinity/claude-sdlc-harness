@@ -4468,6 +4468,111 @@ test_plan_gate_marker_everywhere
 test_plan_gate_canonical_rule_in_sdlc
 test_plan_gate_not_duplicated
 
+echo "--- GitNexus optional guidance (GH #781) ---"
+
+GNX_HEADING='#### Optional: GitNexus code graph'
+GNX_POINTER='wizard → "Optional: GitNexus code graph"'
+GNX_PIN='gitnexus@1.6.12'
+GNX_LICENSE='PolyForm Noncommercial 1.0.0'
+
+# Prints file:line for advice the pilot said must not ship: the generated
+# "never substitute grep" block and unpinned @latest self-update.
+gnx_banned_refs() {
+    grep -niF -e 'never substitute grep' -e 'gitnexus@latest' "$@" 2>/dev/null || true
+}
+
+test_gnx_wizard_section() {
+    local w="$REPO_ROOT/CLAUDE_CODE_SDLC_WIZARD.md" missing="" s
+    for s in "$GNX_HEADING" "$GNX_PIN" "$GNX_LICENSE" 'analyze --index-only --pdg --embeddings' \
+             '"args":["mcp"]' 'keep every server already there'; do
+        grep -qF -- "$s" "$w" || missing="$missing '$s'"
+    done
+    if [ -n "$missing" ]; then
+        fail "#781: wizard GitNexus section missing:$missing"
+        return
+    fi
+    pass "#781: wizard has the GitNexus section with pin, license, index and MCP strings"
+}
+
+test_gnx_banned_advice_absent() {
+    local fx hits
+    fx="$(mktemp "${TMPDIR:-/tmp}/gnx-fixture.XXXXXX")"
+    printf 'Never substitute grep for the graph.\nnpx gitnexus@latest analyze\n' > "$fx"
+    if [ "$(gnx_banned_refs "$fx" | wc -l | tr -d ' ')" -ne 2 ]; then
+        rm -f "$fx"
+        fail "#781: banned-advice detector does not fire on its fixture"
+        return
+    fi
+    rm -f "$fx"
+    # shellcheck disable=SC2046
+    hits=$(gnx_banned_refs $(fable_rung_files))
+    if [ -n "$hits" ]; then
+        fail "#781: shipped files carry banned GitNexus advice:"
+        echo "$hits" | sed "s|^$REPO_ROOT/|    |"
+        return
+    fi
+    pass "#781: no shipped file says 'never substitute grep' or gitnexus@latest (detector fires on fixture)"
+}
+
+test_gnx_lanes_entry() {
+    local f="$REPO_ROOT/AI_SETUP_LANES.md" missing="" s
+    for s in '**GitNexus (optional).**' "$GNX_LICENSE" '384-dim' "$GNX_POINTER"; do
+        grep -qF -- "$s" "$f" || missing="$missing '$s'"
+    done
+    if [ -n "$missing" ]; then
+        fail "#781: AI_SETUP_LANES GitNexus entry missing:$missing"
+        return
+    fi
+    pass "#781: AI_SETUP_LANES names GitNexus as optional, with license, 384-dim and the wizard pointer"
+}
+
+test_gnx_sdlc_bullet() {
+    local missing="" f s
+    for f in skills/sdlc/SKILL.md cowork/skills/sdlc/SKILL.md; do
+        for s in '**GitNexus (optional)**' 'Grep anyway' "$GNX_POINTER"; do
+            grep -qF -- "$s" "$REPO_ROOT/$f" || missing="$missing $f('$s')"
+        done
+    done
+    if [ -n "$missing" ]; then
+        fail "#781: sdlc GitNexus bullet missing:$missing"
+        return
+    fi
+    pass "#781: sdlc and its cowork copy carry the optional GitNexus bullet with the grep caveat"
+}
+
+test_gnx_setup_step() {
+    local f="$REPO_ROOT/skills/setup/SKILL.md" step missing="" s
+    step=$(sed -n '/^### Step 9.6:/,/^### Step [0-9]/p' "$f")
+    for s in 'Opt-In' "$GNX_LICENSE" '`[y/N]`' "$GNX_PIN" "$GNX_POINTER" 'Never run `gitnexus setup`' 'keep every server already there'; do
+        printf '%s' "$step" | grep -qF -- "$s" || missing="$missing '$s'"
+    done
+    if [ -n "$missing" ]; then
+        fail "#781: setup Step 9.6 (GitNexus opt-in) missing:$missing"
+        return
+    fi
+    pass "#781: setup Step 9.6 offers GitNexus default-No, shows the license, pins the version"
+}
+
+test_gnx_conduct_lookup() {
+    local f="$REPO_ROOT/skills/conduct/SKILL.md" missing="" s
+    for s in '**Cross-repo lookups (optional).**' '`list_repos`' '`repo` argument' \
+             'not fleet status' "$GNX_POINTER"; do
+        grep -qF -- "$s" "$f" || missing="$missing '$s'"
+    done
+    if [ -n "$missing" ]; then
+        fail "#781: conduct GitNexus cross-repo note missing:$missing"
+        return
+    fi
+    pass "#781: conduct names list_repos and the repo argument, and says it is not fleet status"
+}
+
+test_gnx_wizard_section
+test_gnx_banned_advice_absent
+test_gnx_lanes_entry
+test_gnx_sdlc_bullet
+test_gnx_setup_step
+test_gnx_conduct_lookup
+
 echo "=== Results: $PASSED passed, $FAILED failed ==="
 
 if [ "$FAILED" -gt 0 ]; then

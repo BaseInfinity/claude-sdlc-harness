@@ -353,6 +353,12 @@ Handing computer use to another session, under Troubleshooting. Rule 10 is what
 `claude-desktop.sh` does: it presses Trust only when the dialog names your
 folder.
 
+**Cross-repo lookups (optional).** If the GitNexus MCP server is connected,
+`list_repos` names the indexed repos and `query` takes a `repo` argument, so a
+controller can search another lane's code without opening a session there. It
+is a code lookup, not fleet status: status still comes from a transcript or
+the ledger (rule 4). Setup: wizard → "Optional: GitNexus code graph".
+
 ### Never stall on the human
 
 Recommended and optional, like the layout above. A controller or worker never
