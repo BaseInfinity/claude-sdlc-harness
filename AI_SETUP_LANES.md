@@ -334,6 +334,56 @@ $ claude -p --model 'claude-opus-4-6' --effort high --output-format json "Reply 
 
 **Need more effort for one stretch?** Type `/effort max` in the conductor session. That is a runtime bump for that session, not a lane change: the entry above stays `high`.
 
+## Browser Automation
+
+CDP Chrome is the default browser automation path for agent workflows that need an authenticated browser — purchases, form submissions, admin panels, anything with logged-in session state.
+
+### Architecture
+
+Launch a dedicated Chrome instance with `--remote-debugging-port=9222` and a separate `--user-data-dir` (not your daily browser profile). Sign in to each site once; cookies persist in the dedicated profile. Playwright MCP connects via `cdp_endpoint` to drive pages.
+
+| Component | Role |
+|-----------|------|
+| **CDP Chrome** (dedicated Chrome + remote debugging) | Default for authenticated/stateful browser work |
+| **Playwright MCP** (`--cdp-endpoint http://localhost:9222`) | Runs headless with its own managed profile by default. When `--cdp-endpoint` is configured, attaches to an existing browser instead, using that browser's cookies and sessions |
+| **Claude in Chrome** (browser extension) | Fallback for read-only browsing when CDP Chrome is unavailable |
+
+### Consumer setup
+
+Write a launcher script that starts Chrome with `--remote-debugging-port=9222` and a dedicated `--user-data-dir` (not your daily profile). The maintainer's `~/bin/chrome-cdp` does this — it is not shipped, but the pattern is:
+
+```bash
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --user-data-dir="$HOME/Library/Application Support/Google/Chrome-CDP/" \
+  --remote-debugging-port=9222 \
+  --no-first-run --no-default-browser-check
+```
+
+Env overrides (read by the maintainer's launcher): `CHROME_CDP_PORT` (default 9222), `CHROME_CDP_PROFILE` (default `~/Library/Application Support/Google/Chrome-CDP/`).
+
+Playwright MCP config in `~/.claude.json` (or project `.claude/settings.json` under `mcpServers`):
+
+```json
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest", "--cdp-endpoint", "http://localhost:9222"]
+    }
+  }
+}
+```
+
+### When to use each tool
+
+- **CDP Chrome + Playwright MCP** — any purchase, form submission, admin panel, registrar dashboard, DNS setup, cloud console, or workflow requiring cookies/auth. This is the default.
+- **Claude in Chrome** — read-only browsing, quick page inspection, when CDP Chrome is not running. Fallback, not primary.
+- **Playwright tests** (isolated contexts) — deterministic CI regression suites. Never for interactive agent work.
+
+### One-time sign-in
+
+After launching CDP Chrome, sign in to each site you need (registrar, payment provider, cloud console, etc.) once in the dedicated browser. Cookies persist across agent sessions in the separate profile directory. No re-auth on every run.
+
 ## See Also
 
 - [`CLAUDE_CODE_SDLC_WIZARD.md`](CLAUDE_CODE_SDLC_WIZARD.md) — Full wizard doc, including Stability tier opt-in for the wider model choice

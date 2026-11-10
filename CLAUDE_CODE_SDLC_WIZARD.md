@@ -2802,6 +2802,27 @@ Trigger examples — if the task description includes any of these, suggest real
 
 These all share a property: the agent's job IS the authenticated session. A clean automation browser is the wrong model.
 
+#### CDP Chrome — the recommended default for authenticated work
+
+Set up a dedicated Chrome instance with `--remote-debugging-port=9222` and a separate `--user-data-dir`. Sign in to each site once; cookies persist in the dedicated profile. Playwright MCP connects via `cdp_endpoint` to drive pages — no re-auth on every session.
+
+**Consumer Playwright MCP config** (in `~/.claude.json` or project `mcpServers`):
+
+```json
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest", "--cdp-endpoint", "http://localhost:9222"]
+    }
+  }
+}
+```
+
+The launch script itself is NOT shipped — consumers write their own. See [`AI_SETUP_LANES.md` § Browser Automation](AI_SETUP_LANES.md#browser-automation) for the Chrome flags pattern (`--remote-debugging-port=9222`, dedicated `--user-data-dir`).
+
+**Claude in Chrome** remains the fallback for read-only browsing when CDP Chrome is not running.
+
 #### Playwright MCP profile-lock policy (#251)
 
 `Playwright MCP`'s default mode reuses a single persistent managed profile (`ms-playwright/mcp-{channel}-{workspace-hash}`) across stdio sessions — which is the right call for single-agent debugging because it preserves session continuity across calls, but breaks down when **multiple agents or MCP clients run concurrently** (two CC sessions, one CC + one Codex, etc.). Concurrent stdio sessions collide on the same Chrome user-data directory and corrupt each other's session state.

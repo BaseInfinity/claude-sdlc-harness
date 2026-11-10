@@ -4390,6 +4390,155 @@ test_conductor_never_bare_pin
 test_conductor_scanner_fixtures
 test_fleet_structure_paragraph
 
+# ────────────────────────────────────────────
+# CDP Chrome Browser Automation Lane
+# ────────────────────────────────────────────
+
+echo ""
+echo "--- CDP Chrome Browser Automation ---"
+
+# AI_SETUP_LANES.md must have a Browser automation section naming CDP Chrome
+# as the default path, with the remote-debugging port and Playwright MCP
+# cdp_endpoint config.
+test_setup_lanes_has_browser_automation_section() {
+    local LANES="$REPO_ROOT/AI_SETUP_LANES.md"
+    if [ ! -f "$LANES" ]; then fail "AI_SETUP_LANES.md not found"; return; fi
+    if grep -qE '^##+ Browser [Aa]utomation' "$LANES"; then
+        pass "AI_SETUP_LANES.md has a Browser automation section heading"
+    else
+        fail "AI_SETUP_LANES.md must have a Browser automation section heading"
+    fi
+}
+
+extract_browser_automation_section() {
+    awk '/^## Browser [Aa]utomation/{f=1;print;next} f && /^## [^#]/{exit} f' "$1"
+}
+
+test_setup_lanes_names_cdp_chrome_as_default() {
+    local LANES="$REPO_ROOT/AI_SETUP_LANES.md"
+    if [ ! -f "$LANES" ]; then fail "AI_SETUP_LANES.md not found"; return; fi
+    local section
+    section=$(extract_browser_automation_section "$LANES")
+    if [ -z "$section" ]; then fail "Browser automation section is empty/missing"; return; fi
+    local ok=true
+    echo "$section" | grep -qiE 'CDP.*Chrome|Chrome.*CDP|remote.debugging' || ok=false
+    echo "$section" | grep -qi 'default' || ok=false
+    if [ "$ok" = true ]; then
+        pass "AI_SETUP_LANES.md Browser automation section names CDP Chrome as default"
+    else
+        fail "AI_SETUP_LANES.md Browser automation section must name CDP Chrome as the default path"
+    fi
+}
+
+test_setup_lanes_names_port_9222() {
+    local LANES="$REPO_ROOT/AI_SETUP_LANES.md"
+    if [ ! -f "$LANES" ]; then fail "AI_SETUP_LANES.md not found"; return; fi
+    local section
+    section=$(extract_browser_automation_section "$LANES")
+    if echo "$section" | grep -q '9222'; then
+        pass "AI_SETUP_LANES.md Browser automation section names port 9222"
+    else
+        fail "AI_SETUP_LANES.md Browser automation section must name the remote-debugging port (9222)"
+    fi
+}
+
+test_setup_lanes_names_cdp_endpoint() {
+    local LANES="$REPO_ROOT/AI_SETUP_LANES.md"
+    if [ ! -f "$LANES" ]; then fail "AI_SETUP_LANES.md not found"; return; fi
+    local section
+    section=$(extract_browser_automation_section "$LANES")
+    if echo "$section" | grep -qE 'cdp_endpoint|cdp-endpoint|cdpEndpoint'; then
+        pass "AI_SETUP_LANES.md Browser automation section names Playwright MCP cdp_endpoint"
+    else
+        fail "AI_SETUP_LANES.md Browser automation section must name the Playwright MCP cdp_endpoint config"
+    fi
+}
+
+# Wizard doc Browser Tooling Policy must name CDP Chrome as the recommended
+# default for authenticated/stateful browser work.
+test_wizard_browser_policy_names_cdp_chrome() {
+    local DOC="$REPO_ROOT/CLAUDE_CODE_SDLC_WIZARD.md"
+    if [ ! -f "$DOC" ]; then fail "CLAUDE_CODE_SDLC_WIZARD.md not found"; return; fi
+    local section
+    section=$(extract_browser_tooling_policy_section "$DOC")
+    if [ -z "$section" ]; then fail "Browser Tooling Policy section is empty/missing"; return; fi
+    if echo "$section" | grep -qiE 'CDP.*Chrome|dedicated.*Chrome.*remote.debugging|chrome-cdp|remote-debugging-port'; then
+        pass "wizard Browser Tooling Policy names CDP Chrome"
+    else
+        fail "wizard Browser Tooling Policy must name CDP Chrome as the default for authenticated browser work"
+    fi
+}
+
+test_wizard_browser_policy_has_consumer_config_snippet() {
+    local DOC="$REPO_ROOT/CLAUDE_CODE_SDLC_WIZARD.md"
+    if [ ! -f "$DOC" ]; then fail "CLAUDE_CODE_SDLC_WIZARD.md not found"; return; fi
+    local section
+    section=$(extract_browser_tooling_policy_section "$DOC")
+    if echo "$section" | grep -qE 'cdp_endpoint.*localhost.*9222|localhost:9222'; then
+        pass "wizard Browser Tooling Policy has consumer config snippet (cdp_endpoint + localhost:9222)"
+    else
+        fail "wizard Browser Tooling Policy must include consumer Playwright MCP config snippet with cdp_endpoint and localhost:9222"
+    fi
+}
+
+# The documented Playwright MCP config must use @playwright/mcp (the real
+# package), not a fabricated name. Sol P1: the original shipped
+# @anthropic-ai/playwright-mcp which does not exist on npm.
+test_setup_lanes_config_uses_real_playwright_package() {
+    local LANES="$REPO_ROOT/AI_SETUP_LANES.md"
+    if [ ! -f "$LANES" ]; then fail "AI_SETUP_LANES.md not found"; return; fi
+    local section
+    section=$(extract_browser_automation_section "$LANES")
+    if echo "$section" | grep -qF '@playwright/mcp'; then
+        pass "AI_SETUP_LANES.md config snippet uses @playwright/mcp (real package)"
+    else
+        fail "AI_SETUP_LANES.md config snippet must use @playwright/mcp (not a fabricated package name)"
+    fi
+}
+
+test_wizard_config_uses_real_playwright_package() {
+    local DOC="$REPO_ROOT/CLAUDE_CODE_SDLC_WIZARD.md"
+    if [ ! -f "$DOC" ]; then fail "CLAUDE_CODE_SDLC_WIZARD.md not found"; return; fi
+    local section
+    section=$(extract_browser_tooling_policy_section "$DOC")
+    if echo "$section" | grep -qF '@playwright/mcp'; then
+        pass "wizard Browser Tooling Policy config snippet uses @playwright/mcp (real package)"
+    else
+        fail "wizard Browser Tooling Policy config snippet must use @playwright/mcp (not a fabricated package name)"
+    fi
+}
+
+# Gated existence check: when running on the maintainer's machine (where
+# ~/bin/chrome-cdp exists), verify the documented launcher is real. Skips
+# gracefully in CI where the script isn't installed. Sol P1: token-grep
+# tests pass after swapping documented commands to nonexistent ones — this
+# is the ground-truth check that catches that mutation locally.
+test_setup_lanes_documented_launcher_exists() {
+    local launcher="$HOME/bin/chrome-cdp"
+    if [ ! -x "$launcher" ]; then
+        pass "chrome-cdp launcher check skipped (not on maintainer machine)"
+        return
+    fi
+    local LANES="$REPO_ROOT/AI_SETUP_LANES.md"
+    local section
+    section=$(extract_browser_automation_section "$LANES")
+    if echo "$section" | grep -qF 'chrome-cdp'; then
+        pass "AI_SETUP_LANES.md references chrome-cdp launcher (exists at $launcher)"
+    else
+        fail "AI_SETUP_LANES.md must reference the chrome-cdp launcher (exists at $launcher but not mentioned in docs)"
+    fi
+}
+
+test_setup_lanes_has_browser_automation_section
+test_setup_lanes_names_cdp_chrome_as_default
+test_setup_lanes_names_port_9222
+test_setup_lanes_names_cdp_endpoint
+test_setup_lanes_config_uses_real_playwright_package
+test_setup_lanes_documented_launcher_exists
+test_wizard_browser_policy_names_cdp_chrome
+test_wizard_browser_policy_has_consumer_config_snippet
+test_wizard_config_uses_real_playwright_package
+
 echo "=== Results: $PASSED passed, $FAILED failed ==="
 
 if [ "$FAILED" -gt 0 ]; then
