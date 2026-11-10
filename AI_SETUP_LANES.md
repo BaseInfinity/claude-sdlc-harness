@@ -337,6 +337,16 @@ $ claude -p --model 'claude-opus-4-6' --effort high --output-format json "Reply 
 
 **In a `/conduct` fleet, show the human a plan only at 95%.** A controller's gameplan, status report or decision reaches the human only at 95% confidence, or once every brain has tried and cannot get there. Below that, the conductor helps close the gap. Full rule: `/sdlc` → "Exhaust the driver before escalating".
 
+## Optional Tooling
+
+**GitNexus (optional).** A local code graph served to Claude Code over MCP, for blast-radius and
+caller queries. It works with every lane above and is never required.
+License: PolyForm Noncommercial 1.0.0; commercial use needs a license from its author. Indexing and queries run
+locally, and no code goes to an API. Semantic search uses 384-dim embeddings from
+`snowflake-arctic-embed-xs`, computed on the machine. Three calls do go out: a one-time ~97 MB
+model download from huggingface.co, an install-time analytics ping and a daily update check. The
+last two can be switched off. Install, opt-outs and limits: wizard → "Optional: GitNexus code graph".
+
 ## See Also
 
 - [`CLAUDE_CODE_SDLC_WIZARD.md`](CLAUDE_CODE_SDLC_WIZARD.md) — Full wizard doc, including Stability tier opt-in for the wider model choice

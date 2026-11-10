@@ -4514,8 +4514,21 @@ test_gnx_banned_advice_absent() {
     pass "#781: no shipped file says 'never substitute grep' or gitnexus@latest (detector fires on fixture)"
 }
 
+test_gnx_lanes_entry() {
+    local f="$REPO_ROOT/AI_SETUP_LANES.md" missing="" s
+    for s in '**GitNexus (optional).**' "$GNX_LICENSE" '384-dim' "$GNX_POINTER"; do
+        grep -qF -- "$s" "$f" || missing="$missing '$s'"
+    done
+    if [ -n "$missing" ]; then
+        fail "#781: AI_SETUP_LANES GitNexus entry missing:$missing"
+        return
+    fi
+    pass "#781: AI_SETUP_LANES names GitNexus as optional, with license, 384-dim and the wizard pointer"
+}
+
 test_gnx_wizard_section
 test_gnx_banned_advice_absent
+test_gnx_lanes_entry
 
 echo "=== Results: $PASSED passed, $FAILED failed ==="
 
