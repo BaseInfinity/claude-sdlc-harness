@@ -4289,28 +4289,31 @@ CONDUCTOR_ROW='| **Conductor** | `claude-opus-4-6[1m]` | `high` |'
 CONDUCTOR_BUILDER_ROW='| **Builders** | `claude-opus-5-5` | `medium` |'
 CONDUCTOR_FABLE_ROW='| **Planning and reviews** | `claude-fable-5-2` | `high` |'
 CONDUCTOR_MARKER='**Conductor model:** `claude-opus-4-6[1m]` at `high`'
+CONTROLLER_ROW='| **Controllers** | `claude-opus-4-6[1m]` | `high` |'
+CONTROLLER_MARKER='**Controller model:** `claude-opus-4-6[1m]` at `high`'
 
 test_conductor_lane_rows() {
     local missing="" f row
     for f in AI_SETUP_LANES.md CLAUDE_CODE_SDLC_WIZARD.md; do
-        for row in "$CONDUCTOR_ROW" "$CONDUCTOR_BUILDER_ROW" "$CONDUCTOR_FABLE_ROW"; do
+        for row in "$CONDUCTOR_ROW" "$CONTROLLER_ROW" "$CONDUCTOR_BUILDER_ROW" "$CONDUCTOR_FABLE_ROW"; do
             grep -qxF "$row" "$REPO_ROOT/$f" || missing="$missing $f('$row')"
         done
     done
     for f in skills/sdlc/SKILL.md cowork/skills/sdlc/SKILL.md skills/setup/SKILL.md; do
         grep -qF "$CONDUCTOR_MARKER" "$REPO_ROOT/$f" || missing="$missing $f(marker)"
+        grep -qF "$CONTROLLER_MARKER" "$REPO_ROOT/$f" || missing="$missing $f(controller-marker)"
     done
     if [ -n "$missing" ]; then
         fail "conductor lane entry missing:$missing"
         return
     fi
-    pass "conductor lane: opus-4-6[1m] high, builders opus-5-5 medium, fable-5-2 high"
+    pass "conductor lane: conductor and controllers opus-4-6[1m] high, builders opus-5-5 medium, fable-5-2 high"
 }
 
 # Prints file:line for every conductor row or marker that does not name the
 # [1m] pin, or that names the bare claude-opus-4-6 pin (a 200K window).
 bare_conductor_pins() {
-    grep -HnE '^\| \*\*Conductor\*\* \||\*\*Conductor model:\*\*' "$@" 2>/dev/null \
+    grep -HnE '^\| \*\*(Conductor|Controllers)\*\* \||\*\*(Conductor|Controller) model:\*\*' "$@" 2>/dev/null \
         | grep -E '`claude-opus-4-6`|^[^\[]*$' || true
 }
 
@@ -4333,11 +4336,14 @@ test_conductor_scanner_fixtures() {
     printf '%s\n' '| **Conductor** | `claude-opus-4-6` | `high` |' > "$d/bare-row.md"
     printf '%s\n' '**Conductor model:** `claude-opus-4-6` at `high`' > "$d/bare-marker.md"
     printf '%s\n' '| **Conductor** | `claude-opus-5-5` | `medium` |' > "$d/other-model.md"
+    printf '%s\n' '| **Controllers** | `claude-opus-4-6` | `high` |' > "$d/bare-controller.md"
+    printf '%s\n' "$CONTROLLER_ROW" "$CONTROLLER_MARKER." >> "$d/ok.md"
     local bad=""
     [ -z "$(bare_conductor_pins "$d/ok.md")" ] || bad="$bad ok.md(flagged)"
     [ -n "$(bare_conductor_pins "$d/bare-row.md")" ] || bad="$bad bare-row.md(missed)"
     [ -n "$(bare_conductor_pins "$d/bare-marker.md")" ] || bad="$bad bare-marker.md(missed)"
     [ -n "$(bare_conductor_pins "$d/other-model.md")" ] || bad="$bad other-model.md(missed)"
+    [ -n "$(bare_conductor_pins "$d/bare-controller.md")" ] || bad="$bad bare-controller.md(missed)"
     rm -rf "$d"
     if [ -n "$bad" ]; then
         fail "conductor pin scanner fixtures:$bad"
@@ -4389,6 +4395,78 @@ test_conductor_lane_rows
 test_conductor_never_bare_pin
 test_conductor_scanner_fixtures
 test_fleet_structure_paragraph
+
+# ────────────────────────────────────────────
+# 95% plan gate (fleet rule 2026-11-09)
+# ────────────────────────────────────────────
+
+echo "--- 95% plan gate ---"
+
+PLAN_GATE_MARKER='**In a `/conduct` fleet, show the human a plan only at 95%.**'
+# The unscoped form binds every /sdlc user, not fleet controllers (Sol, PR #780).
+PLAN_GATE_UNSCOPED='**Show the human a plan only at 95%.**'
+PLAN_GATE_LADDER='driver first, then Sol, then Fable on a split'
+PLAN_GATE_FALLBACK='every brain has tried and cannot get there'
+PLAN_GATE_CHECK_X='"I'"'"'m at 90% because I haven'"'"'t checked X" is never acceptable: check X.'
+
+# Prints the files among the given ones that carry the exact sentence.
+files_with_sentence() {
+    local sentence="$1"; shift
+    grep -lF -- "$sentence" "$@" 2>/dev/null || true
+}
+
+test_plan_gate_marker_everywhere() {
+    local missing="" f
+    for f in skills/sdlc/SKILL.md cowork/skills/sdlc/SKILL.md AI_SETUP_LANES.md \
+             CLAUDE_CODE_SDLC_WIZARD.md skills/conduct/SKILL.md; do
+        grep -qF -- "$PLAN_GATE_MARKER" "$REPO_ROOT/$f" || missing="$missing $f(marker)"
+        grep -qF -- "$PLAN_GATE_FALLBACK" "$REPO_ROOT/$f" || missing="$missing $f(fallback)"
+    done
+    if [ -n "$missing" ]; then
+        fail "95% plan gate marker missing:$missing"
+        return
+    fi
+    pass "95% plan gate marker and every-brain fallback present in sdlc, cowork, lanes, wizard and conduct"
+}
+
+test_plan_gate_canonical_rule_in_sdlc() {
+    local missing="" f s
+    for f in skills/sdlc/SKILL.md cowork/skills/sdlc/SKILL.md; do
+        for s in "$PLAN_GATE_LADDER" "$PLAN_GATE_CHECK_X" \
+                 "This covers a controller's gameplans, status reports and any decision that needs confidence" \
+                 "dispatch research, read files, check state, ask another controller"; do
+            grep -qF -- "$s" "$REPO_ROOT/$f" || missing="$missing $f('$s')"
+        done
+    done
+    if [ -n "$missing" ]; then
+        fail "95% plan gate canonical rule incomplete:$missing"
+        return
+    fi
+    pass "95% plan gate canonical rule (ladder, check-X, scope) lives in the sdlc skill"
+}
+
+# The full rule lives once (sdlc + its cowork copy); other files point to it.
+test_plan_gate_not_duplicated() {
+    local files hits n
+    files=$(fable_rung_files)
+    # shellcheck disable=SC2086
+    hits=$(files_with_sentence "$PLAN_GATE_CHECK_X" $files | sed "s|^$REPO_ROOT/||" | sort | tr '\n' ' ')
+    if [ "$hits" != "cowork/skills/sdlc/SKILL.md skills/sdlc/SKILL.md " ]; then
+        fail "95% plan gate check-X sentence must live only in skills/sdlc and its cowork copy, found in: ${hits:-nothing}"
+        return
+    fi
+    # shellcheck disable=SC2086
+    hits=$(grep -lF -- "$PLAN_GATE_UNSCOPED" $files 2>/dev/null | sed "s|^$REPO_ROOT/||" | tr '\n' ' ')
+    if [ -n "$hits" ]; then
+        fail "95% plan gate marker must carry its /conduct fleet scope; unscoped in: $hits"
+        return
+    fi
+    pass "95% plan gate full rule is not duplicated outside the sdlc skill, and every marker is fleet-scoped"
+}
+
+test_plan_gate_marker_everywhere
+test_plan_gate_canonical_rule_in_sdlc
+test_plan_gate_not_duplicated
 
 echo "=== Results: $PASSED passed, $FAILED failed ==="
 
