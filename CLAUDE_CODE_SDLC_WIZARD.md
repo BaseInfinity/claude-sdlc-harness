@@ -1680,7 +1680,9 @@ GITNEXUS_NO_UPDATE_NOTIFIER=1 ~/.local/share/gitnexus/node_modules/.bin/gitnexus
 `.git/info/exclude` and registers the repo in `~/.gitnexus/registry.json`. Re-run it after large
 changes.
 
-**Register the MCP server** in the project's `.mcp.json`, with the absolute path to the binary:
+**Register the MCP server** in the project's `.mcp.json`, with the absolute path to the binary.
+If the file already exists, add the `gitnexus` entry under `mcpServers`
+and keep every server already there, plus any other top-level keys. Do not overwrite the file. A new file looks like this:
 
 ```json
 {"mcpServers":{"gitnexus":{"command":"/Users/<you>/.local/share/gitnexus/node_modules/.bin/gitnexus","args":["mcp"],"env":{"GITNEXUS_NO_UPDATE_NOTIFIER":"1"}}}}

@@ -4484,7 +4484,7 @@ gnx_banned_refs() {
 test_gnx_wizard_section() {
     local w="$REPO_ROOT/CLAUDE_CODE_SDLC_WIZARD.md" missing="" s
     for s in "$GNX_HEADING" "$GNX_PIN" "$GNX_LICENSE" 'analyze --index-only --pdg --embeddings' \
-             '"args":["mcp"]'; do
+             '"args":["mcp"]' 'keep every server already there'; do
         grep -qF -- "$s" "$w" || missing="$missing '$s'"
     done
     if [ -n "$missing" ]; then
@@ -4543,7 +4543,7 @@ test_gnx_sdlc_bullet() {
 test_gnx_setup_step() {
     local f="$REPO_ROOT/skills/setup/SKILL.md" step missing="" s
     step=$(sed -n '/^### Step 9.6:/,/^### Step [0-9]/p' "$f")
-    for s in 'Opt-In' "$GNX_LICENSE" '`[y/N]`' "$GNX_PIN" "$GNX_POINTER" 'Never run `gitnexus setup`'; do
+    for s in 'Opt-In' "$GNX_LICENSE" '`[y/N]`' "$GNX_PIN" "$GNX_POINTER" 'Never run `gitnexus setup`' 'keep every server already there'; do
         printf '%s' "$step" | grep -qF -- "$s" || missing="$missing '$s'"
     done
     if [ -n "$missing" ]; then

@@ -336,7 +336,9 @@ parse bash. Otherwise skip this step silently.
 
 Only an explicit yes proceeds. Then follow wizard → "Optional: GitNexus code graph": install
 `gitnexus@1.6.12` with `--save-exact`, index with `analyze --index-only --pdg --embeddings`, and
-write the project `.mcp.json`. Never run `gitnexus setup`; the wizard section says why.
+add the `gitnexus` server to the project `.mcp.json`. If that file exists, merge into
+`mcpServers` and keep every server already there; never overwrite it. Never run `gitnexus setup`;
+the wizard section says why.
 
 ### Step 10: Customize Hooks
 
