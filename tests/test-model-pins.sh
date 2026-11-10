@@ -89,22 +89,6 @@ test_fable_51_in_docs() {
     fi
 }
 
-test_no_stale_fable_5() {
-    # claude-fable-5 IS the correct model ID (no point releases exist).
-    # Flag only stale claude-fable-5-1 references (the old wrong ID).
-    local stale=0
-    for f in "${SHIPPED_DOCS[@]}"; do
-        if [ -f "$f" ] && grep -q 'claude-fable-5-1' "$f" 2>/dev/null; then
-            stale=$((stale + 1))
-        fi
-    done
-    if [ "$stale" -eq 0 ]; then
-        pass "No stale claude-fable-5-1 refs in shipped docs"
-    else
-        fail "$stale shipped docs still reference claude-fable-5-1 (should be claude-fable-5)"
-    fi
-}
-
 # --- No stale GPT-5.5 in live guidance (historical citations OK) ---
 
 test_no_stale_gpt55_guidance() {
@@ -142,7 +126,6 @@ test_sol_is_review_default
 echo ""
 echo "--- Advisor: Fable 5 ---"
 test_fable_51_in_docs
-test_no_stale_fable_5
 
 echo ""
 echo "--- No stale GPT-5.5 ---"

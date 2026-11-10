@@ -224,7 +224,7 @@ Present suggestions and let the user confirm.
 
 ### Step 9.5: Context Window + Mixed-Mode Configuration (Opt-In)
 
-The CLI ships `cli/templates/settings.json` with **no** `model` or `env` pin, preserving Claude Code's model auto-selection. Users can opt into a pin during setup — see `AI_SETUP_LANES.md` (Reliable: Opus 4.6[1m] + GPT-5.6 Sol + Fable 5.1, recommended default; Frontier: Opus 5.5 + GPT-5.6 Sol + Fable 5.1, experimental; B: Sonnet 5 Simple/One-Off; C: OpusPlan Hybrid).
+The CLI ships `cli/templates/settings.json` with **no** `model` or `env` pin, preserving Claude Code's model auto-selection. Users can opt into a pin during setup — see `AI_SETUP_LANES.md` (Reliable: Opus 4.6[1m] + GPT-5.6 Sol + Fable 5.2, recommended default; Frontier: Opus 5.5 + GPT-5.6 Sol + Fable 5.2, experimental; B: Sonnet 5 Simple/One-Off; C: OpusPlan Hybrid).
 
 **Why this is opt-in (issue #198):** A top-level `"model"` in `settings.json` disables auto-mode for the session. Pinning is only worth it when you want consistent model behavior rather than per-turn auto-selection.
 
@@ -245,12 +245,14 @@ The output is JSON: `{ tier: "simple" | "complex", score, signals }`. Use the re
 > How do you want to configure the model for this repo?
 >
 > - **[N] No pin (default):** Auto-mode. CC picks model per turn. Simplest, no advisor.
-> - **[r] Reliable — Opus 4.6[1m] + GPT-5.6 Sol + Fable 5.1** *(Recommended default):* Pins `model: "claude-opus-4-6[1m]"`, `advisorModel: "claude-fable-5-1"`. Proven stability. Effort: `max` per session via `/effort`. GPT-5.6 Sol xhigh as first brain, Fable 5.1 high as escalation.
-> - **[o] Opus 5.5 + Fable 5.1** *(Frontier — experimental):* Pins `model: "claude-opus-5-5"`, `advisorModel: "claude-fable-5-1"`. Effort: `high`; GPT-5.6 Sol xhigh as reviewer.
-> - **[s] Sonnet 5 + Fable 5.1** *(Setup B — Simple/One-Off, lower cost):* Pins `model: "sonnet"`, `advisorModel: "claude-fable-5-1"`. Native 1M context, no `[1m]` suffix needed. Effort: `medium`, escalate `high` → `xhigh` for hard tasks.
+> - **[r] Reliable — Opus 4.6[1m] + GPT-5.6 Sol + Fable 5.2** *(Recommended default):* Pins `model: "claude-opus-4-6[1m]"`, `advisorModel: "claude-fable-5-2"`. Proven stability; Fable 5.2 is new to the lane as of 2026-11-09. Effort: `max` per session via `/effort`. GPT-5.6 Sol xhigh as first brain, Fable 5.2 high as escalation.
+> - **[o] Opus 5.5 + Fable 5.2** *(Frontier — experimental):* Pins `model: "claude-opus-5-5"`, `advisorModel: "claude-fable-5-2"`. Effort: `high`; GPT-5.6 Sol xhigh as reviewer.
+> - **[s] Sonnet 5 + Fable 5.2** *(Setup B — Simple/One-Off, lower cost):* Pins `model: "sonnet"`, `advisorModel: "claude-fable-5-2"`. Native 1M context, no `[1m]` suffix needed. Effort: `medium`, escalate `high` → `xhigh` for hard tasks.
 > - **[p] OpusPlan Hybrid** *(Setup C — cost-conscious, still want Opus reasoning):* Pins `model: "opusplan"`. Opus 5 plans (Shift+Tab), Sonnet 5 executes. Max-bundled. No API credit drain (#390).
 >
 > `[N/r/o/s/p]`
+
+**Conductor model:** `claude-opus-4-6[1m]` at `high` — for a `/conduct` front-door session, set per session (`--model 'claude-opus-4-6[1m]' --effort high`), not a Step 9.5 repo pin. See `AI_SETUP_LANES.md` → "Conductor".
 
 **If the user answers `N` (default):** Make no edits to `.claude/settings.json`. Auto-mode stays on. Done.
 
@@ -259,30 +261,30 @@ The output is JSON: `{ tier: "simple" | "complex", score, signals }`. Use the re
 ```json
 {
   "model": "claude-opus-4-6[1m]",
-  "advisorModel": "claude-fable-5-1"
+  "advisorModel": "claude-fable-5-2"
 }
 ```
 
-No `effortLevel` in settings — use `/effort max` per session. Tell the user: "Reliable lane (Opus 4.6[1m] + GPT-5.6 Sol + Fable 5.1). Use GPT-5.6 Sol xhigh as first brain for reviews, Fable 5.1 high as escalation brain at <95% confidence. See AI_SETUP_LANES.md for the full brain ladder."
+No `effortLevel` in settings — use `/effort max` per session. Tell the user: "Reliable lane (Opus 4.6[1m] + GPT-5.6 Sol + Fable 5.2). Use GPT-5.6 Sol xhigh as first brain for reviews, Fable 5.2 high as escalation brain at <95% confidence. See AI_SETUP_LANES.md for the full brain ladder."
 
-**If the user answers `o` (Frontier — Opus 5.5 + Fable 5.1):** Edit `.claude/settings.json` and add:
+**If the user answers `o` (Frontier — Opus 5.5 + Fable 5.2):** Edit `.claude/settings.json` and add:
 
 ```json
 {
   "model": "claude-opus-5-5",
-  "advisorModel": "claude-fable-5-1",
+  "advisorModel": "claude-fable-5-2",
   "effortLevel": "high"
 }
 ```
 
-Tell the user: "Frontier lane (Opus 5.5 + GPT-5.6 Sol + Fable 5.1). Effort `high`. GPT-5.6 Sol xhigh as cross-model reviewer via Codex CLI. Check shell rc for a stale `ANTHROPIC_DEFAULT_OPUS_MODEL` — it silently overrides this pin."
+Tell the user: "Frontier lane (Opus 5.5 + GPT-5.6 Sol + Fable 5.2). Effort `high`. GPT-5.6 Sol xhigh as cross-model reviewer via Codex CLI. Check shell rc for a stale `ANTHROPIC_DEFAULT_OPUS_MODEL` — it silently overrides this pin."
 
-**If the user answers `s` (Sonnet 5 + Fable 5.1):** Edit `.claude/settings.json` and add:
+**If the user answers `s` (Sonnet 5 + Fable 5.2):** Edit `.claude/settings.json` and add:
 
 ```json
 {
   "model": "sonnet",
-  "advisorModel": "claude-fable-5-1",
+  "advisorModel": "claude-fable-5-2",
   "effortLevel": "medium",
   "env": {
     "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "75"
@@ -297,7 +299,7 @@ Tell the user: "Sonnet 5 + Fable (Setup B) — lower-stakes/simpler work. Effort
 ```json
 {
   "model": "opusplan",
-  "advisorModel": "claude-fable-5-1"
+  "advisorModel": "claude-fable-5-2"
 }
 ```
 
@@ -318,7 +320,7 @@ This is project-scoped and shared with the team via git.
 
 Default No. If yes, read `~/.claude/settings.json`, add/update only the `advisorModel` key (do NOT touch other keys), write back. This is the only global settings mutation in setup besides Step 7.7's dead plugin cleanup.
 
-**Note:** All pin choices include an advisor that auto-consults at decision points. Fable-as-advisor was disabled by an Anthropic rollout on 2026-07-24 and observed working again on 2026-08-16 — check by calling it, not by trusting this note. Fall back to a Fable subagent at `high` if it genuinely fails. Needs CC v2.1.170+ (v2.1.219+ for Opus 5).
+**Note:** All pin choices include an advisor that auto-consults at decision points. Fable-as-advisor was disabled by an Anthropic rollout on 2026-07-24 and observed working again on 2026-08-16 — check by calling it, not by trusting this note. Fall back to a Fable subagent at `high` if it genuinely fails. Needs CC v2.1.170+ (v2.1.219+ for Opus 5, v2.1.290+ for `claude-fable-5-2` — older versions return a 400).
 
 ### Step 10: Customize Hooks
 

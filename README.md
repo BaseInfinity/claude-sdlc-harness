@@ -4,9 +4,9 @@ A **self-evolving Software Development Life Cycle (SDLC) enforcement system for 
 
 **Built on 15+ years of software engineering and founding engineering experience** — battle-tested patterns from real production systems, baked into an AI agent that follows tried-and-true software quality practices so you don't have to enforce them manually.
 
-> **The Reliable lane is the recommended default.** Opus 4.6[1m] max + GPT-5.6 Sol xhigh + Fable 5.1 high — field-proven, actively dogfooded.
+> **The Reliable lane is the recommended default.** Opus 4.6[1m] max + GPT-5.6 Sol xhigh + Fable 5.2 high — field-proven, actively dogfooded. Fable 5.2 replaced the previous Fable rung on 2026-11-09 and is not yet field-proven here.
 >
-> The Frontier lane (`@frontier`, not yet published) uses Opus 5.5 high + GPT-5.6 Sol xhigh + Fable 5.1 high — experimental, latest models.
+> The Frontier lane (`@frontier`, not yet published) uses Opus 5.5 high + GPT-5.6 Sol xhigh + Fable 5.2 high — experimental, latest models.
 
 > **Built for Claude Code.** Using OpenAI's Codex CLI instead? Check out [`codex-sdlc-wizard`](https://github.com/BaseInfinity/codex-sdlc-wizard). Need privacy-first / any-backend (local Ollama, Azure OpenAI, hosted OSS)? See [`opencode-sdlc-wizard`](https://github.com/BaseInfinity/opencode-sdlc-wizard). ([Full ecosystem](#xdlc-ecosystem-sibling-projects).)
 
@@ -15,10 +15,10 @@ A **self-evolving Software Development Life Cycle (SDLC) enforcement system for 
 > npm install -g agentic-sdlc-wizard              # Reliable (default, @latest)
 > # npm install -g agentic-sdlc-wizard@frontier   # Bleeding edge (not yet published)
 > ```
-> **Reliable** (`@latest`) — Opus 4.6[1m] max + GPT-5.6 Sol xhigh + Fable 5.1 high.
+> **Reliable** (`@latest`) — Opus 4.6[1m] max + GPT-5.6 Sol xhigh + Fable 5.2 high.
 > Field-proven, stable. Use `/model claude-opus-4-6[1m]` (`/effort max`).
 > The bare `claude-opus-4-6` pin (without `[1m]`) gives only 200K.
-> **Frontier** (`@frontier`, not yet published) — Opus 5.5 high + GPT-5.6 Sol xhigh + Fable 5.1 high.
+> **Frontier** (`@frontier`, not yet published) — Opus 5.5 high + GPT-5.6 Sol xhigh + Fable 5.2 high.
 > Latest models, less field data. See [AI_SETUP_LANES.md](AI_SETUP_LANES.md)
 > for full details.
 > Known defect on **both** lanes: setup does not auto-invoke on a brand-new
@@ -33,7 +33,7 @@ Run from your terminal or from inside Claude Code (`!` prefix):
 ```bash
 npx -y agentic-sdlc-wizard@latest init
 ```
-The `@latest` pin forces npm to fetch the newest version. Without it, `npx` may serve a stale CLI from your local cache (#358); `init` also nudges if it detects a gap. Since v1.100.0, `@latest` is the **Reliable** lane (Opus 4.6[1m] + GPT-5.6 Sol + Fable 5.1).
+The `@latest` pin forces npm to fetch the newest version. Without it, `npx` may serve a stale CLI from your local cache (#358); `init` also nudges if it detects a gap. Since v1.100.0, `@latest` is the **Reliable** lane (Opus 4.6[1m] + GPT-5.6 Sol + Fable 5.2).
 Then start (or restart) Claude Code — type `/exit` then `claude` to reload hooks. Setup is meant to auto-invoke on first prompt — Claude reads the wizard doc, scans your project, and generates bespoke CLAUDE.md, SDLC.md, TESTING.md, and ARCHITECTURE.md. **Known defect:** on a brand-new project the auto-invoke does not fire ([#698](https://github.com/BaseInfinity/claude-sdlc-harness/issues/698)) — run the setup skill manually: type `/` plus the skill name.
 
 **Claude Code plugin (skills + hooks, no npm needed):**
@@ -194,14 +194,14 @@ model at any time — `/model` per session, or pin in `.claude/settings.json`.
 **Sonnet 5 at `medium` effort** (Setup B) for simple or one-off work.
 
 **What has actually been exercised on this harness.** The Reliable lane — Opus 4.6[1m]
-driving, GPT-5.6 Sol reviewing, Fable 5.1 escalating — is the actively dogfooded
-configuration. The Frontier lane (Opus 5.5 + GPT-5.6 Sol + Fable 5.1) is experimental.
+driving, GPT-5.6 Sol reviewing, Fable 5.2 escalating — is the actively dogfooded
+configuration (Fable 5.2 replaced the previous Fable rung on 2026-11-09 and is not yet field-proven here). The Frontier lane (Opus 5.5 + GPT-5.6 Sol + Fable 5.2) is experimental.
 
 ### Switch any time
 
 ```bash
 /model claude-opus-4-6[1m]  # Reliable default — Opus 4.6, 1M context, `max` effort
-/model claude-opus-5     # Frontier — Opus 5, `xhigh` effort
+/model claude-opus-5-5   # Frontier — Opus 5.5, `xhigh` effort
 /model sonnet              # Simple/one-off lane (Setup B) — native 1M context, lower cost
 /model opusplan            # Opus 5 plans (Shift+Tab), Sonnet executes — both Max-bundled (Setup C)
 /model claude-opus-4-8     # pin explicitly for Opus 4.8's field-proven behavior
@@ -210,7 +210,7 @@ configuration. The Frontier lane (Opus 5.5 + GPT-5.6 Sol + Fable 5.1) is experim
 Or pin in `.claude/settings.json`:
 
 ```json
-{ "model": "claude-opus-4-6[1m]", "advisorModel": "claude-fable-5-1" }
+{ "model": "claude-opus-4-6[1m]", "advisorModel": "claude-fable-5-2" }
 ```
 
 Set effort per session with `/effort max` — don't persist it in settings (the effort hook warns on a settings-only pin).
@@ -225,10 +225,10 @@ The wizard defines five AI coding setups in [`AI_SETUP_LANES.md`](AI_SETUP_LANES
 
 | Lane | Advisor | Driver | Reviewer | Escalation |
 |------|---------|--------|----------|------------|
-| **Reliable (default)** | Fable 5.1 (`advisor()`) | Opus 4.6[1m], `max` | GPT-5.6 Sol xhigh | Fable 5.1 high |
-| **Frontier** | Fable 5.1 (`advisor()`) | Opus 5.5, `high` | GPT-5.6 Sol xhigh | Fable 5.1 high |
-| **B — Simple/One-Off** | Fable 5.1 (advisorModel, fallback subagent) | Sonnet 5, `medium`→`high`→`xhigh` | GPT-5.6 Sol xhigh | Opus 4.8 xhigh or Fable 5.1 review |
-| **C — Saver** | Fable 5.1 (advisorModel) | Opus 5 plans, Sonnet 5 executes | GPT-5.6 Sol xhigh | None |
+| **Reliable (default)** | Fable 5.2 (`advisor()`) | Opus 4.6[1m], `max` | GPT-5.6 Sol xhigh | Fable 5.2 high |
+| **Frontier** | Fable 5.2 (`advisor()`) | Opus 5.5, `high` | GPT-5.6 Sol xhigh | Fable 5.2 high |
+| **B — Simple/One-Off** | Fable 5.2 (advisorModel, fallback subagent) | Sonnet 5, `medium`→`high`→`xhigh` | GPT-5.6 Sol xhigh | Opus 4.8 xhigh or Fable 5.2 review |
+| **C — Saver** | Fable 5.2 (advisorModel) | Opus 5 plans, Sonnet 5 executes | GPT-5.6 Sol xhigh | None |
 | **D — Lite** | None | Sonnet 5, `medium` | None | None |
 
 Setup D's whole point: **the discipline of knowing when NOT to use discipline.** When blast radius is low and you just need fast cheap hands, skip the SDLC overhead.
