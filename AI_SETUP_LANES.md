@@ -303,6 +303,37 @@ Clarified 2026-07-13, updated 2026-07-24 for the Opus 5 swap — these exact poi
 - **Model escalation swaps the driver, not the tier.** After 2 failed attempts, LOW confidence, or on high-stakes changes with Setup A already exhausted, a pinned Opus 4.8 (`claude-opus-4-8`) takes over as driver for a genuinely independent second pass — Opus-5-driver plus an Opus-5 advisor fallback would otherwise be a same-family self-check. Why a swap and not more effort: the lane's policy treats repeated failure as a sign the *approach* needs different eyes, not deeper reasoning on the same track.
 - **Advisor failure has a fallback, not a shrug.** Fable 5.2 advises via `advisorModel: "claude-fable-5-2"` (CC v2.1.290+). Fable-as-advisor was disabled by an Anthropic rollout on 2026-07-24 and observed working again on 2026-08-16. Availability is a dated observation, so establish it by calling the tool. On a real failure, spawn a Fable 5.2 subagent at `high` as the fallback reviewer immediately, exactly as the `/sdlc` skill prescribes. Why: the advisor's job is catching wrong approaches *before* they're built, so a transport failure changes how the advice is obtained — not whether the check happens.
 
+## Conductor — Opus 4.6[1m] `high` (multi-session routing)
+
+The conductor is the one front-door session that routes work to other sessions (`/conduct`). It does not build or review, so it gets its own entry.
+
+| Role | Model | Effort |
+|------|-------|--------|
+| **Conductor** | `claude-opus-4-6[1m]` | `high` |
+| **Builders** | `claude-opus-5-5` | `medium` |
+| **Planning and reviews** | `claude-fable-5-2` | `high` |
+
+**The `[1m]` suffix is mandatory.** The bare `claude-opus-4-6` pin configures a 200K context window, so an all-day conductor reaches autocompact far sooner. Observed 2026-11-09 on Claude Code 2.1.321 (`modelUsage`, trimmed):
+
+```
+$ claude -p --model 'claude-opus-4-6[1m]' --effort high --output-format json "Reply ok" < /dev/null
+"claude-opus-4-6[1m]": { ... "contextWindow":1000000 ... }
+$ claude -p --model 'claude-opus-4-6' --effort high --output-format json "Reply ok" < /dev/null
+"claude-opus-4-6": { ... "contextWindow":200000 ... }
+```
+
+`contextWindow` is the window the CLI configures for the pin, not a measured server limit.
+
+**Fleet structure.** Controllers run the conductor pin, `claude-opus-4-6[1m]` at `high`. Workers run `claude-opus-5-5` at `medium`, each in its own iTerm tab with its own worktree — never a subagent. A controller opens workers only in its own lane; cross-lane work goes to that lane's controller. Group related tabs in the same window.
+
+**Controller restart.** The conductor can restart a controller to switch its model. Send the old controller process SIGTERM and verify it is gone (`kill -0 <pid>` fails). The process then uses a new iTerm tab created by `it2api create-tab`, launches `claude` there with the new `--model` and `--effort` flags, and sends it the fleet rules plus a pointer to its running workers. The new controller picks up from the workers' reports. Observed 2026-11-09: the SIGTERM and `kill -0` check on a throwaway process; `it2api create-tab` read from its `--help` (it takes `--window` and `--command`), not run; the flags as in the evidence above.
+
+**Approval is the go signal.** When the conductor approves a gameplan, its controllers and workers start immediately, with no second confirmation; the review, merge and work-hours gates still apply.
+
+**Hard thinking goes up the brain ladder, not to the conductor.** A design question or a sub-95% call goes to the cross-model reviewer first, then to Fable 5.2 `high` on an unreconciled split. The conductor routes the question; it does not answer it.
+
+**Need more effort for one stretch?** Type `/effort max` in the conductor session. That is a runtime bump for that session, not a lane change: the entry above stays `high`.
+
 ## See Also
 
 - [`CLAUDE_CODE_SDLC_WIZARD.md`](CLAUDE_CODE_SDLC_WIZARD.md) — Full wizard doc, including Stability tier opt-in for the wider model choice

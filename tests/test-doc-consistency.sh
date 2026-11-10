@@ -4258,9 +4258,137 @@ test_fable_52_rung_and_cc_minimum_documented() {
     pass "#758: claude-fable-5-2 and the 2.1.290 minimum are documented"
 }
 
+# /update Step 7.8 writes claude-fable-5-2, which needs CC 2.1.290; the step's
+# own 2.1.170 floor is not enough, so it must carry a 2.1.290 gate too.
+test_update_step_78_gates_fable_52_on_2_1_290() {
+    local F="$REPO_ROOT/skills/update/SKILL.md" section missing=""
+    section=$(awk '/^### Step 7\.8:/{f=1} /^### Step 7\.9:/{f=0} f' "$F")
+    [ -n "$section" ] || { fail "#758: /update Step 7.8 section not found"; return; }
+    printf '%s' "$section" | grep -qF '**If CC < v2.1.290:**' || missing="$missing gate"
+    printf '%s' "$section" | grep -qF 'write `"claude-fable-5"` instead' || missing="$missing fallback-pin"
+    printf '%s' "$section" | grep -qF 'Run `claude update` to get claude-fable-5-2 support.' || missing="$missing update-message"
+    if [ -n "$missing" ]; then
+        fail "#758: /update Step 7.8 writes claude-fable-5-2 without a CC 2.1.290 gate:$missing"
+        return
+    fi
+    pass "#758: /update Step 7.8 gates claude-fable-5-2 writes on CC 2.1.290"
+}
+
 test_no_stale_fable_51_rung
 test_fable_rung_scanner_fixtures
+test_update_step_78_gates_fable_52_on_2_1_290
 test_fable_52_rung_and_cc_minimum_documented
+
+# ────────────────────────────────────────────
+# Conductor lane: claude-opus-4-6[1m] at high (fleet rule 2026-11-09)
+# ────────────────────────────────────────────
+
+echo "--- Conductor lane ---"
+
+CONDUCTOR_ROW='| **Conductor** | `claude-opus-4-6[1m]` | `high` |'
+CONDUCTOR_BUILDER_ROW='| **Builders** | `claude-opus-5-5` | `medium` |'
+CONDUCTOR_FABLE_ROW='| **Planning and reviews** | `claude-fable-5-2` | `high` |'
+CONDUCTOR_MARKER='**Conductor model:** `claude-opus-4-6[1m]` at `high`'
+
+test_conductor_lane_rows() {
+    local missing="" f row
+    for f in AI_SETUP_LANES.md CLAUDE_CODE_SDLC_WIZARD.md; do
+        for row in "$CONDUCTOR_ROW" "$CONDUCTOR_BUILDER_ROW" "$CONDUCTOR_FABLE_ROW"; do
+            grep -qxF "$row" "$REPO_ROOT/$f" || missing="$missing $f('$row')"
+        done
+    done
+    for f in skills/sdlc/SKILL.md cowork/skills/sdlc/SKILL.md skills/setup/SKILL.md; do
+        grep -qF "$CONDUCTOR_MARKER" "$REPO_ROOT/$f" || missing="$missing $f(marker)"
+    done
+    if [ -n "$missing" ]; then
+        fail "conductor lane entry missing:$missing"
+        return
+    fi
+    pass "conductor lane: opus-4-6[1m] high, builders opus-5-5 medium, fable-5-2 high"
+}
+
+# Prints file:line for every conductor row or marker that does not name the
+# [1m] pin, or that names the bare claude-opus-4-6 pin (a 200K window).
+bare_conductor_pins() {
+    grep -HnE '^\| \*\*Conductor\*\* \||\*\*Conductor model:\*\*' "$@" 2>/dev/null \
+        | grep -E '`claude-opus-4-6`|^[^\[]*$' || true
+}
+
+test_conductor_never_bare_pin() {
+    local files hits
+    files=$(fable_rung_files)
+    # shellcheck disable=SC2086
+    hits=$(bare_conductor_pins $files)
+    if [ -n "$hits" ]; then
+        fail "conductor rows/markers must pin claude-opus-4-6[1m], never the bare pin:"
+        echo "$hits" | sed "s|^$REPO_ROOT/|    |"
+        return
+    fi
+    pass "no conductor row or marker uses the bare claude-opus-4-6 pin"
+}
+
+test_conductor_scanner_fixtures() {
+    local d; d=$(mktemp -d "${TMPDIR:-/tmp}/conductor-pin.XXXXXX") || { fail "conductor: temp dir failed"; return; }
+    printf '%s\n' "$CONDUCTOR_ROW" "Prose: $CONDUCTOR_MARKER." '**Conductor:** the front door.' 'The bare `claude-opus-4-6` pin gives 200K.' > "$d/ok.md"
+    printf '%s\n' '| **Conductor** | `claude-opus-4-6` | `high` |' > "$d/bare-row.md"
+    printf '%s\n' '**Conductor model:** `claude-opus-4-6` at `high`' > "$d/bare-marker.md"
+    printf '%s\n' '| **Conductor** | `claude-opus-5-5` | `medium` |' > "$d/other-model.md"
+    local bad=""
+    [ -z "$(bare_conductor_pins "$d/ok.md")" ] || bad="$bad ok.md(flagged)"
+    [ -n "$(bare_conductor_pins "$d/bare-row.md")" ] || bad="$bad bare-row.md(missed)"
+    [ -n "$(bare_conductor_pins "$d/bare-marker.md")" ] || bad="$bad bare-marker.md(missed)"
+    [ -n "$(bare_conductor_pins "$d/other-model.md")" ] || bad="$bad other-model.md(missed)"
+    rm -rf "$d"
+    if [ -n "$bad" ]; then
+        fail "conductor pin scanner fixtures:$bad"
+        return
+    fi
+    pass "conductor pin scanner flags bare and non-[1m] conductor pins, passes the [1m] row"
+}
+
+# Fleet structure (fleet rule 2026-11-09): worker tabs, lane ownership.
+FLEET_ANCHORS=(
+    '**Fleet structure.**'
+    'Workers run `claude-opus-5-5` at `medium`'
+    'each in its own iTerm tab with its own worktree'
+    'never a subagent'
+    'opens workers only in its own lane'
+    "goes to that lane's controller"
+    'Group related tabs in the same window.'
+)
+
+# Controller restart (fleet rule 2026-11-09): conductor swaps a controller's model.
+RESTART_ANCHORS=(
+    '**Controller restart.**'
+    "restart a controller to switch its model"
+    'SIGTERM'
+    'verify it is gone'
+    'a new iTerm tab created by `it2api create-tab`'
+    '`--model` and `--effort`'
+    'the fleet rules plus a pointer to its running workers'
+    "picks up from the workers' reports"
+    '**Approval is the go signal.**'
+    'start immediately, with no second confirmation'
+)
+
+test_fleet_structure_paragraph() {
+    local missing="" f a
+    for f in AI_SETUP_LANES.md CLAUDE_CODE_SDLC_WIZARD.md; do
+        for a in "${FLEET_ANCHORS[@]}" "${RESTART_ANCHORS[@]}"; do
+            grep -qF -- "$a" "$REPO_ROOT/$f" || missing="$missing $f('$a')"
+        done
+    done
+    if [ -n "$missing" ]; then
+        fail "fleet structure paragraph missing:$missing"
+        return
+    fi
+    pass "fleet structure and controller restart: worker tabs, lane-owned controllers, restart steps"
+}
+
+test_conductor_lane_rows
+test_conductor_never_bare_pin
+test_conductor_scanner_fixtures
+test_fleet_structure_paragraph
 
 echo "=== Results: $PASSED passed, $FAILED failed ==="
 

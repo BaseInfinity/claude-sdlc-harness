@@ -222,7 +222,7 @@ If `cli/init.js` later adds wizard marketplace names, append verbatim.
 
 ### Step 7.8: advisorModel Migration + Model Setup Guidance (v2.1.170+, #452)
 
-If CC < v2.1.170: skip. Resolve the live driver from the `model` pin, or — unpinned — your self-reported model name (`/model` without saving persists nothing).
+If CC < v2.1.170: skip. **If CC < v2.1.290:** `claude-fable-5-2` returns a 400 there. Wherever this step writes `"claude-fable-5-2"`, write `"claude-fable-5"` instead, leave an existing Fable `advisorModel` unchanged, and print: Run `claude update` to get claude-fable-5-2 support. Resolve the live driver from the `model` pin, or — unpinned — your self-reported model name (`/model` without saving persists nothing).
 
 1. **Live driver is Fable** (pin `"fable"`/`"claude-fable-5"`/`"claude-fable-5-1"`/`"claude-fable-5-2"`, or unpinned + live identity Fable) — fires even with `advisorModel` already set (`/setup` 9.5 never offers Fable as driver, always a misconfig). If `advisorModel` is `"claude-fable-5"`, `"claude-fable-5-1"` or `"fable"`, migrate to `"claude-fable-5-2"` (needs CC v2.1.290+). Show:
 

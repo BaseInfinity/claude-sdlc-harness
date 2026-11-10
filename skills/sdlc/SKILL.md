@@ -118,7 +118,7 @@ Native `/goal <condition>` (**v2.1.143+**). Haiku evaluator re-checks transcript
 
 ## Recommended Model
 
-**Recommended: Opus 4.6[1m] `max`** (Reliable default). **Opus 5.5 `xhigh`** for Frontier work. **Sonnet 5 `medium`** for simple work. Pin `claude-opus-4-8` for a same-family escape. **Effort is model-aware, not blanket `max`** — set via `/effort` per session, never a shell-rc env var (overrides post-switch). `/model` persists; picker `s` does not.
+**Recommended: Opus 4.6[1m] `max`** (Reliable default). **Opus 5.5 `xhigh`** for Frontier work. **Sonnet 5 `medium`** for simple work. Pin `claude-opus-4-8` for a same-family escape. **Effort is model-aware, not blanket `max`** — set via `/effort` per session, never a shell-rc env var (overrides post-switch). `/model` persists; picker `s` does not. **Conductor model:** `claude-opus-4-6[1m]` at `high` for a `/conduct` front-door session — never the bare pin (200K window); `/effort max` there is a runtime bump, not a lane change.
 
 **Autocompact: set neither override by default.** For a deliberately earlier boundary use `CLAUDE_CODE_AUTO_COMPACT_WINDOW` alone — a smaller window compacts sooner, and nothing in that range switches compaction off. On **current Opus** a percentage alone is inert unless the window is also set, and then the two multiply; on Sonnet 5 and on a 200K Opus 4.6 pin it is live, so size it against THAT window (#520). **Advisor (v2.1.170+; `claude-fable-5-2` needs v2.1.290+):** `advisorModel: "claude-fable-5-2"` works with all drivers above; set in `/claude-setup-wizard` Step 9.5.
 

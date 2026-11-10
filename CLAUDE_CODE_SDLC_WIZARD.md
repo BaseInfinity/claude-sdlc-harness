@@ -1215,6 +1215,24 @@ Set effort per-session with `/effort` (planner `xhigh`, driver `medium`, escalat
 - The Sonnet driver will drop some fine-grained self-review moves compared to an Opus-coder run — it's fast, less deliberate. The Opus planner and GPT-5.6 Sol reviewer catch them, but expect more "fix in round 2" cycles.
 - Mixed-mode disables auto-mode (same as any pinned model). The pin is per-session — to switch back, remove the `model` line.
 
+### Conductor tier — Opus 4.6[1m] `high`
+
+A multi-session setup has one conductor session that routes work (`/conduct`). It runs its own pin; builders and reviewers keep theirs. Full entry and evidence: `AI_SETUP_LANES.md` → "Conductor".
+
+| Role | Model | Effort |
+|------|-------|--------|
+| **Conductor** | `claude-opus-4-6[1m]` | `high` |
+| **Builders** | `claude-opus-5-5` | `medium` |
+| **Planning and reviews** | `claude-fable-5-2` | `high` |
+
+Pin `[1m]`: on Claude Code 2.1.321 (2026-11-09) the bare `claude-opus-4-6` pin configured a 200K context window and `claude-opus-4-6[1m]` configured 1M. Hard thinking goes up the brain ladder, not to the conductor. `/effort max` in the conductor session is a runtime bump, not a lane change.
+
+**Fleet structure.** Controllers run the conductor pin, `claude-opus-4-6[1m]` at `high`. Workers run `claude-opus-5-5` at `medium`, each in its own iTerm tab with its own worktree — never a subagent. A controller opens workers only in its own lane; cross-lane work goes to that lane's controller. Group related tabs in the same window.
+
+**Controller restart.** The conductor can restart a controller to switch its model. Send the old controller process SIGTERM and verify it is gone (`kill -0 <pid>` fails). The process then uses a new iTerm tab created by `it2api create-tab`, launches `claude` there with the new `--model` and `--effort` flags, and sends it the fleet rules plus a pointer to its running workers. The new controller picks up from the workers' reports. Observed 2026-11-09: the SIGTERM and `kill -0` check on a throwaway process; `it2api create-tab` read from its `--help` (it takes `--window` and `--command`), not run; the flags as in the evidence above.
+
+**Approval is the go signal.** When the conductor approves a gameplan, its controllers and workers start immediately, with no second confirmation; the review, merge and work-hours gates still apply.
+
 ### Latest tier — Opus 4.8 (pinned escalation model, #395)
 
 The wizard's recommended default is the **Reliable lane** (Opus 4.6[1m] + GPT-5.6 Sol + Fable 5.2 — see `AI_SETUP_LANES.md`). **Opus 5.5** (Frontier) is the experimental lane for users who want the newest model at accepted risk. **Opus 4.8**, pinned explicitly (`claude-opus-4-8`), is the same-family-check escalation model: reach for it when the default driver stalls on architecture, a stuck bug, or anything needing a genuinely independent second pass — not as a daily driver. It ships SWE-Bench Pro / Terminal-Bench 2.1 gains, dynamic-workflows, and parallel-subagent-swarm features 4.6 doesn't have.
