@@ -4178,6 +4178,90 @@ test_sdlc_skill_planning_requires_a_scope_card
 test_scope_card_breaker_conditions_are_named
 test_issue_templates_carry_a_scope_card
 
+# ────────────────────────────────────────────
+# Fable rung is 5.2 (#758)
+# ────────────────────────────────────────────
+
+echo "--- Fable rung (#758) ---"
+
+# Prints file:line for every stale Fable 5.1 rung reference in the given files.
+# Two exact tokens on the skills/update/SKILL.md "Live driver is Fable" line are exempt: the
+# pin list and the migration source, which must still recognize a 5.1 pin a
+# consumer already has. The migration target on that line is not exempt.
+stale_fable_rung_refs() {
+    grep -HnE 'claude-fable-5-1|Fable 5\.1' "$@" 2>/dev/null \
+        | sed -E '/^[^:]*skills\/update\/SKILL\.md:[0-9]+:1\. \*\*Live driver is Fable\*\*/{
+s#/`"claude-fable-5-1"`/#/#
+s#, `"claude-fable-5-1"` or#,#
+}' \
+        | grep -E 'claude-fable-5-1|Fable 5\.1' || true
+}
+
+# Shipped files (package.json "files", minus CHANGELOG history) plus README
+# and the cowork copies.
+fable_rung_files() {
+    git -C "$REPO_ROOT" ls-files -- CLAUDE_CODE_SDLC_WIZARD.md AI_SETUP_LANES.md \
+        README.md skills cli hooks .claude-plugin cowork \
+        | sed "s|^|$REPO_ROOT/|"
+}
+
+test_no_stale_fable_51_rung() {
+    local files hits
+    files=$(fable_rung_files)
+    # shellcheck disable=SC2086
+    hits=$(stale_fable_rung_refs $files)
+    if [ -n "$hits" ]; then
+        fail "#758: stale Fable 5.1 rung references (rung is claude-fable-5-2):"
+        echo "$hits" | sed "s|^$REPO_ROOT/|    |"
+        return
+    fi
+    pass "#758: no stale Fable 5.1 rung references in shipped docs, README or cowork"
+}
+
+test_fable_rung_scanner_fixtures() {
+    local d; d=$(mktemp -d "${TMPDIR:-/tmp}/fable-rung.XXXXXX") || { fail "#758: temp dir failed"; return; }
+    mkdir -p "$d/skills/update"
+    printf '%s\n' '1. **Live driver is Fable** (pin `"fable"`/`"claude-fable-5-1"`/`"claude-fable-5-2"`). If `advisorModel` is `"claude-fable-5"`, `"claude-fable-5-1"` or `"fable"`, migrate to `"claude-fable-5-2"`.' \
+        'advisorModel: "claude-fable-5-2"' > "$d/skills/update/SKILL.md"
+    printf '%s\n' '1. **Live driver is Fable** (pin `"fable"`/`"claude-fable-5-1"`). If `advisorModel` is `"fable"`, migrate to `"claude-fable-5-1"`.' > "$d/target.md"
+    printf '%s\n' '"advisorModel": "claude-fable-5-1"' > "$d/id.md"
+    printf '%s\n' 'Escalate to Fable 5.1 via advisor().' > "$d/name.md"
+    printf '%s\n' '2. **Live driver is Fable** (pin `"claude-fable-5-1"`)' > "$d/near.md"
+    local bad=""
+    cp "$d/skills/update/SKILL.md" "$d/other.md"
+    [ -z "$(stale_fable_rung_refs "$d/skills/update/SKILL.md")" ] || bad="$bad update-skill(flagged)"
+    [ -n "$(stale_fable_rung_refs "$d/other.md")" ] || bad="$bad other.md(missed)"
+    [ -n "$(stale_fable_rung_refs "$d/id.md")" ] || bad="$bad id.md(missed)"
+    [ -n "$(stale_fable_rung_refs "$d/name.md")" ] || bad="$bad name.md(missed)"
+    [ -n "$(stale_fable_rung_refs "$d/near.md")" ] || bad="$bad near.md(missed)"
+    [ -n "$(stale_fable_rung_refs "$d/target.md")" ] || bad="$bad target.md(missed)"
+    rm -rf "$d"
+    if [ -n "$bad" ]; then
+        fail "#758: Fable rung scanner fixtures:$bad"
+        return
+    fi
+    pass "#758: Fable rung scanner flags 5.1 by ID and name, exempts only the /update detection tokens"
+}
+
+test_fable_52_rung_and_cc_minimum_documented() {
+    local missing="" f
+    for f in CLAUDE_CODE_SDLC_WIZARD.md AI_SETUP_LANES.md README.md skills/setup/SKILL.md skills/sdlc/SKILL.md; do
+        grep -q 'claude-fable-5-2' "$REPO_ROOT/$f" || missing="$missing $f(claude-fable-5-2)"
+    done
+    for f in CLAUDE_CODE_SDLC_WIZARD.md AI_SETUP_LANES.md; do
+        grep -q '2\.1\.290' "$REPO_ROOT/$f" || missing="$missing $f(2.1.290)"
+    done
+    if [ -n "$missing" ]; then
+        fail "#758: Fable 5.2 rung or Claude Code 2.1.290 minimum missing:$missing"
+        return
+    fi
+    pass "#758: claude-fable-5-2 and the 2.1.290 minimum are documented"
+}
+
+test_no_stale_fable_51_rung
+test_fable_rung_scanner_fixtures
+test_fable_52_rung_and_cc_minimum_documented
+
 echo "=== Results: $PASSED passed, $FAILED failed ==="
 
 if [ "$FAILED" -gt 0 ]; then

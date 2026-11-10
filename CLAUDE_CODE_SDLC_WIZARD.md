@@ -271,7 +271,7 @@ Claude Code's **effort level** controls how much thinking the model does before 
 | Opus 5 (Frontier) | `high` (complex) / `medium` (routine web/CRUD) | Changed 2026-08-02. Escalate to `xhigh` for genuinely hard or long-running agentic work — Anthropic's own framing for that tier — but not as a standing default; their Opus 5 prompting guide advises using lower effort liberally wherever quality holds. Original rationale: Anthropic's recommendation for "difficult tasks and long-running asynchronous workflows" — Setup A's target use case, not `high`'s routine-work default. Effort tier is static per session, but adaptive reasoning modulates depth within it. Trial-flagged as of 2026-07-24 — see `AI_SETUP_LANES.md` |
 | Sonnet 5 (Simple/One-Off lane) | `medium`, escalate to `high`/`xhigh` for hard tasks | CodeRabbit testing: `medium` captures most of the upside at the lowest cost; blanket `xhigh`/`max` defaults add cost for marginal gains |
 | Opus 4.8 (escalation, pinned) | `xhigh` | `max` triggers excessive reasoning on 4.7/4.8 — documented 40-60x cache-token jump vs `high` (see "Opus 4.6" row below) |
-| Fable 5.1 (advisor / subagent fallback) | `high` everywhere — driver, subagent fallback, and `advisor()` (which exposes no effort parameter at all) | Adaptive thinking always on; pin `advisorModel: "claude-fable-5-1"` — see "Advisor Model" below |
+| Fable 5.2 (advisor / subagent fallback) | `high` everywhere — driver, subagent fallback, and `advisor()` (which exposes no effort parameter at all) | Adaptive thinking always on; pin `advisorModel: "claude-fable-5-2"` — see "Advisor Model" below |
 | Opus 4.6 (pinned, stability profile) | `max` | The one model where `max` doesn't overthink — no `xhigh` support at all (only low/medium/high/max) |
 | OpenAI/Codex (cross-model reviewer) | `high` default (maintainer decision 2026-08-01 — cost and review-noise, not capability); escalate to `xhigh` for unusually risky PRs | Lower reasoning misses subtle bugs the reviewer exists to catch; see `AI_SETUP_LANES.md`'s Final Review Policy for when to escalate |
 
@@ -417,23 +417,23 @@ New built-in commands available to use alongside the wizard:
 
 | Method | Scope | Persists? |
 |--------|-------|-----------|
-| `"advisorModel": "claude-fable-5-1"` in `.claude/settings.json` | Project | Yes (committed, shared with team) |
-| `/advisor fable` | User (global `~/.claude/settings.json`) | Yes (all projects) — resolves to 5.1 on CC v2.1.257+; pin `"claude-fable-5-1"` on older versions |
+| `"advisorModel": "claude-fable-5-2"` in `.claude/settings.json` | Project | Yes (committed, shared with team) |
+| `/advisor fable` | User (global `~/.claude/settings.json`) | Yes (all projects) — `--model fable` resolved to `claude-fable-5-2` on CC 2.1.321 (2026-11-09); `/advisor fable` itself was not re-checked, so pin `"claude-fable-5-2"` to be sure |
 | `--advisor fable` CLI flag | Session | No |
 
 **Recommended pairings:**
 
 | Driver | Advisor | Lane |
 |--------|---------|------|
-| Opus 4.6[1m] (`claude-opus-4-6[1m]`) | GPT-5.6 Sol xhigh + Fable 5.1 (`"claude-fable-5-1"`) | **Reliable — recommended default** |
-| Opus 5.5 (`claude-opus-5-5`) | GPT-5.6 Sol xhigh + Fable 5.1 (`"claude-fable-5-1"`) | Frontier — experimental |
-| Sonnet 5 (`sonnet`) | Fable 5.1 (`"claude-fable-5-1"`) | Setup B — Simple/One-Off |
+| Opus 4.6[1m] (`claude-opus-4-6[1m]`) | GPT-5.6 Sol xhigh + Fable 5.2 (`"claude-fable-5-2"`) | **Reliable — recommended default** |
+| Opus 5.5 (`claude-opus-5-5`) | GPT-5.6 Sol xhigh + Fable 5.2 (`"claude-fable-5-2"`) | Frontier — experimental |
+| Sonnet 5 (`sonnet`) | Fable 5.2 (`"claude-fable-5-2"`) | Setup B — Simple/One-Off |
 | Sonnet via opusplan | Opus 5 (`"claude-opus-5"`) | Setup C — OpusPlan Hybrid |
-| Opus 4.8 (`claude-opus-4-8`, pinned) | Fable 5.1 (`"claude-fable-5-1"`) | Escalation tier |
+| Opus 4.8 (`claude-opus-4-8`, pinned) | Fable 5.2 (`"claude-fable-5-2"`) | Escalation tier |
 
 **Settings precedence:** Managed > CLI flags > Local (`.claude/settings.local.json`) > Project (`.claude/settings.json`) > User (`~/.claude/settings.json`). The wizard writes project-level by default — never nukes global settings. Setup skill Step 9.5 asks if you also want global.
 
-**Important:** Fable 5.1 does NOT appear in the `/advisor` interactive picker — set `advisorModel: "claude-fable-5-1"` explicitly. On CC v2.1.257+, `"fable"` resolves to Fable 5.1 natively; on older versions, the explicit ID is required. Availability has moved: Anthropic's rollout **disabled** Fable-as-advisor on 2026-07-24, and it was **observed working again on 2026-08-16**. Both are dated observations, not current state — **determine which applies by calling `advisor()`**, never by reading this line. On a real failure, fall back to a Fable 5.1 subagent (`Agent({model: "claude-fable-5-1", effort: "high"})`) at every point you'd have called `advisor()`.
+**Important:** set `advisorModel: "claude-fable-5-2"` explicitly — Fable was absent from the `/advisor` interactive picker when last checked, before 5.2 shipped. `claude-fable-5-2` requires **Claude Code v2.1.290+**. Observed 2026-11-09: on 2.1.289, `claude -p --model claude-fable-5-2` returned `400 Claude Code 2.1.289 does not support this model; version 2.1.290 or newer is required`; on 2.1.321 it printed `ok`, and with `advisorModel: "claude-fable-5-2"` the advisor call ran on `claude-fable-5-2`. Availability has moved: Anthropic's rollout **disabled** Fable-as-advisor on 2026-07-24, and it was **observed working again on 2026-08-16**. Both are dated observations, not current state — **determine which applies by calling `advisor()`**, never by reading this line. On a real failure, fall back to a Fable 5.2 subagent (`Agent({model: "claude-fable-5-2", effort: "high"})`) at every point you'd have called `advisor()`.
 
 **Quota exhaustion is a different condition, and the advisor was observed to survive it once.** claude.ai shows `All models` and `Fable` as separate meters. Observed 2026-08-16: `advisor()` returned a Fable ruling while the `Fable` meter read 100% and `/model fable` was refused. **So try the advisor before concluding Fable is out of reach** — but no meter delta was measured, so which meter that call billed is unknown, and a window rollover was not ruled out. It is the most expensive shape either way — it forwards the whole conversation on every call and its read is not cached between them.
 
@@ -1067,27 +1067,27 @@ Override the default auto-compact threshold with environment variables. Per offi
 
 > **`env` is global, not per-model.** `env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` in `.claude/settings.json` applies to whichever model runs under that file — and, per the same doc row, "to both main conversations and subagents". Switching drivers does **not** switch its value: a file carrying Setup B's `75` keeps supplying `75` after you switch to Opus. No static `env` object can express "75 for Sonnet, none for Opus" — if you want per-model tuning, edit the key when you change persistent pins, or keep separate settings profiles.
 
-**Opt-in (issue #198):** The SDLC Harness CLI ships `.claude/settings.json` with **no** `model`, `advisorModel`, or `env` pin so Claude Code's auto-mode stays enabled. The setup skill's Step 9.5 offers choices: no pin (auto-mode), Opus 4.6[1m] + GPT-5.6 Sol + Fable 5.1 (Reliable — recommended default), Opus 5.5 + GPT-5.6 Sol + Fable 5.1 (Frontier — experimental), OpusPlan Hybrid (Setup C), and Sonnet 5 Simple/One-Off (Setup B). Opus 4.8 itself is a pinned escalation model, not a persistent Step 9.5 pin — reach for it per-session via `/model claude-opus-4-8` when the driver gets stuck (see "Latest tier" below). Default is **No pin**. Pinning the model turns off per-turn auto-selection — a real tradeoff, so we ask.
+**Opt-in (issue #198):** The SDLC Harness CLI ships `.claude/settings.json` with **no** `model`, `advisorModel`, or `env` pin so Claude Code's auto-mode stays enabled. The setup skill's Step 9.5 offers choices: no pin (auto-mode), Opus 4.6[1m] + GPT-5.6 Sol + Fable 5.2 (Reliable — recommended default), Opus 5.5 + GPT-5.6 Sol + Fable 5.2 (Frontier — experimental), OpusPlan Hybrid (Setup C), and Sonnet 5 Simple/One-Off (Setup B). Opus 4.8 itself is a pinned escalation model, not a persistent Step 9.5 pin — reach for it per-session via `/model claude-opus-4-8` when the driver gets stuck (see "Latest tier" below). Default is **No pin**. Pinning the model turns off per-turn auto-selection — a real tradeoff, so we ask.
 
 To opt in by hand, edit `.claude/settings.json` (Reliable example — the recommended default):
 
 ```json
 {
   "model": "claude-opus-4-6[1m]",
-  "advisorModel": "claude-fable-5-1"
+  "advisorModel": "claude-fable-5-2"
 }
 ```
 
 No `effortLevel` in settings — the hook warns on settings-only pins. Use `/effort max` per session.
 
-For the Frontier lane (Opus 5.5 + Fable 5.1), see `AI_SETUP_LANES.md`.
+For the Frontier lane (Opus 5.5 + Fable 5.2), see `AI_SETUP_LANES.md`.
 
 For the older `claude-opus-4-6` pin instead (still valid for proven stability), a percentage override *is* supported — Opus 4.6 without extended context is one of the documented proactive-compaction cases, so unlike on the current default driver the percentage is genuinely live here. **But mind the window it acts on.** An explicit `claude-opus-4-6` string pins **200K**; the Max auto-upgrade to 1M applies to the bare `opus` alias, not to an explicit version string. So a `30` here is 30% of 200K — a **~60K trigger**, the same over-aggressive setting this doc warns about for `opusplan` further down. Earlier revisions shipped exactly that pairing, annotated "(1M)", and it was wrong on both counts (GH #520). Use the 200K figures from the table above:
 
 ```json
 {
   "model": "claude-opus-4-6",
-  "advisorModel": "claude-fable-5-1",
+  "advisorModel": "claude-fable-5-2",
   "env": {
     "CLAUDE_CODE_EFFORT_LEVEL": "max",
     "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "75"
@@ -1217,7 +1217,7 @@ Set effort per-session with `/effort` (planner `xhigh`, driver `medium`, escalat
 
 ### Latest tier — Opus 4.8 (pinned escalation model, #395)
 
-The wizard's recommended default is the **Reliable lane** (Opus 4.6[1m] + GPT-5.6 Sol + Fable 5.1 — see `AI_SETUP_LANES.md`). **Opus 5.5** (Frontier) is the experimental lane for users who want the newest model at accepted risk. **Opus 4.8**, pinned explicitly (`claude-opus-4-8`), is the same-family-check escalation model: reach for it when the default driver stalls on architecture, a stuck bug, or anything needing a genuinely independent second pass — not as a daily driver. It ships SWE-Bench Pro / Terminal-Bench 2.1 gains, dynamic-workflows, and parallel-subagent-swarm features 4.6 doesn't have.
+The wizard's recommended default is the **Reliable lane** (Opus 4.6[1m] + GPT-5.6 Sol + Fable 5.2 — see `AI_SETUP_LANES.md`). **Opus 5.5** (Frontier) is the experimental lane for users who want the newest model at accepted risk. **Opus 4.8**, pinned explicitly (`claude-opus-4-8`), is the same-family-check escalation model: reach for it when the default driver stalls on architecture, a stuck bug, or anything needing a genuinely independent second pass — not as a daily driver. It ships SWE-Bench Pro / Terminal-Bench 2.1 gains, dynamic-workflows, and parallel-subagent-swarm features 4.6 doesn't have.
 
 **When Opus 4.8 is the right call:**
 - The driver is stuck (2+ failed attempts) and you want a fresh, deeper-reasoning pass
