@@ -4,6 +4,61 @@ All notable changes to the SDLC Wizard.
 
 > **Note:** This changelog is for humans to read. Don't manually apply these changes - just run the wizard ("Check for SDLC wizard updates") and it handles everything automatically.
 
+## [2.1.0] - 2026-11-09
+
+38 commits since v2.0.0. Minor release: new features, no breaking changes.
+
+> **Repo-local entries.** Merge-gate (`scripts/merge-pr.sh`) and review-leg
+> (`scripts/run-review-leg.sh`) changes, and test-only fixes, arrive in no install.
+> They are marked *(repo-local)* below.
+
+### Added
+- **Conduct protocol: Claude adapter (#729).** `/conduct` ships a Claude adapter on the
+  shared Conduct protocol v1, with reciprocal peer recovery mirrored from the Codex
+  adapter. It can submit a Claude Desktop Code session and start a new Codex thread
+  without a human; `--no-trust` serves callers that may not approve dialogs.
+- **Conduct fleet status (#738, #757).** `status.cjs` keeps one row per controller
+  workstream in `.brain/fleet.json` and renders a terminal view with progress bar,
+  state, next step and a STALE mark past 24h. `conduct.cjs` is re-vendored with the
+  `status` subcommand.
+- **Fleet coordination.** `/fleet` alias that delegates to `/conduct` (#779). Conduct
+  roles and operating-model docs (#734, #752, #753). In a `/conduct` fleet, a controller
+  shows the human a plan only at 95% confidence (#780).
+- **SDLC skill gate (#739).** Hooks block gated edits and commits until the session (or
+  subagent, by its own `agent_id`) has invoked the sdlc skill.
+- **Green local suite as commit authorization (#731).** `codex-gate-check.sh` allows a
+  commit when `.local-test-result` (path override: `SDLC_LOCAL_TEST_RESULT`) holds
+  `<tree> PASS` for the staged index tree. In this repo `tests/run-local.sh` writes that
+  file; the runner is repo-local, so consumers must write it themselves.
+- **Merge-gate guards** *(repo-local)*. Refuse merges Mon-Fri 08:00-16:59 local time
+  (#763). Past round 3, a clearance must carry a falling per-round history and a reason
+  for each extra round (#768).
+- **Review leg** *(repo-local)*. The caller can choose the codex sandbox (#740).
+- **GitNexus (#783).** Optional code-graph guidance: `impact` for blast radius while
+  planning, `context` for callers while reviewing.
+
+### Changed
+- **Model updates.** Fable rung moves to `claude-fable-5-2`, which needs Claude Code
+  2.1.290+; `/update` migrates `claude-fable-5-1` pins and recognizes the
+  `claude-opus-5-5` Frontier pin (#762). Conductor and controller lanes run
+  `claude-opus-4-6[1m]` at `high`, never the bare 200K pin; workers keep
+  `claude-opus-5-5` at `medium` (#762, #780). Earlier: model IDs corrected, reviewer
+  split per lane, and GPT-5.5 → GPT-5.6 Sol swept across shipped docs (#715).
+- **Brain verdicts.** The sdlc skill requires Fable and Codex verdicts before handing
+  the user an options menu, and a held dual verdict replaces a typed yes for the
+  driver's own reversible change on a non-default branch.
+- README documents the plugin install method (#724).
+
+### Fixed
+- `/conduct`: `codex-thread.py` accepts native absolute paths, exits 2 when codex cannot
+  start, survives older and Windows app-servers, keeps its exit contract on odd pipes,
+  and prints the answer byte for byte. Skill frontmatter declares `effort: medium`.
+- `/conduct`: `status.cjs --help` no longer hits the usage TDZ (#755); status output
+  escapes peer control characters (#761).
+- *(repo-local)* Token-spike ingest lock uses `noclobber`, not `mkdir` (#737). Mutation
+  guards use portable in-place `sed`. `test-escalation-ladder.sh` expects the
+  `claude-fable-5-2` advisor pin that #762 moved the docs to.
+
 ## [2.0.0] - 2026-09-27
 
 ### Changed
