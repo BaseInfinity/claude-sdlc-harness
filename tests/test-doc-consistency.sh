@@ -4540,10 +4540,24 @@ test_gnx_sdlc_bullet() {
     pass "#781: sdlc and its cowork copy carry the optional GitNexus bullet with the grep caveat"
 }
 
+test_gnx_setup_step() {
+    local f="$REPO_ROOT/skills/setup/SKILL.md" step missing="" s
+    step=$(sed -n '/^### Step 9.6:/,/^### Step [0-9]/p' "$f")
+    for s in 'Opt-In' "$GNX_LICENSE" '`[y/N]`' "$GNX_PIN" "$GNX_POINTER" 'Never run `gitnexus setup`'; do
+        printf '%s' "$step" | grep -qF -- "$s" || missing="$missing '$s'"
+    done
+    if [ -n "$missing" ]; then
+        fail "#781: setup Step 9.6 (GitNexus opt-in) missing:$missing"
+        return
+    fi
+    pass "#781: setup Step 9.6 offers GitNexus default-No, shows the license, pins the version"
+}
+
 test_gnx_wizard_section
 test_gnx_banned_advice_absent
 test_gnx_lanes_entry
 test_gnx_sdlc_bullet
+test_gnx_setup_step
 
 echo "=== Results: $PASSED passed, $FAILED failed ==="
 

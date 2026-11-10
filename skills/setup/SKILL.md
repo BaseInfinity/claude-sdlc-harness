@@ -322,6 +322,22 @@ Default No. If yes, read `~/.claude/settings.json`, add/update only the `advisor
 
 **Note:** All pin choices include an advisor that auto-consults at decision points. Fable-as-advisor was disabled by an Anthropic rollout on 2026-07-24 and observed working again on 2026-08-16 — check by calling it, not by trusting this note. Fall back to a Fable subagent at `high` if it genuinely fails. Needs CC v2.1.170+ (v2.1.219+ for Opus 5, v2.1.290+ for `claude-fable-5-2` — older versions return a 400).
 
+### Step 9.6: GitNexus Code Graph (Optional, Opt-In)
+
+Offer this only when most of the repo's code is in a language GitNexus parses: TypeScript,
+JavaScript, Python, Java, C, C++, C#, Go, Rust, PHP, Kotlin, Swift, Ruby, Dart or Zig. It does not
+parse bash. Otherwise skip this step silently.
+
+**Ask the user exactly once, default No:**
+
+> Install GitNexus, a local code graph for blast-radius and caller queries?
+> License: PolyForm Noncommercial 1.0.0 — commercial use needs a license from its author.
+> `[y/N]`
+
+Only an explicit yes proceeds. Then follow wizard → "Optional: GitNexus code graph": install
+`gitnexus@1.6.12` with `--save-exact`, index with `analyze --index-only --pdg --embeddings`, and
+write the project `.mcp.json`. Never run `gitnexus setup`; the wizard section says why.
+
 ### Step 10: Customize Hooks
 
 If `.claude/hooks/` has fewer than 9 files, hooks were never installed — tell the user to run `npx agentic-sdlc-wizard@latest init` first (the wizard doc's hook code blocks are illustrative, not a full template set).
