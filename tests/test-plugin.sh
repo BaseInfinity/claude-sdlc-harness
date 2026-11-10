@@ -270,14 +270,31 @@ print(' '.join(sorted(scripts)))
 
 test_plugin_skills_exist() {
     local ok=true
-    for skill in sdlc setup update feedback conduct; do
+    for skill in sdlc setup update feedback conduct fleet; do
         [ -f "$REPO_ROOT/skills/$skill/SKILL.md" ] || ok=false
     done
     if [ "$ok" = true ]; then
-        pass "All 5 skill SKILL.md files exist at skills/"
+        pass "All 6 skill SKILL.md files exist at skills/"
     else
-        fail "skills/ should contain sdlc, setup, update, feedback, conduct SKILL.md files"
+        fail "skills/ should contain sdlc, setup, update, feedback, conduct, fleet SKILL.md files"
     fi
+}
+
+# /fleet is a second name for /conduct, not a second skill: its frontmatter
+# names it fleet, its body sends the reader to /conduct, and conduct still
+# answers to its own name.
+test_fleet_alias_resolves_to_conduct() {
+    local f="$REPO_ROOT/skills/fleet/SKILL.md" bad=""
+    [ -f "$f" ] || { fail "skills/fleet/SKILL.md missing"; return; }
+    grep -qx 'name: fleet' "$f" || bad="$bad fleet-name"
+    grep -qF 'Run `/conduct`' "$f" || bad="$bad no-conduct-pointer"
+    [ "$(grep -c '^' "$f")" -le 12 ] || bad="$bad not-thin"
+    grep -qx 'name: conduct' "$REPO_ROOT/skills/conduct/SKILL.md" || bad="$bad conduct-renamed"
+    if [ -n "$bad" ]; then
+        fail "fleet alias:$bad"
+        return
+    fi
+    pass "/fleet is a thin alias that points to /conduct; conduct keeps its name"
 }
 
 test_plugin_hook_scripts_exist() {
@@ -310,7 +327,7 @@ test_plugin_hook_scripts_executable() {
 
 test_skill_parity() {
     local ok=true
-    for skill in sdlc setup update feedback conduct; do
+    for skill in sdlc setup update feedback conduct fleet; do
         local plugin_file="$REPO_ROOT/skills/$skill/SKILL.md"
         # CLI init copies from wherever init.js points. After refactor, CLI reads from skills/ too.
         # Verify content matches what CLI would install by running init and comparing.
@@ -332,7 +349,7 @@ test_cli_installs_from_plugin_source() {
     (cd "$d" && node "$CLI" init > /dev/null 2>&1)
     local ok=true
     for rel in sdlc/SKILL.md setup/SKILL.md update/SKILL.md feedback/SKILL.md \
-               conduct/SKILL.md conduct/references/protocol.md conduct/scripts/conduct.cjs conduct/scripts/claude-desktop.sh conduct/scripts/claude-desktop.py conduct/scripts/codex-thread.py conduct/scripts/status.cjs; do
+               conduct/SKILL.md conduct/references/protocol.md conduct/scripts/conduct.cjs conduct/scripts/claude-desktop.sh conduct/scripts/claude-desktop.py conduct/scripts/codex-thread.py conduct/scripts/status.cjs fleet/SKILL.md; do
         local installed="$d/.claude/skills/$rel"
         local source="$REPO_ROOT/skills/$rel"
         [ -f "$installed" ] || { ok=false; continue; }
@@ -487,6 +504,7 @@ test_hooks_json_six_events
 test_hooks_json_event_parity
 test_hooks_json_script_parity
 test_plugin_skills_exist
+test_fleet_alias_resolves_to_conduct
 test_plugin_hook_scripts_exist
 test_plugin_hook_scripts_executable
 test_skill_parity

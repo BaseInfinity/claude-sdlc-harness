@@ -32,7 +32,7 @@ Honest assessment of where we stand in the Claude Code ecosystem. What we do wel
 | Feature | Who | What They Do | Our Status |
 |---------|-----|-------------|-----------|
 | Language coverage | everything-claude-code | 7+ languages, 10 ecosystems | Python/JS-centric (by design) |
-| Skill library | everything-claude-code | 80+ domain-specific skills | 5 skills (by design — minimal) |
+| Skill library | everything-claude-code | 80+ domain-specific skills | 6 skills (by design — minimal; /fleet is an alias for /conduct) |
 | Cross-platform hooks | everything-claude-code | Node.js (Windows/macOS/Linux) | Bash only (macOS/Linux) |
 | Token/cost tracking | everything-claude-code | Per-session cost monitoring | Blocked — `claude-code-action` doesn't expose usage data |
 | Webhook automation | claude-sdlc | GitHub issues auto-trigger SDLC | Manual PR creation |
