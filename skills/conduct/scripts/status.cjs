@@ -149,6 +149,14 @@ function bar(percent) {
   return "█".repeat(cells) + "░".repeat(10 - cells);
 }
 
+// Peer-written values print as text: every C0, DEL and C1 code point becomes
+// visible \xNN, so a field cannot move the cursor, clear the screen or set a
+// title. Applied at render time only; stored values are never rewritten.
+function esc(value) {
+  return String(value).replace(/[\u0000-\u001f\u007f-\u009f]/g,
+    (char) => `\\x${char.charCodeAt(0).toString(16).padStart(2, "0")}`);
+}
+
 function age(ms) {
   const hours = Math.floor(ms / 3600000);
   return hours >= 48 ? `${Math.floor(hours / 24)}d` : `${hours}h`;
@@ -227,13 +235,13 @@ function renderUsage({ accounts, rows }, now) {
   for (const account of accounts) {
     const own = rows.filter((row) => row.account === account)
       .sort((a, b) => a.provider.localeCompare(b.provider) || a.window.localeCompare(b.window));
-    if (own.length === 0) lines.push(`  ${account} unknown`);
+    if (own.length === 0) lines.push(`  ${esc(account)} unknown`);
     for (const row of own) {
       const used = Math.max(0, Math.min(100, Math.floor(row.used)));
       const old = now - Date.parse(row.observed_at);
       const stale = old > USAGE_STALE_MS ? `  STALE ${age(old)}` : "";
       const unattributed = row.accuracy === "unattributed" ? " · unattributed" : "";
-      lines.push(`  ${account} ${row.provider} ${row.window}  ${bar(used)} ${used}% · resets ${localTime(row.resets_at)}${unattributed}${stale}`);
+      lines.push(`  ${esc(account)} ${esc(row.provider)} ${esc(row.window)}  ${bar(used)} ${used}% · resets ${localTime(row.resets_at)}${unattributed}${stale}`);
     }
   }
   return `${lines.join("\n")}\n`;
@@ -254,10 +262,10 @@ function render(data, { controller, now, color }) {
     for (const row of own) {
       const old = now - Date.parse(row.updated_at);
       const stale = old > STALE_MS ? `  STALE ${age(old)}` : "";
-      lines.push(`  ${paint(COLORS[name], bar(row.percent))} ${String(row.percent).padStart(3)}% ${row.workstream}${stale}`);
-      const state = row.state === "blocked" ? `blocked on ${row.blocker_owner}` : row.state.replace("_", " ");
-      const next = row.next_step ? ` · next: ${row.next_step}` : "";
-      const evidence = row.evidence ? ` · ${row.evidence}` : "";
+      lines.push(`  ${paint(COLORS[name], bar(row.percent))} ${esc(row.percent).padStart(3)}% ${esc(row.workstream)}${stale}`);
+      const state = row.state === "blocked" ? `blocked on ${esc(row.blocker_owner)}` : esc(row.state.replace("_", " "));
+      const next = row.next_step ? ` · next: ${esc(row.next_step)}` : "";
+      const evidence = row.evidence ? ` · ${esc(row.evidence)}` : "";
       lines.push(`                  ${state}${next}${evidence}`);
     }
   }
