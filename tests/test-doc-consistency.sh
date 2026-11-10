@@ -4553,11 +4553,25 @@ test_gnx_setup_step() {
     pass "#781: setup Step 9.6 offers GitNexus default-No, shows the license, pins the version"
 }
 
+test_gnx_conduct_lookup() {
+    local f="$REPO_ROOT/skills/conduct/SKILL.md" missing="" s
+    for s in '**Cross-repo lookups (optional).**' '`list_repos`' '`repo` argument' \
+             'not fleet status' "$GNX_POINTER"; do
+        grep -qF -- "$s" "$f" || missing="$missing '$s'"
+    done
+    if [ -n "$missing" ]; then
+        fail "#781: conduct GitNexus cross-repo note missing:$missing"
+        return
+    fi
+    pass "#781: conduct names list_repos and the repo argument, and says it is not fleet status"
+}
+
 test_gnx_wizard_section
 test_gnx_banned_advice_absent
 test_gnx_lanes_entry
 test_gnx_sdlc_bullet
 test_gnx_setup_step
+test_gnx_conduct_lookup
 
 echo "=== Results: $PASSED passed, $FAILED failed ==="
 
