@@ -789,6 +789,51 @@ nview | grep -qxF '  spend unknown' && pass "an account with only a usd row prin
 nview | grep -qxF '  codex-56c919 p 7d  ███░░░░░░░ 30% · resets Tue 18:00 · unattributed' \
     && pass "an unattributed row says so" || fail "an unattributed row says so (got: $(nview))"
 
+echo "=== status escapes peer control characters (#756) ==="
+# Peer-written values carry ESC/CSI (ESC[2J), CR, OSC (ESC]0;...BEL), C1 CSI
+# (U+009B) and DEL. The view must print each as visible \xNN text (lowercase
+# hex, one per code point: ESC -> \x1b, U+009B -> \x9b), never the raw byte.
+XROOT="$TMPDIR_T/escape"; mkdir -p "$XROOT/.brain/usage"
+python3 - "$XROOT/.brain" <<'PY'
+import json, sys
+d = sys.argv[1]
+evil = "\x1b[2J\rX\x1b]0;pwn\x07\x9b\x7f"
+row = {"controller": "HARNESS", "workstream": "ws" + evil, "percent": 5, "state": "blocked",
+       "blocker_owner": "own" + evil, "next_step": "nx" + evil,
+       "updated_at": "2026-11-08T11:00:00Z", "evidence": "ev" + evil}
+open(f"{d}/fleet.json", "w").write(json.dumps({"v": 1, "rows": {"HARNESS/ws": row}}, indent=2) + "\n")
+u = {"account": "acct" + evil, "provider": "prov" + evil, "window": "win" + evil, "used": 10,
+     "limit": 100, "unit": "pct", "resets_at": "2026-11-10T18:00:00Z", "source": "t",
+     "accuracy": "server", "observed_at": "2026-11-08T11:00:00Z"}
+open(f"{d}/usage/peer.jsonl", "w").write(json.dumps(u) + "\n")
+open(f"{d}/usage/accounts.json", "w").write(json.dumps({"peer": "alias" + evil}) + "\n")
+PY
+XFLEET_SHA=$(sha "$XROOT/.brain/fleet.json")
+# Exit 0 when the text holds no control code point except LF (and CR only as
+# part of CRLF, which a pty adds) once the renderer's own SGR is removed, and
+# the "^D\b\b" BSD script(1) writes at the start of a pty session.
+no_ctl() { python3 -c 'import re, sys
+t = sys.stdin.buffer.read().decode("utf-8")
+t = re.sub(r"\x1b\[[0-9;]*m", "", t).replace("\r\n", "\n").removeprefix("^D\b\b")
+sys.exit(1 if re.search(r"[\x00-\x09\x0b-\x1f\x7f-\x9f]", t) else 0)'; }
+VIS='\x1b[2J\x0dX\x1b]0;pwn\x07\x9b\x7f'
+xview() { TZ=UTC node "$STATUS" --root "$XROOT" --now "2026-11-08T12:00:00Z" 2>&1; }
+xview | no_ctl && pass "piped view prints no field-supplied control code point" \
+    || fail "piped view prints no field-supplied control code point (got: $(xview | od -c | head -20))"
+for f in ws own nx ev acct prov win alias; do
+    xview | grep -qF "$f$VIS" && pass "$f shows its control characters as visible \\xNN" \
+        || fail "$f shows its control characters as visible \\xNN (got: $(xview))"
+done
+[ "$(sha "$XROOT/.brain/fleet.json")" = "$XFLEET_SHA" ] && pass "rendering leaves fleet.json byte-identical" \
+    || fail "rendering leaves fleet.json byte-identical"
+xtty() { socket_stdin bash -c 'on_tty node "$0" --root "$1" --now 2026-11-08T12:00:00Z' "$STATUS" "$XROOT"; }
+got=$(unset NO_COLOR; xtty)
+case "$got" in *"${ESC}[38;5;208m[HARNESS]${ESC}[0m"*) pass "a TTY keeps the renderer's own color" ;;
+    *) fail "a TTY keeps the renderer's own color (got: $got)" ;; esac
+# Piped, not captured: $(...) would strip the LF of the final CRLF, leaving a lone CR.
+(unset NO_COLOR; xtty) | no_ctl && pass "a TTY view prints no field-supplied control code point" \
+    || fail "a TTY view prints no field-supplied control code point (got: $(printf '%s' "$got" | od -c | head -20))"
+
 echo "=== codex usage collector ==="
 COLLECT="$REPO_ROOT/scripts/usage-codex.cjs"
 CHOME="$TMPDIR_T/codex-home/.codex"; CROOT="$TMPDIR_T/collect"; CS="$CHOME/sessions/2026/11"
