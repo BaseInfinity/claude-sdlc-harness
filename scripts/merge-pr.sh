@@ -5,6 +5,8 @@
 # Feedback Loop section and ROADMAP.md for why).
 #
 # What this mechanically proves (hard-verified, fail-closed):
+#   - The local time is outside Mon-Fri 08:00-16:59. Checked first, before
+#     any argument parsing or network call, and no flag lifts it.
 #   - CI's `validate` check is success for the PR's REMOTE head SHA (not a
 #     cached field — queried fresh every run).
 #   - The PR touches no HARD_DENY path — the merge-evidence chain, including
@@ -46,6 +48,34 @@
 # adversary.
 
 set -u
+
+# --- AFTERHOURS: NO MERGES MON-FRI 08:00-16:59 LOCAL TIME ---
+#
+# Fleet rule, 2026-11-09: merges wait for after hours, as pushes already do.
+# Same window as the afterhours pre-push hook
+# (~/.afterhours/hooks/pre-push), deliberately
+# WITHOUT its AFTERHOURS_SKIP / _DOW / _HOUR knobs: a bypass would loosen the
+# gate this exists to tighten, and no flag below lifts it either.
+#
+# One `date` call, so the day and the hour come from the same instant. TZ is
+# removed for that call because an inherited TZ=UTC turns 14:00 PST into 22:00
+# and walks straight past the window. Output that is not "<1-7> <HH>:<MM>"
+# fails closed: a non-numeric day would make `[ -le ]` error, read false, and
+# let the merge through.
+AFTERHOURS_NOW=$(env -u TZ date '+%u %H:%M')
+case "$AFTERHOURS_NOW" in
+    [1-7]' '[0-2][0-9]:[0-5][0-9]) ;;
+    *)
+        echo "FAILED CLOSED: could not read the local day and time for the afterhours guard (date printed '$AFTERHOURS_NOW')." >&2
+        exit 1
+        ;;
+esac
+AFTERHOURS_HOUR=${AFTERHOURS_NOW#* }
+AFTERHOURS_HOUR=${AFTERHOURS_HOUR%%:*}
+if [ "${AFTERHOURS_NOW%% *}" -le 5 ] && [ "$((10#$AFTERHOURS_HOUR))" -ge 8 ] && [ "$((10#$AFTERHOURS_HOUR))" -lt 17 ]; then
+    echo "BLOCKED: no merges Mon-Fri 08:00-16:59 local time (now: weekday ${AFTERHOURS_NOW%% *} of 7, ${AFTERHOURS_NOW#* }). Merge before 08:00, from 17:00, or on a weekend." >&2
+    exit 1
+fi
 
 # --- THE REPOSITORY AND HOST THIS GATE ACTS ON ARE PINNED HERE ---
 #

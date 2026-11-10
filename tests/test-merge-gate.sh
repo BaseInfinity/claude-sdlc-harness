@@ -305,10 +305,33 @@ echo "--- merge-pr.sh (verifying wrapper) ---"
 # real network/GitHub calls happen. The stub reads a small control file to
 # decide what to return for each gh subcommand it's asked to fake.
 
+# Fixture clock for the afterhours guard. merge-pr.sh refuses Mon-Fri
+# 08:00-16:59, so every wrapper run needs a controlled `date` or the suite's
+# result depends on when it runs. FAKE_NOW="<%u> <%H> <%M>" picks the moment;
+# the default, Saturday 12:00, is outside the window. The stub expands only
+# %u, %H and %M in the format it was ASKED for and fails on any other token, so
+# a wrong format in the wrapper goes red instead of getting a canned answer.
+# It records the TZ it saw, so a row can prove the caller's TZ never reaches it.
+install_fixture_clock() {
+    cat > "$1/bin/date" <<'STUB'
+#!/bin/bash
+printf '%s\n' "${TZ-unset}" > "$(dirname "$0")/../.date-tz"
+if [ $# -ne 1 ] || [ "${1#+}" = "$1" ]; then
+    echo "date stub: unexpected argv: $*" >&2; exit 2
+fi
+read -r d h m <<< "${FAKE_NOW:-6 12 00}"
+out=${1#+}; out=${out//%u/$d}; out=${out//%H/$h}; out=${out//%M/$m}
+case "$out" in *%*) echo "date stub: unsupported format: $1" >&2; exit 2 ;; esac
+printf '%s\n' "$out"
+STUB
+    chmod +x "$1/bin/date"
+}
+
 setup_wrapper_fixture() {
     local tmpdir
     tmpdir=$(mktemp -d)
     mkdir -p "$tmpdir/bin" "$tmpdir/.reviews" "$tmpdir/tests"
+    install_fixture_clock "$tmpdir"
     git init -q "$tmpdir"
 
     # #540: the merge boundary compares the REMOTE HEAD's TREE against the
@@ -616,6 +639,7 @@ test_wrapper_fails_closed_on_gh_error() {
     local tmpdir out exit_code
     tmpdir=$(mktemp -d)
     mkdir -p "$tmpdir/bin"
+    install_fixture_clock "$tmpdir"
     cat > "$tmpdir/bin/gh" <<'STUB'
 #!/bin/bash
 echo "network error" >&2
@@ -2939,6 +2963,88 @@ test_dual_record_body_names_the_authorized_path() {
     fi
 }
 test_dual_record_body_names_the_authorized_path
+
+echo ""
+echo "--- afterhours guard (no merges Mon-Fri 08:00-16:59) ---"
+
+# Runs the wrapper at FAKE_NOW with a gh that only records that it was called
+# and then fails. "gh=called" therefore means the run got PAST the guard;
+# "gh=uncalled" means it stopped before any network call.
+# Echoes "exit=<n> gh=<called|uncalled> tz=<what date saw> <output>".
+run_at_clock() {   # $1=FAKE_NOW "<%u> <%H> <%M>", rest=wrapper args
+    local now="$1"; shift
+    local tmpdir out code gh tz
+    tmpdir=$(setup_wrapper_fixture)
+    cat > "$tmpdir/bin/gh" <<'STUB'
+#!/bin/bash
+touch "$(dirname "$0")/../.gh-called"
+exit 1
+STUB
+    out=$(cd "$tmpdir" && PATH="$tmpdir/bin:$PATH" FAKE_NOW="$now" "$WRAPPER" 123 "$@" 2>&1) && code=0 || code=$?
+    gh=uncalled; [ -f "$tmpdir/.gh-called" ] && gh=called
+    tz=$(cat "$tmpdir/.date-tz" 2>/dev/null || echo never)
+    rm -rf "$tmpdir"
+    printf 'exit=%s gh=%s tz=%s %s' "$code" "$gh" "$tz" "$out"
+}
+
+assert_refused_in_window() {   # $1=label, $2=run_at_clock result
+    case "$2" in
+        exit=0*) fail "$1: exited 0 inside the window: $2" ;;
+        *gh=called*) fail "$1: reached gh inside the window: $2" ;;
+        *"Mon-Fri 08:00-16:59"*) pass "$1: refused before any gh call, message names the window" ;;
+        *) fail "$1: refused, but the message does not name the window: $2" ;;
+    esac
+}
+
+assert_past_guard() {   # $1=label, $2=run_at_clock result
+    case "$2" in
+        *"Mon-Fri 08:00-16:59"*) fail "$1: the afterhours guard refused it: $2" ;;
+        *gh=called*) pass "$1: proceeds past the afterhours guard" ;;
+        *) fail "$1: never reached gh: $2" ;;
+    esac
+}
+
+assert_refused_in_window "weekday 10:00 (Mon)" "$(run_at_clock '1 10 00')"
+assert_refused_in_window "weekday 08:00 (Mon), first refused minute" "$(run_at_clock '1 08 00')"
+assert_refused_in_window "weekday 16:59 (Fri), last refused minute" "$(run_at_clock '5 16 59')"
+assert_refused_in_window "weekday 10:00 with --user-approved, no flag lifts it" \
+    "$(run_at_clock '1 10 00' --user-approved "maintainer decision: ship it")"
+assert_refused_in_window "weekday 10:00 with --dual-certified, no flag lifts it" \
+    "$(run_at_clock '1 10 00' --dual-certified)"
+# The pre-push hook's knobs must not reach this guard: the wrapper reads none.
+assert_refused_in_window "weekday 10:00 with the pre-push hook's AFTERHOURS_* knobs set" \
+    "$(AFTERHOURS_SKIP=1 AFTERHOURS_DOW=6 AFTERHOURS_HOUR=20 run_at_clock '1 10 00')"
+assert_past_guard "weekday 17:00 (Mon)" "$(run_at_clock '1 17 00')"
+assert_past_guard "weekday 07:59 (Wed)" "$(run_at_clock '3 07 59')"
+assert_past_guard "Saturday 12:00" "$(run_at_clock '6 12 00')"
+assert_past_guard "Sunday 12:00" "$(run_at_clock '7 12 00')"
+
+# Fail closed on a clock it cannot parse. Without this a non-numeric day made
+# the `[ -le ]` comparison error out, the condition read false, and the merge
+# went ahead.
+test_afterhours_fails_closed_on_unparseable_clock() {
+    local r
+    r=$(run_at_clock 'x 10 00')
+    case "$r" in
+        exit=0*|*gh=called*) fail "an unparseable clock got past the guard: $r" ;;
+        *"FAILED CLOSED"*) pass "an unparseable clock fails closed before any gh call" ;;
+        *) fail "an unparseable clock was refused without saying it failed closed: $r" ;;
+    esac
+}
+test_afterhours_fails_closed_on_unparseable_clock
+
+# The caller's TZ must not move the clock. TZ=UTC turns 14:00 PST into 22:00,
+# outside the window, so an inherited TZ would be a bypass. The stub records
+# the TZ it was given; the wrapper must have removed it.
+test_afterhours_ignores_caller_tz() {
+    local r
+    r=$(TZ=UTC run_at_clock '6 12 00')
+    case "$r" in
+        *"tz=unset "*) pass "the caller's TZ never reaches the guard's date call" ;;
+        *) fail "the guard's date call saw the caller's TZ: $r" ;;
+    esac
+}
+test_afterhours_ignores_caller_tz
 
 echo ""
 echo "=== Results ==="
