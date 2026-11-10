@@ -325,8 +325,8 @@ Default No. If yes, read `~/.claude/settings.json`, add/update only the `advisor
 ### Step 9.6: GitNexus Code Graph (Optional, Opt-In)
 
 Offer this only when most of the repo's code is in a language GitNexus parses: TypeScript,
-JavaScript, Python, Java, C, C++, C#, Go, Rust, PHP, Kotlin, Swift, Ruby, Dart or Zig. It does not
-parse bash. Otherwise skip this step silently.
+JavaScript, Vue, Python, Java, Kotlin, C, C++, C#, Objective-C, Go, Rust, PHP, Ruby, Swift, Dart,
+Zig or COBOL. It does not parse bash. Otherwise skip this step silently.
 
 **Ask the user exactly once, default No:**
 

@@ -1653,7 +1653,7 @@ calls do go out:
 | Scarf analytics ping | `npm install` | `SCARF_ANALYTICS=false` or `DO_NOT_TRACK=1` |
 | Update check | Daily, on CLI use | `GITNEXUS_NO_UPDATE_NOTIFIER=1` |
 | Embedding model, ~97 MB from huggingface.co, cached in `~/.cache/huggingface` | First index with `--embeddings` | Drop `--embeddings` |
-| LadybugDB full-text and vector extensions | First index | None |
+| LadybugDB full-text and vector extensions | First index | `GITNEXUS_LBUG_EXTENSION_INSTALL=never` or `load-only` (pre-installed only), or `--skip-fts`; full-text search is then off |
 
 The `wiki`, `serve` and `publish` commands send data off the machine. They are opt-in, and
 nothing here uses them.
@@ -1696,9 +1696,10 @@ indexed repo, 12 skills, and a `CLAUDE.md` block that tells the agent to stop us
 advice also self-updates to an unpinned version.
 
 **Limits. Grep anyway.**
-- Supported: TypeScript, JavaScript, Python, Java, C, C++, C#, Go, Rust, PHP, Kotlin, Swift, Ruby,
-  Dart, Zig. Bash is not parsed: the claude-sdlc-wizard repo's 135 `.sh` files produced 0
-  Function nodes.
+- Supported, per the package's language list: TypeScript, JavaScript, Vue, Python, Java, Kotlin,
+  C, C++, C#, Objective-C, Go, Rust, PHP, Ruby, Swift, Dart, Zig, COBOL. Bash is not parsed: in
+  claude-sdlc-wizard at `5301587`, 140 tracked `.sh` files gave 135 File nodes and 0 Function
+  nodes.
 - `impact` can miss callers. In that repo, `impact` on `render` (`status.cjs`) returned an exact LOW
   and missed a `spawnSync` caller in `conduct.cjs`, plus callers in tests and `cli/init.js`. Callers
   across a process boundary are invisible to the graph.

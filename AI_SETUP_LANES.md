@@ -343,9 +343,10 @@ $ claude -p --model 'claude-opus-4-6' --effort high --output-format json "Reply 
 caller queries. It works with every lane above and is never required.
 License: PolyForm Noncommercial 1.0.0; commercial use needs a license from its author. Indexing and queries run
 locally, and no code goes to an API. Semantic search uses 384-dim embeddings from
-`snowflake-arctic-embed-xs`, computed on the machine. Three calls do go out: a one-time ~97 MB
-model download from huggingface.co, an install-time analytics ping and a daily update check. The
-last two can be switched off. Install, opt-outs and limits: wizard → "Optional: GitNexus code graph".
+`snowflake-arctic-embed-xs`, computed on the machine. Four calls do go out: a one-time ~97 MB
+model download from huggingface.co, a one-time LadybugDB extension download, an install-time
+analytics ping and a daily update check. Each can be switched off. Install, opt-outs and limits:
+wizard → "Optional: GitNexus code graph".
 
 ## See Also
 
