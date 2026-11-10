@@ -237,6 +237,7 @@ Mandatory steps:
 - **EXISTENCE RULE** — a guard/fix does not exist until observed producing BOTH outcomes on live input. Every guard ships a negative fixture: RED proves it fires, never that it does not overfire.
 - **PROCESS BUDGET prices the promise** — none, or watched it hold → ship; predicted → one fact-check pass; unobservable or High-Stakes → full gate.
 - **DRY** — before coding: "what patterns exist to reuse?" After: "did I duplicate anything?"
+- **GitNexus (optional)** — if its MCP server is connected, use `impact` for blast radius while planning and `context` for callers while reviewing. Grep anyway: it does not parse bash and misses callers across a process boundary. Setup: wizard → "Optional: GitNexus code graph".
 - **New patterns** require human approval: search first, propose if no equivalent, get explicit approval.
 - **DELETE legacy code** — backwards-compat shims, "just in case" fallbacks → gone. If it breaks, fix properly.
 

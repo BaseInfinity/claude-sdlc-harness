@@ -4526,9 +4526,24 @@ test_gnx_lanes_entry() {
     pass "#781: AI_SETUP_LANES names GitNexus as optional, with license, 384-dim and the wizard pointer"
 }
 
+test_gnx_sdlc_bullet() {
+    local missing="" f s
+    for f in skills/sdlc/SKILL.md cowork/skills/sdlc/SKILL.md; do
+        for s in '**GitNexus (optional)**' 'Grep anyway' "$GNX_POINTER"; do
+            grep -qF -- "$s" "$REPO_ROOT/$f" || missing="$missing $f('$s')"
+        done
+    done
+    if [ -n "$missing" ]; then
+        fail "#781: sdlc GitNexus bullet missing:$missing"
+        return
+    fi
+    pass "#781: sdlc and its cowork copy carry the optional GitNexus bullet with the grep caveat"
+}
+
 test_gnx_wizard_section
 test_gnx_banned_advice_absent
 test_gnx_lanes_entry
+test_gnx_sdlc_bullet
 
 echo "=== Results: $PASSED passed, $FAILED failed ==="
 
