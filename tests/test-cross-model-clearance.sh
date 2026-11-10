@@ -202,6 +202,9 @@ write_clearance_artifact() {
 { "pr_number": 123, "status": "CERTIFIED", "round": 4, "sha": "$2",
   "candidate_tree": "${3:-$HEAD_TREE}", "base_tree": "${4:-$HEAD_TREE}",
   "base_sha": "${5:-$HEAD_SHA}",
+  "rounds": [{"round": 1, "findings_total": 4}, {"round": 2, "findings_total": 3},
+             {"round": 3, "findings_total": 2}, {"round": 4, "findings_total": 1}],
+  "scope_decisions": [{"round": 4, "reason": "in-card P1 still open after round 3"}],
   "review_file": ".reviews/r.md" }
 JSON
     echo "review body" > "$1/.reviews/r.md"
