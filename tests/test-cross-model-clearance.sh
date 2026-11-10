@@ -177,6 +177,18 @@ echo "unstubbed gh invocation: $*" >&2
 exit 1
 STUB
     chmod +x "$tmpdir/bin/gh"
+    # Fixture clock: merge-pr.sh refuses Mon-Fri 08:00-16:59, so every row
+    # runs at Saturday 12:00 or its result depends on when the suite runs.
+    # Expands only %u %H %M in the requested format; the guard's own rows
+    # live in tests/test-merge-gate.sh.
+    cat > "$tmpdir/bin/date" <<'STUB'
+#!/bin/bash
+[ $# -eq 1 ] && [ "${1#+}" != "$1" ] || { echo "date stub: unexpected argv: $*" >&2; exit 2; }
+out=${1#+}; out=${out//%u/6}; out=${out//%H/12}; out=${out//%M/00}
+case "$out" in *%*) echo "date stub: unsupported format: $1" >&2; exit 2 ;; esac
+printf '%s\n' "$out"
+STUB
+    chmod +x "$tmpdir/bin/date"
     echo "$tmpdir"
 }
 
