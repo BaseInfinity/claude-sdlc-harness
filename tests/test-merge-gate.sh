@@ -1740,6 +1740,142 @@ test_wrapper_allows_round_2_without_findings_field() {
     fi
 }
 
+# --- Round cap: past round 3, each extra round carries a recorded reason ---
+#
+# The gate had a floor (round >= 2) and no ceiling. The shape it now checks,
+# READ ONLY PAST ROUND 3 so every round 1-3 clearance stays valid unchanged,
+# including older ones that use a top-level "rounds" key for something else:
+#
+#   "rounds": [{"round": 1, "findings_total": N}, ...]
+#       one entry per round, in order, length == round. From round 3 on,
+#       findings_total must be strictly below the previous round's.
+#   "scope_decisions": [{"round": R, "reason": "<non-blank>"}, ...]
+#       for every R in 4..round, at least one entry with a non-blank reason
+#       and no decision other than "continue". Other entries are ignored, so
+#       the wizard's existing {decision, cost, blame, by} records can coexist.
+
+# "5 4 2" -> "rounds":[{"round":1,"findings_total":5},...]
+rounds_json() {
+    local i=0 n out=""
+    for n in $1; do
+        i=$((i + 1))
+        [ -n "$out" ] && out="$out,"
+        out="$out{\"round\":$i,\"findings_total\":$n}"
+    done
+    printf '"rounds":[%s]' "$out"
+}
+
+# Writes a clearance at round $1 with raw extra fields $2, runs the wrapper,
+# and prints "<exit>|<output>".
+run_round_cap() {
+    local tmpdir out exit_code
+    tmpdir=$(setup_wrapper_fixture)
+    write_clearance "$tmpdir" 123 "CERTIFIED" "$1" "$(cat "$tmpdir/.fixture-sha")" \
+        ".reviews/some-review.md" "" "" "" "" "" "$2"
+    echo "content" > "$tmpdir/.reviews/some-review.md"
+    out=$(cd "$tmpdir" && PATH="$tmpdir/bin:$PATH" "$WRAPPER" 123 2>&1) && exit_code=0 || exit_code=$?
+    rm -rf "$tmpdir"
+    printf '%s|%s' "$exit_code" "$out"
+}
+
+# $1 label, $2 expected text, $3 result of run_round_cap
+expect_round_cap_refused() {
+    local code="${3%%|*}" out="${3#*|}"
+    if [ "$code" -ne 0 ] && ! printf '%s' "$out" | grep -q "GH_MERGE_INVOKED" \
+        && printf '%s' "$out" | grep -qF "$2"; then
+        pass "round cap refuses: $1"
+    else
+        fail "round cap should refuse ($1) with '$2', got exit=$code out=$out"
+    fi
+}
+
+expect_round_cap_merges() {
+    local code="${2%%|*}" out="${2#*|}"
+    if [ "$code" -eq 0 ] && printf '%s' "$out" | grep -q "GH_MERGE_INVOKED"; then
+        pass "round cap allows: $1"
+    else
+        fail "round cap should allow ($1), got exit=$code out=$out"
+    fi
+}
+
+test_round_cap() {
+    local sd4='"scope_decisions":[{"round":4,"reason":"in-card P1 open after round 3"}]'
+    local sd_empty='"scope_decisions":[{"round":4,"reason":""}]'
+    local sd_space='"scope_decisions":[{"round":4,"reason":" \t "}]'
+    local sd_append='"scope_decisions":[{"round":4,"reason":""},{"round":4,"reason":"re-frozen scope"}]'
+    local sd_stop='"scope_decisions":[{"round":4,"decision":"stop","reason":"converged"}]'
+    local sd_continue='"scope_decisions":[{"round":4,"decision":"continue","reason":"P1 open"}]'
+
+    expect_round_cap_refused "round 4 with no scope_decisions entry for round 4" \
+        "no scope_decisions reason for round 4" \
+        "$(run_round_cap 4 "$(rounds_json "5 4 2 1")")"
+    expect_round_cap_merges "round 4 with a reasoned entry for round 4" \
+        "$(run_round_cap 4 "$(rounds_json "5 4 2 1"), $sd4")"
+    expect_round_cap_merges "round 4 with an explicit continue decision" \
+        "$(run_round_cap 4 "$(rounds_json "5 4 2 1"), $sd_continue")"
+    expect_round_cap_refused "round 4 whose only entry is a stop decision" \
+        "no scope_decisions reason for round 4" \
+        "$(run_round_cap 4 "$(rounds_json "5 4 2 1"), $sd_stop")"
+    expect_round_cap_refused "round 5 with an entry only for round 4" \
+        "no scope_decisions reason for round 5" \
+        "$(run_round_cap 5 "$(rounds_json "5 4 3 2 1"), $sd4")"
+    expect_round_cap_refused "round 4 with an empty reason" \
+        "no scope_decisions reason for round 4" \
+        "$(run_round_cap 4 "$(rounds_json "5 4 2 1"), $sd_empty")"
+    expect_round_cap_refused "round 4 with a whitespace reason" \
+        "no scope_decisions reason for round 4" \
+        "$(run_round_cap 4 "$(rounds_json "5 4 2 1"), $sd_space")"
+    expect_round_cap_merges "a blank entry beside a reasoned one for the same round (scopes append)" \
+        "$(run_round_cap 4 "$(rounds_json "5 4 2 1"), $sd_append")"
+    expect_round_cap_refused "findings 5,4,4 do not strictly fall after round 2" \
+        "findings_total did not fall at round 3" \
+        "$(run_round_cap 4 "$(rounds_json "5 4 4 3"), $sd4")"
+    expect_round_cap_merges "findings 5,4,2" \
+        "$(run_round_cap 4 "$(rounds_json "5 4 2 1"), $sd4")"
+    expect_round_cap_merges "findings 4,5,2 (round 2 may rise; the rule starts at round 3)" \
+        "$(run_round_cap 4 "$(rounds_json "4 5 2 1"), $sd4")"
+    expect_round_cap_refused "findings 5,4,2,2 at round 4" \
+        "findings_total did not fall at round 4" \
+        "$(run_round_cap 4 "$(rounds_json "5 4 2 2"), $sd4")"
+    expect_round_cap_refused "a rounds list shorter than round" \
+        "rounds must be a list of 4 entries" \
+        "$(run_round_cap 4 "$(rounds_json "5 4 2"), $sd4")"
+    expect_round_cap_refused "a rounds list longer than round" \
+        "rounds must be a list of 4 entries" \
+        "$(run_round_cap 4 "$(rounds_json "6 5 4 2 1"), $sd4")"
+    expect_round_cap_refused "rounds entries out of order" \
+        "rounds entry 1" \
+        "$(run_round_cap 4 '"rounds":[{"round":2,"findings_total":5},{"round":1,"findings_total":4},{"round":3,"findings_total":2},{"round":4,"findings_total":1}],'"$sd4")"
+    expect_round_cap_refused "a non-integer findings_total in rounds" \
+        "rounds entry 2" \
+        "$(run_round_cap 4 '"rounds":[{"round":1,"findings_total":5},{"round":2,"findings_total":true},{"round":3,"findings_total":1},{"round":4,"findings_total":0}],'"$sd4")"
+    expect_round_cap_refused "a negative findings_total in rounds" \
+        "rounds entry 4" \
+        "$(run_round_cap 4 "$(rounds_json "5 4 2 -1"), $sd4")"
+    expect_round_cap_refused "round 4 that records no rounds at all" \
+        "declares no 'rounds'" \
+        "$(run_round_cap 4 "$sd4")"
+    expect_round_cap_merges "round 3 with neither field (existing clearances unchanged)" \
+        "$(run_round_cap 3 "")"
+    expect_round_cap_merges "round 3 whose rounds would fail the rule (not read until round 4)" \
+        "$(run_round_cap 3 "$(rounds_json "5 4 4")")"
+    # merge-clearance-597.json: a real round-2 clearance whose top-level
+    # "rounds" is a dialogue log, not a findings history. It must still merge.
+    expect_round_cap_merges "round 2 with a foreign-shaped rounds key (the #597 artifact)" \
+        "$(run_round_cap 2 '"rounds":[{"round":1,"reviewer":"sol","verdict":"NOT CERTIFIED","score":6},{"round":2,"reviewer":"sol","verdict":"CERTIFIED"}]')"
+
+    # Malformed JSON: the strict parse already refuses it. Kept as a row so the
+    # new fields never get a lenient reader of their own.
+    local tmpdir out exit_code
+    tmpdir=$(setup_wrapper_fixture)
+    write_clearance "$tmpdir" 123 "CERTIFIED" 4 "$(cat "$tmpdir/.fixture-sha")" \
+        ".reviews/some-review.md" "" "" "" "" "" "$(rounds_json "5 4 2 1"), \"scope_decisions\":[{\"round\":4,\"reason\":\"x\"}"
+    echo "content" > "$tmpdir/.reviews/some-review.md"
+    out=$(cd "$tmpdir" && PATH="$tmpdir/bin:$PATH" "$WRAPPER" 123 2>&1) && exit_code=0 || exit_code=$?
+    rm -rf "$tmpdir"
+    expect_round_cap_refused "malformed JSON" "does not parse as a certification" "$exit_code|$out"
+}
+
 # --- #540: the clearance names CONTENT, and the merge boundary checks it ---
 #
 # The hook can only speak for the index it saw before the commit; PreToolUse
@@ -2144,6 +2280,7 @@ test_wrapper_blocks_round_1_unscoped_findings_totals
 test_wrapper_blocks_round_1_partially_counted_reviewers
 test_wrapper_blocks_round_1_clean_but_not_certified_reviewer
 test_wrapper_allows_round_2_without_findings_field
+test_round_cap
 test_wrapper_blocks_stale_clearance
 test_wrapper_blocks_wrong_candidate_tree
 test_wrapper_blocks_moved_base

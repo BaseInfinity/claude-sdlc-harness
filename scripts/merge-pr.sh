@@ -1053,6 +1053,57 @@ emit("reviewer_count", reviewer_count)
 emit("clean_count", clean_count)
 emit("dirty_count", dirty_count)
 
+# ROUND CAP. The gate had a floor and no ceiling. Past round 3 a clearance
+# carries a per-round history and a recorded reason for every extra round.
+#
+#   "rounds": [{"round": 1, "findings_total": N}, ...]  one per round, in
+#       order, length == round. From round 3 on, each findings_total is
+#       strictly below the one before.
+#   "scope_decisions": [{"round": R, "reason": "..."}, ...]  for every R in
+#       4..round, at least one entry with a non-blank reason and no decision
+#       other than "continue". Scopes append, so other entries are ignored.
+#
+# BOTH ARE READ ONLY PAST ROUND 3. At rounds 1-3 nothing new is required, and
+# older artifacts already use a top-level "rounds" key for other things
+# (merge-clearance-597.json is a dialogue log), so reading it there would
+# refuse clearances that were valid.
+#
+# The verdict is decided HERE and crosses the TSV channel as a fixed token. A
+# reason is free text and never reaches the shell.
+def is_int(v):
+    return isinstance(v, int) and not isinstance(v, bool)
+
+round_cap = "ok"
+if is_int(rnd) and rnd > 3:
+    rounds = doc.get("rounds")
+    if rounds is None:
+        round_cap = "no_rounds"
+    else:
+        if not isinstance(rounds, list) or len(rounds) != rnd:
+            sys.stderr.write("rounds must be a list of %d entries, one per round\n" % rnd)
+            sys.exit(2)
+        for i, entry in enumerate(rounds, 1):
+            if not (isinstance(entry, dict) and is_int(entry.get("round")) and entry["round"] == i
+                    and is_int(entry.get("findings_total")) and entry["findings_total"] >= 0):
+                sys.stderr.write("rounds entry %d is not {\"round\": %d, \"findings_total\": <count>}\n" % (i, i))
+                sys.exit(2)
+        for r in range(3, rnd + 1):
+            if rounds[r - 1]["findings_total"] >= rounds[r - 2]["findings_total"]:
+                round_cap = "not_falling %d" % r
+                break
+    if round_cap == "ok":
+        decisions = doc.get("scope_decisions")
+        if not isinstance(decisions, list):
+            decisions = []
+        for r in range(4, rnd + 1):
+            if not any(isinstance(d, dict) and is_int(d.get("round")) and d["round"] == r
+                       and d.get("decision", "continue") == "continue"
+                       and isinstance(d.get("reason"), str) and d["reason"].strip()
+                       for d in decisions):
+                round_cap = "no_reason %d" % r
+                break
+emit("round_cap", round_cap)
+
 sys.stdout.write("\n".join(out))
 ' "$CLEARANCE_FILE" 2>&1) || {
             echo "BLOCKED: $CLEARANCE_FILE does not parse as a certification — $CLEARANCE_PARSED. A file the gate cannot read one way is not a clearance. Explicit user confirmation is required: --user-approved \"<reason>\"." >&2
@@ -1138,6 +1189,24 @@ sys.stdout.write("\n".join(out))
                 exit 1
             fi
         fi
+        # ROUND CAP: the ceiling to the floor above. Decided in the parse; see
+        # the comment there for the shape. Anything but a known token refuses.
+        CL_ROUND_CAP=$(cl_field round_cap)
+        case "$CL_ROUND_CAP" in
+            ok) ;;
+            no_rounds)
+                echo "BLOCKED: $CLEARANCE_FILE is at round $CL_ROUND but declares no 'rounds'. Past round 3 a clearance records findings_total per round: \"rounds\": [{\"round\": 1, \"findings_total\": N}, ...]. Explicit user confirmation is required: --user-approved \"<reason>\"." >&2
+                exit 1 ;;
+            "not_falling "*)
+                echo "BLOCKED: $CLEARANCE_FILE findings_total did not fall at round ${CL_ROUND_CAP#not_falling }. After round 2 every round must find strictly fewer than the one before, or the loop is not converging. Explicit user confirmation is required: --user-approved \"<reason>\"." >&2
+                exit 1 ;;
+            "no_reason "*)
+                echo "BLOCKED: $CLEARANCE_FILE has no scope_decisions reason for round ${CL_ROUND_CAP#no_reason }. Past round 3 every extra round needs a recorded continue reason: \"scope_decisions\": [{\"round\": ${CL_ROUND_CAP#no_reason }, \"reason\": \"...\"}]. Explicit user confirmation is required: --user-approved \"<reason>\"." >&2
+                exit 1 ;;
+            *)
+                echo "BLOCKED: $CLEARANCE_FILE produced no round-cap verdict ('${CL_ROUND_CAP}'). Explicit user confirmation is required: --user-approved \"<reason>\"." >&2
+                exit 1 ;;
+        esac
         CL_SHA=$(cl_field sha)
         if [ "$CL_SHA" != "$HEAD_SHA" ]; then
             echo "BLOCKED: $CLEARANCE_FILE is stale — its sha ($CL_SHA) does not match the current remote head ($HEAD_SHA). New commits landed since certification. Explicit user confirmation is required: --user-approved \"<reason>\"." >&2
