@@ -4468,6 +4468,55 @@ test_plan_gate_marker_everywhere
 test_plan_gate_canonical_rule_in_sdlc
 test_plan_gate_not_duplicated
 
+echo "--- GitNexus optional guidance (GH #781) ---"
+
+GNX_HEADING='#### Optional: GitNexus code graph'
+GNX_POINTER='wizard → "Optional: GitNexus code graph"'
+GNX_PIN='gitnexus@1.6.12'
+GNX_LICENSE='PolyForm Noncommercial 1.0.0'
+
+# Prints file:line for advice the pilot said must not ship: the generated
+# "never substitute grep" block and unpinned @latest self-update.
+gnx_banned_refs() {
+    grep -niF -e 'never substitute grep' -e 'gitnexus@latest' "$@" 2>/dev/null || true
+}
+
+test_gnx_wizard_section() {
+    local w="$REPO_ROOT/CLAUDE_CODE_SDLC_WIZARD.md" missing="" s
+    for s in "$GNX_HEADING" "$GNX_PIN" "$GNX_LICENSE" 'analyze --index-only --pdg --embeddings' \
+             '"args":["mcp"]'; do
+        grep -qF -- "$s" "$w" || missing="$missing '$s'"
+    done
+    if [ -n "$missing" ]; then
+        fail "#781: wizard GitNexus section missing:$missing"
+        return
+    fi
+    pass "#781: wizard has the GitNexus section with pin, license, index and MCP strings"
+}
+
+test_gnx_banned_advice_absent() {
+    local fx hits
+    fx="$(mktemp "${TMPDIR:-/tmp}/gnx-fixture.XXXXXX")"
+    printf 'Never substitute grep for the graph.\nnpx gitnexus@latest analyze\n' > "$fx"
+    if [ "$(gnx_banned_refs "$fx" | wc -l | tr -d ' ')" -ne 2 ]; then
+        rm -f "$fx"
+        fail "#781: banned-advice detector does not fire on its fixture"
+        return
+    fi
+    rm -f "$fx"
+    # shellcheck disable=SC2046
+    hits=$(gnx_banned_refs $(fable_rung_files))
+    if [ -n "$hits" ]; then
+        fail "#781: shipped files carry banned GitNexus advice:"
+        echo "$hits" | sed "s|^$REPO_ROOT/|    |"
+        return
+    fi
+    pass "#781: no shipped file says 'never substitute grep' or gitnexus@latest (detector fires on fixture)"
+}
+
+test_gnx_wizard_section
+test_gnx_banned_advice_absent
+
 echo "=== Results: $PASSED passed, $FAILED failed ==="
 
 if [ "$FAILED" -gt 0 ]; then
