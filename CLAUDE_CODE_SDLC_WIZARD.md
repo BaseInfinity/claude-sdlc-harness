@@ -1217,11 +1217,12 @@ Set effort per-session with `/effort` (planner `xhigh`, driver `medium`, escalat
 
 ### Conductor tier — Opus 4.6[1m] `high`
 
-A multi-session setup has one conductor session that routes work (`/conduct`). It runs its own pin; builders and reviewers keep theirs. Full entry and evidence: `AI_SETUP_LANES.md` → "Conductor".
+A multi-session setup has one conductor session that routes work (`/conduct`). It runs its own pin, and the controllers run the same one; workers and reviewers keep theirs. Full entry and evidence: `AI_SETUP_LANES.md` → "Conductor".
 
 | Role | Model | Effort |
 |------|-------|--------|
 | **Conductor** | `claude-opus-4-6[1m]` | `high` |
+| **Controllers** | `claude-opus-4-6[1m]` | `high` |
 | **Builders** | `claude-opus-5-5` | `medium` |
 | **Planning and reviews** | `claude-fable-5-2` | `high` |
 
@@ -1232,6 +1233,8 @@ Pin `[1m]`: on Claude Code 2.1.321 (2026-11-09) the bare `claude-opus-4-6` pin c
 **Controller restart.** The conductor can restart a controller to switch its model. Send the old controller process SIGTERM and verify it is gone (`kill -0 <pid>` fails). The process then uses a new iTerm tab created by `it2api create-tab`, launches `claude` there with the new `--model` and `--effort` flags, and sends it the fleet rules plus a pointer to its running workers. The new controller picks up from the workers' reports. Observed 2026-11-09: the SIGTERM and `kill -0` check on a throwaway process; `it2api create-tab` read from its `--help` (it takes `--window` and `--command`), not run; the flags as in the evidence above.
 
 **Approval is the go signal.** When the conductor approves a gameplan, its controllers and workers start immediately, with no second confirmation; the review, merge and work-hours gates still apply.
+
+**In a `/conduct` fleet, show the human a plan only at 95%.** A controller's gameplan, status report or decision reaches the human only at 95% confidence, or once every brain has tried and cannot get there. Full rule: `/sdlc` → "Exhaust the driver before escalating".
 
 ### Latest tier — Opus 4.8 (pinned escalation model, #395)
 

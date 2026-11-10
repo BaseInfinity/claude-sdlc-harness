@@ -370,6 +370,12 @@ waits on the user for something a model can answer.
    PRs, merges, issue closes, settings and permissions (for example OS privacy
    toggles (TCC)), sending messages, and product values.
 
+**In a `/conduct` fleet, show the human a plan only at 95%.** The conductor relays a controller's
+gameplan, status report or decision to the user only at 95% confidence, or
+once every brain has tried and cannot get there. Below that, it helps close
+the gap: dispatch research, read files, check state, ask another controller.
+Full rule: `/sdlc` → "Exhaust the driver before escalating".
+
 Writing commands that pass the guards:
 
 - Use absolute literal paths, not `cd` plus relative ones.

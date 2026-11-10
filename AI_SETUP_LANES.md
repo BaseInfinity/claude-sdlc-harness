@@ -305,11 +305,12 @@ Clarified 2026-07-13, updated 2026-07-24 for the Opus 5 swap — these exact poi
 
 ## Conductor — Opus 4.6[1m] `high` (multi-session routing)
 
-The conductor is the one front-door session that routes work to other sessions (`/conduct`). It does not build or review, so it gets its own entry.
+The conductor is the one front-door session that routes work to other sessions (`/conduct`). It does not build or review, so it gets its own entry. Controllers (one per project or harness) run the same pin as the conductor; workers keep the builder lane.
 
 | Role | Model | Effort |
 |------|-------|--------|
 | **Conductor** | `claude-opus-4-6[1m]` | `high` |
+| **Controllers** | `claude-opus-4-6[1m]` | `high` |
 | **Builders** | `claude-opus-5-5` | `medium` |
 | **Planning and reviews** | `claude-fable-5-2` | `high` |
 
@@ -333,6 +334,8 @@ $ claude -p --model 'claude-opus-4-6' --effort high --output-format json "Reply 
 **Hard thinking goes up the brain ladder, not to the conductor.** A design question or a sub-95% call goes to the cross-model reviewer first, then to Fable 5.2 `high` on an unreconciled split. The conductor routes the question; it does not answer it.
 
 **Need more effort for one stretch?** Type `/effort max` in the conductor session. That is a runtime bump for that session, not a lane change: the entry above stays `high`.
+
+**In a `/conduct` fleet, show the human a plan only at 95%.** A controller's gameplan, status report or decision reaches the human only at 95% confidence, or once every brain has tried and cannot get there. Below that, the conductor helps close the gap. Full rule: `/sdlc` → "Exhaust the driver before escalating".
 
 ## See Also
 

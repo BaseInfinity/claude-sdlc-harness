@@ -252,7 +252,7 @@ The output is JSON: `{ tier: "simple" | "complex", score, signals }`. Use the re
 >
 > `[N/r/o/s/p]`
 
-**Conductor model:** `claude-opus-4-6[1m]` at `high` — for a `/conduct` front-door session, set per session (`--model 'claude-opus-4-6[1m]' --effort high`), not a Step 9.5 repo pin. See `AI_SETUP_LANES.md` → "Conductor".
+**Conductor model:** `claude-opus-4-6[1m]` at `high` — for a `/conduct` front-door session, set per session (`--model 'claude-opus-4-6[1m]' --effort high`), not a Step 9.5 repo pin. **Controller model:** `claude-opus-4-6[1m]` at `high` too; workers keep `claude-opus-5-5` at `medium`. See `AI_SETUP_LANES.md` → "Conductor".
 
 **If the user answers `N` (default):** Make no edits to `.claude/settings.json`. Auto-mode stays on. Done.
 
