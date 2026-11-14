@@ -67,6 +67,7 @@ A clearance is not a mood. `scripts/merge-pr.sh` accepts specific evidence, and 
 | tier | what it requires | what it proves |
 |---|---|---|
 | **dual-certified** | 2 **distinct** reviewers at ≥95%, each bound to the head SHA | the strongest evidence available here |
+| **cross-model-cleared** (ACKABLE paths only) | the same as dual-certified, **or** 1 reviewer at ≥95% plus a **distinct** `YES` below 95 whose payload declares `"p0_p1": 0` (#784) | two reviewers said yes; only one cleared the number. HARD paths never accept this |
 | **user-approved** | a maintainer reason string | **zero independent reviewers.** Honest, visible degradation — never equivalent to the above |
 
 Three failure modes worth flagging on sight:
