@@ -29,6 +29,14 @@
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/codex-gate-check.sh"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/handoff-check.sh"
+          }
+        ]
       }
     ],
     "InstructionsLoaded": [

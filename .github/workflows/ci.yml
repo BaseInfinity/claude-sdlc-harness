@@ -150,6 +150,9 @@ jobs:
       - name: Run conduct tests (shared helper parity, one-response protocol)
         run: ./tests/test-conduct.sh
 
+      - name: Run handoff tests (handoff.cjs write/read/list, handoff-check hook)
+        run: ./tests/test-handoff.sh
+
       - name: Run session-load audit tests (token bloat phase 2)
         run: ./tests/test-audit-session-load.sh
 

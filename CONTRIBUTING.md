@@ -47,6 +47,7 @@ Thank you for your interest in improving the SDLC Harness!
    ./tests/test-firmware-fixture.sh && \
    ./tests/test-doc-consistency.sh && \
    ./tests/test-conduct.sh && \
+   ./tests/test-handoff.sh && \
    ./tests/test-mutation-guards.sh && \
    ./tests/test-usage-diagnostics.sh && \
    ./tests/test-model-config-batch.sh && \
