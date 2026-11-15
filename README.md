@@ -94,7 +94,7 @@ this label upgrades to "verified" only when that canary's verdict is recorded
 there. Verified on 2026-08-26: `npm install agentic-sdlc-wizard@opus-4.6`
 resolves and installs 1.87.0.
 
-**Manual (advanced — partial, not an escape hatch):** Download `CLAUDE_CODE_SDLC_WIZARD.md` to your project and tell Claude `Run the SDLC wizard setup`. This skips the live-session auto-invoke and generates your bespoke `CLAUDE.md`, `SDLC.md`, `TESTING.md` and `ARCHITECTURE.md`. **It does not give you a working install.** The document no longer contains the SDLC skill — Step 6 installs it by running the CLI (GH #513) — and only 2 of the 8 hooks have hand-typed templates here. So this path still needs `npx`; there is no npx-free route to a complete install. The default human path is `npx init` → restart CC → first-prompt auto-setup.
+**Manual (advanced — partial, not an escape hatch):** Download `CLAUDE_CODE_SDLC_WIZARD.md` to your project and tell Claude `Run the SDLC wizard setup`. This skips the live-session auto-invoke and generates your bespoke `CLAUDE.md`, `SDLC.md`, `TESTING.md` and `ARCHITECTURE.md`. **It does not give you a working install.** The document no longer contains the SDLC skill — Step 6 installs it by running the CLI (GH #513) — and only 2 of the 9 hooks have hand-typed templates here. So this path still needs `npx`; there is no npx-free route to a complete install. The default human path is `npx init` → restart CC → first-prompt auto-setup.
 </details>
 
 <details>

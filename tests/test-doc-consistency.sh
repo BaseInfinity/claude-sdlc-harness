@@ -4573,6 +4573,23 @@ test_gnx_sdlc_bullet
 test_gnx_setup_step
 test_gnx_conduct_lookup
 
+# /conduct orient reads the latest handoff through handoff.cjs. Structure only:
+# the heading, both documented forms, and the helper invocation it relies on.
+test_conduct_orient_documented() {
+    local f="$REPO_ROOT/skills/conduct/SKILL.md" missing=""
+    grep -qx '### `conduct orient`' "$f" || missing="$missing heading"
+    grep -qE '^conduct orient +#' "$f" || missing="$missing bare-form"
+    grep -qE '^conduct orient --id <id> +#' "$f" || missing="$missing id-form"
+    grep -qF 'scripts/handoff.cjs read --root <repo>' "$f" || missing="$missing helper-call"
+    if [ -n "$missing" ]; then
+        fail "conduct orient not documented in SKILL.md:$missing"
+        return
+    fi
+    pass "SKILL.md documents conduct orient and its handoff.cjs read call"
+}
+
+test_conduct_orient_documented
+
 echo "=== Results: $PASSED passed, $FAILED failed ==="
 
 if [ "$FAILED" -gt 0 ]; then

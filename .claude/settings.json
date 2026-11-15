@@ -80,6 +80,14 @@
             "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/merge-gate-check.sh"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/hooks/handoff-check.sh"
+          }
+        ]
       }
     ],
     "InstructionsLoaded": [

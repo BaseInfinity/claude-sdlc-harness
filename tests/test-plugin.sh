@@ -300,11 +300,11 @@ test_fleet_alias_resolves_to_conduct() {
 test_plugin_hook_scripts_exist() {
     local ok=true
     local missing=""
-    for script in sdlc-prompt-check.sh tdd-pretool-check.sh instructions-loaded-check.sh model-effort-check.sh precompact-seam-check.sh codex-gate-check.sh token-spike-check.sh codex-review-stop-check.sh; do
+    for script in sdlc-prompt-check.sh tdd-pretool-check.sh instructions-loaded-check.sh model-effort-check.sh precompact-seam-check.sh codex-gate-check.sh token-spike-check.sh codex-review-stop-check.sh handoff-check.sh; do
         [ -f "$REPO_ROOT/hooks/$script" ] || { ok=false; missing="$missing $script"; }
     done
     if [ "$ok" = true ]; then
-        pass "All 8 hook scripts exist at hooks/"
+        pass "All 9 hook scripts exist at hooks/"
     else
         fail "hooks/ missing scripts:$missing"
     fi
@@ -313,11 +313,11 @@ test_plugin_hook_scripts_exist() {
 test_plugin_hook_scripts_executable() {
     local ok=true
     local missing=""
-    for script in sdlc-prompt-check.sh tdd-pretool-check.sh instructions-loaded-check.sh model-effort-check.sh precompact-seam-check.sh codex-gate-check.sh token-spike-check.sh codex-review-stop-check.sh; do
+    for script in sdlc-prompt-check.sh tdd-pretool-check.sh instructions-loaded-check.sh model-effort-check.sh precompact-seam-check.sh codex-gate-check.sh token-spike-check.sh codex-review-stop-check.sh handoff-check.sh; do
         [ -x "$REPO_ROOT/hooks/$script" ] || { ok=false; missing="$missing $script"; }
     done
     if [ "$ok" = true ]; then
-        pass "All 8 hook scripts are executable"
+        pass "All 9 hook scripts are executable"
     else
         fail "hooks/ non-executable:$missing"
     fi
@@ -349,7 +349,7 @@ test_cli_installs_from_plugin_source() {
     (cd "$d" && node "$CLI" init > /dev/null 2>&1)
     local ok=true
     for rel in sdlc/SKILL.md setup/SKILL.md update/SKILL.md feedback/SKILL.md \
-               conduct/SKILL.md conduct/references/protocol.md conduct/scripts/conduct.cjs conduct/scripts/claude-desktop.sh conduct/scripts/claude-desktop.py conduct/scripts/codex-thread.py conduct/scripts/status.cjs fleet/SKILL.md; do
+               conduct/SKILL.md conduct/references/protocol.md conduct/scripts/conduct.cjs conduct/scripts/claude-desktop.sh conduct/scripts/claude-desktop.py conduct/scripts/codex-thread.py conduct/scripts/status.cjs conduct/scripts/handoff.cjs fleet/SKILL.md; do
         local installed="$d/.claude/skills/$rel"
         local source="$REPO_ROOT/skills/$rel"
         [ -f "$installed" ] || { ok=false; continue; }

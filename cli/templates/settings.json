@@ -29,6 +29,14 @@
             "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/codex-gate-check.sh"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/handoff-check.sh"
+          }
+        ]
       }
     ],
     "InstructionsLoaded": [

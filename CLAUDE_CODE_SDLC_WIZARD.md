@@ -545,7 +545,7 @@ See the dedicated subsection under [Tasks System](#tasks-system-v2116) (above, i
 
 ### MCP-tool hooks audit (ROADMAP #218, CC 2.1.118)
 
-CC 2.1.118 introduced `type: "mcp_tool"` for hooks — a hook can now directly invoke an MCP tool instead of running a bash script. **Audit (2026-04-26) of the 5 wizard hooks that existed at the time concluded: none migrate, all stay bash.** This subsection documents the per-hook reasoning so future audits don't redo the work; if a future PR migrates a hook to MCP, update this entry with the new rationale rather than deleting it. **Not yet re-audited**: 3 hooks shipped since 2026-04-26 (`codex-gate-check.sh`, `token-spike-check.sh`, `codex-review-stop-check.sh`) — the project now registers 8 hooks total (see `.claude/settings.json`), but this table only covers the original 5.
+CC 2.1.118 introduced `type: "mcp_tool"` for hooks — a hook can now directly invoke an MCP tool instead of running a bash script. **Audit (2026-04-26) of the 5 wizard hooks that existed at the time concluded: none migrate, all stay bash.** This subsection documents the per-hook reasoning so future audits don't redo the work; if a future PR migrates a hook to MCP, update this entry with the new rationale rather than deleting it. **Not yet re-audited**: 4 hooks shipped since 2026-04-26 (`codex-gate-check.sh`, `token-spike-check.sh`, `codex-review-stop-check.sh`, `handoff-check.sh`) — the project now registers 9 shippable hooks (see `.claude/settings.json`), but this table only covers the original 5.
 
 **Decision criteria applied** (any one rules out MCP):
 

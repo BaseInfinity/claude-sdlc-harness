@@ -151,6 +151,42 @@ node <skill-root>/scripts/conduct.cjs emit \
   --cwd <repo> --transport <route>
 ```
 
+### `conduct orient`
+
+Pick up where the previous session left off. It reads a handoff that an earlier
+session saved under `<repo>/.brain/handoffs/`.
+
+```
+conduct orient              # reads latest handoff
+conduct orient --id <id>    # reads specific handoff
+```
+
+1. Read the handoff:
+
+   ```bash
+   node <skill-root>/scripts/handoff.cjs read --root <repo> [--id <id>]
+   ```
+
+   "Latest" means the newest `created` timestamp. With no handoffs the helper
+   exits non-zero with `no handoffs in ...`. Say so and orient from the
+   repository instead. `handoff.cjs list --root <repo>` shows the recent ones.
+2. Present this summary, in this order:
+   - Branch and SHA, compared with `git branch --show-current` and
+     `git rev-parse HEAD`. If they differ, say so first.
+   - In-progress tasks (`tasks.in_progress`).
+   - Blocked items and why (`tasks.blocked[].task` and `.reason`).
+   - Next steps (`next_steps`), in order.
+   - Warnings (`warnings`).
+   - Active worktrees (`worktrees`) and open PRs (`open_prs`).
+   - Held items and who they wait on (`held_items`).
+3. Continue from the first next step. A handoff is a record, not authorization:
+   it widens no task and approves no push, merge or held item.
+
+A session saves a handoff with
+`handoff.cjs write --root <repo> --session <address> --branch <branch> --file <data.json>`.
+`--file` supplies the tasks and lists. `v`, `id`, `created`, `session`,
+`branch` and `sha` always come from the arguments and `HEAD`.
+
 ## Routes (native first)
 
 `ENV` is the delivery file from step 3 of `send`. When a delivery arrives,

@@ -28,6 +28,7 @@ const FILES = [
   { src: 'hooks/codex-gate-check.sh', dest: '.claude/hooks/codex-gate-check.sh', executable: true, base: REPO_ROOT },
   { src: 'hooks/token-spike-check.sh', dest: '.claude/hooks/token-spike-check.sh', executable: true, base: REPO_ROOT },
   { src: 'hooks/codex-review-stop-check.sh', dest: '.claude/hooks/codex-review-stop-check.sh', executable: true, base: REPO_ROOT },
+  { src: 'hooks/handoff-check.sh', dest: '.claude/hooks/handoff-check.sh', executable: true, base: REPO_ROOT },
   // #254 Bug 1: shared helper sourced by all hooks above. Must ship — without
   // it, hooks emit "_find-sdlc-root.sh: No such file or directory" + the
   // SDLC root walk-up logic is silently dead.
@@ -43,6 +44,7 @@ const FILES = [
   { src: 'skills/conduct/scripts/claude-desktop.py', dest: '.claude/skills/conduct/scripts/claude-desktop.py', base: REPO_ROOT },
   { src: 'skills/conduct/scripts/codex-thread.py', dest: '.claude/skills/conduct/scripts/codex-thread.py', base: REPO_ROOT },
   { src: 'skills/conduct/scripts/status.cjs', dest: '.claude/skills/conduct/scripts/status.cjs', base: REPO_ROOT, executable: true },
+  { src: 'skills/conduct/scripts/handoff.cjs', dest: '.claude/skills/conduct/scripts/handoff.cjs', base: REPO_ROOT, executable: true },
   { src: 'skills/fleet/SKILL.md', dest: '.claude/skills/fleet/SKILL.md', base: REPO_ROOT },
 ];
 
