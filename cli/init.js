@@ -44,6 +44,7 @@ const FILES = [
   { src: 'skills/conduct/scripts/claude-desktop.py', dest: '.claude/skills/conduct/scripts/claude-desktop.py', base: REPO_ROOT },
   { src: 'skills/conduct/scripts/codex-thread.py', dest: '.claude/skills/conduct/scripts/codex-thread.py', base: REPO_ROOT },
   { src: 'skills/conduct/scripts/status.cjs', dest: '.claude/skills/conduct/scripts/status.cjs', base: REPO_ROOT, executable: true },
+  { src: 'skills/conduct/scripts/prompts.cjs', dest: '.claude/skills/conduct/scripts/prompts.cjs', base: REPO_ROOT, executable: true },
   { src: 'skills/conduct/scripts/handoff.cjs', dest: '.claude/skills/conduct/scripts/handoff.cjs', base: REPO_ROOT, executable: true },
   { src: 'skills/fleet/SKILL.md', dest: '.claude/skills/fleet/SKILL.md', base: REPO_ROOT },
 ];

@@ -1,0 +1,13 @@
+Session "✳ ANTICHEAT: email step (node)" id=AAAAAAAA-0000-0000-0000-000000000001 (192 x 46) frame=[(0, 0) (1354 x 787)]
+Session "Review diff | repo (codex")" id=BBBBBBBB-0000-0000-0000-000000000002 (80 x 25) frame=[(0, 0) (570 x 429)]
+Session "◐ Port scope (node)" id=CCCCCCCC-0000-0000-0000-000000000003 (214 x 53) frame=[(0, 0) (1510 x 906)]
+Session "✳ HARNESS worker (node)" id=DDDDDDDD-0000-0000-0000-000000000004 (203 x 53) frame=[(0, 0) (1431 x 906)]
+Session "CODEX SDLC | codex-sdlc-wizard (codex")" id=EEEEEEEE-0000-0000-0000-000000000005 (130 x 38) frame=[(0, 0) (1310 x 890)]
+Session "✳ HARNESS old (node)" id=FFFFFFFF-0000-0000-0000-000000000006 (203 x 53) frame=[(0, 0) (1431 x 906)]
+Session "✳ notes one (node)" id=11111111-0000-0000-0000-000000000007 (203 x 53) frame=[(0, 0) (1431 x 906)]
+Session "✳ notes two (node)" id=22222222-0000-0000-0000-000000000008 (203 x 53) frame=[(0, 0) (1431 x 906)]
+Session "✳ notes three (node)" id=33333333-0000-0000-0000-000000000009 (203 x 53) frame=[(0, 0) (1431 x 906)]
+Session "codex notes | repo (codex")" id=44444444-0000-0000-0000-000000000010 (130 x 38) frame=[(0, 0) (1310 x 890)]
+Session "codex notes two | repo (codex")" id=55555555-0000-0000-0000-000000000011 (130 x 38) frame=[(0, 0) (1310 x 890)]
+
+Buried sessions:

@@ -1,0 +1,7 @@
+⏺ Before the cleanup I would have asked:
+  Do you want to proceed?
+  The reply options end with "3. No, and tell Claude what to do differently".
+
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────

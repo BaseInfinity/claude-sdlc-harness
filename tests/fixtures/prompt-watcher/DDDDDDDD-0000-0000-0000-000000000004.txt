@@ -1,0 +1,12 @@
+⏺ Running the cleanup now.
+
+────────────────────────────────────────────────────────────────────────────────
+ Bash command
+
+   rm -rf build/tmp
+   Remove stale build output
+
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. Yes, and don't ask again for rm commands in /Users/x/repo
+   3. No, and tell Claude what to do differently (esc)

@@ -261,7 +261,34 @@ Then send with `it2api send-text <id> "$(cat "$ENV")"`, and submit with a
 separate `it2api send-text <id> $'\r'`. Read buffers only for the session in
 the current handoff. The one exception to this rule is the first launch of a
 new worker tab: that send goes to a shell prompt and carries the launcher line,
-never an envelope (see Material work goes to a worker tab).
+never an envelope (see Material work goes to a worker tab). The watcher below
+reads every pane, but prints no buffer text.
+
+**Stalled-prompt watcher.** It lists each pane whose last screen is a Claude
+permission dialog (`claude-permission`), a Codex approval dialog
+(`codex-approval`) or an AskUserQuestion picker (`question`), one line per pane.
+Run with `dangerouslyDisableSandbox`, like every `it2api` call:
+
+```
+$ node <skill-root>/scripts/prompts.cjs scan --state "$TMPDIR/prompts-state.json"
+STALLED question age=0s AAAAAAAA "✳ ANTICHEAT: email step (node)"
+STALLED claude-permission age=0s DDDDDDDD "✳ HARNESS worker (node)"
+STALLED codex-approval age=0s EEEEEEEE "CODEX SDLC | codex-sdlc-wizard (codex")"
+```
+
+That output is from the test fixtures (`tests/fixtures/prompt-watcher/` in the
+wizard repo). With nothing stalled it prints `no stalled prompts (N panes scanned)`.
+
+It calls only `it2api list-sessions` and `get-buffer`, and prints the pane's id
+and title, never its contents. Age counts from the first scan that saw that
+pane in that kind of dialog, and restarts when the dialog clears. The watching
+session re-runs the scan every 60 seconds and sends the conductor only lines
+that are new since the last scan. The conductor reads that one pane's buffer as part of the handoff and
+routes the prompt to the pane's owner, or to the user. **The watcher never
+answers a prompt, and no session answers one for another** (operating model
+rule 10). A recurring stall is fixed where it starts: an exact allowlist entry
+the user approves, or a launcher that runs the leg without prompting (see
+`docs/permission-prompt-architecture.md` in the wizard repo).
 
 **A queued message is accepted, not executed.** `codex queue` returning
 `Queued message <id>` proves acceptance only. An inactive Codex session needs

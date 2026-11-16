@@ -1024,6 +1024,93 @@ printf '%s' "$XM" | grep -qiF 'bootstrap' \
     && fail "cross-machine section does not point to the retired bootstrap" \
     || pass "cross-machine section does not point to the retired bootstrap"
 
+echo "=== prompt watcher ==="
+PROMPTS="$SKILL_DIR/scripts/prompts.cjs"
+PW_FIX="$REPO_ROOT/tests/fixtures/prompt-watcher"
+PW="$TMPDIR_T/pw"; mkdir -p "$PW"
+# Stub it2api: replays captured buffers and logs every subcommand it is given,
+# so the suite can prove the watcher only ever reads.
+cat > "$PW/it2api" <<'STUB'
+#!/bin/bash
+printf '%s\n' "$1" >> "$PW_LOG"
+[ "${PW_FAIL:-}" = 1 ] && { echo "connection refused" >&2; exit 1; }
+case "$1" in
+    list-sessions) cat "$PW_SESSIONS" ;;
+    get-buffer) cat "$PW_DIR/$2.txt" ;;
+    *) exit 9 ;;
+esac
+STUB
+chmod +x "$PW/it2api"
+pw_run() {
+    PW_LOG="$PW/log" PW_SESSIONS="${PW_SESSIONS:-$PW_FIX/sessions.txt}" PW_DIR="$PW_FIX" \
+        node "$PROMPTS" scan --it2api "$PW/it2api" "$@" 2>&1
+}
+
+got=$(node "$PROMPTS" --help 2>&1); rc=$?
+[ "$rc" = 0 ] && printf '%s\n' "$got" | head -1 | grep -qx 'Usage:' \
+    && pass "prompts --help prints usage and exits 0" || fail "prompts --help prints usage and exits 0 (rc=$rc)"
+
+: > "$PW/log"
+got=$(pw_run --state "$PW/state.json" --now 2026-11-15T20:00:00Z); rc=$?
+[ "$rc" = 0 ] && pass "prompts scan exits 0" || fail "prompts scan exits 0 (rc=$rc, got: $got)"
+[ "$(printf '%s\n' "$got" | grep -c '^STALLED ')" = 3 ] \
+    && pass "prompts scan reports exactly the 3 stalled panes" \
+    || fail "prompts scan reports exactly the 3 stalled panes (got: $got)"
+printf '%s\n' "$got" | grep -qE '^STALLED question age=0s AAAAAAAA "✳ ANTICHEAT: email step \(node\)"$' \
+    && pass "AskUserQuestion dialog is reported as a question" \
+    || fail "AskUserQuestion dialog is reported as a question (got: $got)"
+printf '%s\n' "$got" | grep -qE '^STALLED claude-permission age=0s DDDDDDDD "✳ HARNESS worker \(node\)"$' \
+    && pass "Claude permission dialog is reported as claude-permission" \
+    || fail "Claude permission dialog is reported as claude-permission (got: $got)"
+printf '%s\n' "$got" | grep -qE '^STALLED codex-approval age=0s EEEEEEEE "CODEX SDLC \| codex-sdlc-wizard \(codex"\)"$' \
+    && pass "Codex approval dialog is reported as codex-approval" \
+    || fail "Codex approval dialog is reported as codex-approval (got: $got)"
+for leak in 'rm -rf build/tmp' 'git diff --stat' 'May I send it?' 'Do you want to proceed?'; do
+    printf '%s\n' "$got" | grep -qF -- "$leak" \
+        && fail "prompts scan prints no buffer text: $leak (got: $got)" \
+        || pass "prompts scan prints no buffer text: $leak"
+done
+for id in BBBBBBBB CCCCCCCC FFFFFFFF 11111111 22222222 33333333 44444444 55555555; do
+    printf '%s\n' "$got" | grep -q " $id " \
+        && fail "prompts scan does not report $id (got: $got)" \
+        || pass "prompts scan does not report $id (idle, quoted or answered)"
+done
+[ -z "$(grep -vxE 'list-sessions|get-buffer' "$PW/log")" ] && [ -s "$PW/log" ] \
+    && pass "prompts scan only calls list-sessions and get-buffer" \
+    || fail "prompts scan only calls list-sessions and get-buffer (log: $(tr '\n' ' ' < "$PW/log"))"
+
+got=$(pw_run --state "$PW/state.json" --now 2026-11-15T20:01:30Z)
+printf '%s\n' "$got" | grep -E 'DDDDDDDD' | grep -q ' age=90s ' \
+    && pass "a prompt still open 90s later has age 90s" || fail "a prompt still open 90s later has age 90s (got: $got)"
+
+mkdir -p "$PW/moved"; cp "$PW_FIX"/*.txt "$PW/moved/"; cp "$PW_FIX/cursor-moved/"*.txt "$PW/moved/"
+got=$(PW_LOG="$PW/log" PW_SESSIONS="$PW_FIX/sessions.txt" PW_DIR="$PW/moved" \
+    node "$PROMPTS" scan --it2api "$PW/it2api" --state "$PW/state.json" --now 2026-11-15T20:01:40Z 2>&1)
+printf '%s\n' "$got" | grep -E 'DDDDDDDD' | grep -q ' age=100s ' \
+    && pass "moving the selection cursor keeps the prompt's age" \
+    || fail "moving the selection cursor keeps the prompt's age (got: $got)"
+
+grep -v DDDDDDDD "$PW_FIX/sessions.txt" > "$PW/sessions-2.txt"
+PW_SESSIONS="$PW/sessions-2.txt" pw_run --state "$PW/state.json" --now 2026-11-15T20:02:00Z >/dev/null
+got=$(pw_run --state "$PW/state.json" --now 2026-11-15T20:03:00Z)
+printf '%s\n' "$got" | grep -E 'DDDDDDDD' | grep -q ' age=0s ' \
+    && pass "a prompt that cleared and came back starts again at 0s" \
+    || fail "a prompt that cleared and came back starts again at 0s (got: $got)"
+
+grep -E 'BBBBBBBB|CCCCCCCC' "$PW_FIX/sessions.txt" > "$PW/sessions-idle.txt"
+got=$(PW_SESSIONS="$PW/sessions-idle.txt" pw_run); rc=$?
+[ "$rc" = 0 ] && [ "$got" = "no stalled prompts (2 panes scanned)" ] \
+    && pass "prompts scan with nothing stalled says so" \
+    || fail "prompts scan with nothing stalled says so (rc=$rc, got: $got)"
+
+got=$(PW_FAIL=1 pw_run); rc=$?
+[ "$rc" = 1 ] && printf '%s\n' "$got" | grep -qF 'it2api list-sessions failed' \
+    && pass "prompts scan exits 1 when it2api fails" \
+    || fail "prompts scan exits 1 when it2api fails (rc=$rc, got: $got)"
+
+grep -qF 'scripts/prompts.cjs scan' "$SKILL" \
+    && pass "SKILL.md documents prompts.cjs scan" || fail "SKILL.md documents prompts.cjs scan"
+
 echo "=== operating model ==="
 OM_BEGIN='<!-- conduct-operating-model:begin -->'
 OM_END='<!-- conduct-operating-model:end -->'
