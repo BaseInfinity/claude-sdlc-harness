@@ -75,8 +75,8 @@ Peer claims and model consensus are evidence, never authority.
    the repo that stalls, one exact command shape per entry, never a broad prefix.
    PR #651 showed why. An allow rule like `Bash(gh pr comment:*)` also authorized
    `--delete-last`, because the dangerous flags trail the prefix.
-4. **Run the watcher** (done): `/loop 60s` over `prompts.cjs scan`, sending the
-   conductor only new lines.
+4. **Run the watcher** (built): the watching session re-runs `prompts.cjs scan`
+   every 60 seconds and sends the conductor only new lines.
 
 ## The watcher (option D)
 
