@@ -369,6 +369,53 @@ test_precompact_blocks_on_rebase_head_with_rebase_merge_dir() {
     fi
 }
 
+test_precompact_blocks_in_linked_worktree_and_submodule() {
+    # In a linked worktree or a submodule, .git is a FILE holding
+    # "gitdir: <path>", and the in-flight markers live under that path. The
+    # hook only looked inside a .git DIRECTORY, so /compact mid-rebase in a
+    # worktree was allowed. Covers an absolute pointer (git worktree add)
+    # and a relative one (submodules), plus a silent negative control.
+    local tmpdir ok=true why=""
+    tmpdir=$(mktemp -d)
+    local stderr_out rc
+
+    # Linked worktree: absolute gitdir, rebase in progress
+    mkdir -p "$tmpdir/main/.git/worktrees/wt/rebase-merge" "$tmpdir/wt"
+    echo "dummy" > "$tmpdir/main/.git/worktrees/wt/rebase-merge/head-name"
+    echo "gitdir: $tmpdir/main/.git/worktrees/wt" > "$tmpdir/wt/.git"
+    rc=0
+    stderr_out=$(CLAUDE_PROJECT_DIR="$tmpdir/wt" "$HOOKS_DIR/precompact-seam-check.sh" < /dev/null 2>&1 >/dev/null) || rc=$?
+    if [ "$rc" -ne 2 ] || ! echo "$stderr_out" | grep -qi "rebase"; then
+        ok=false; why="worktree rebase rc=$rc"
+    fi
+
+    # Submodule: relative gitdir, merge in progress
+    mkdir -p "$tmpdir/main/.git/modules/sub" "$tmpdir/main/sub"
+    echo "abc" > "$tmpdir/main/.git/modules/sub/MERGE_HEAD"
+    echo "gitdir: ../.git/modules/sub" > "$tmpdir/main/sub/.git"
+    rc=0
+    stderr_out=$(CLAUDE_PROJECT_DIR="$tmpdir/main/sub" "$HOOKS_DIR/precompact-seam-check.sh" < /dev/null 2>&1 >/dev/null) || rc=$?
+    if [ "$rc" -ne 2 ] || ! echo "$stderr_out" | grep -qi "merge"; then
+        ok=false; why="$why; submodule merge rc=$rc"
+    fi
+
+    # Negative control: a worktree with nothing in flight stays silent
+    mkdir -p "$tmpdir/main/.git/worktrees/idle" "$tmpdir/idle"
+    echo "gitdir: $tmpdir/main/.git/worktrees/idle" > "$tmpdir/idle/.git"
+    rc=0
+    stderr_out=$(CLAUDE_PROJECT_DIR="$tmpdir/idle" "$HOOKS_DIR/precompact-seam-check.sh" < /dev/null 2>&1 >/dev/null) || rc=$?
+    if [ "$rc" -ne 0 ] || [ -n "$stderr_out" ]; then
+        ok=false; why="$why; idle worktree rc=$rc stderr='$stderr_out'"
+    fi
+
+    rm -rf "$tmpdir"
+    if [ "$ok" = true ]; then
+        pass "precompact hook resolves a .git file (worktree/submodule) and blocks mid-operation"
+    else
+        fail "precompact should follow a .git gitdir pointer ($why)"
+    fi
+}
+
 test_precompact_size_cap() {
     # Worst case: all 3 git-op blockers fire simultaneously (rebase + merge +
     # cherry-pick). Should still emit a token-efficient HOLD message.
@@ -1025,6 +1072,7 @@ test_precompact_blocks_on_git_merge_in_progress
 test_precompact_blocks_on_cherry_pick_in_progress
 test_precompact_silent_on_stale_rebase_head_alone
 test_precompact_blocks_on_rebase_head_with_rebase_merge_dir
+test_precompact_blocks_in_linked_worktree_and_submodule
 test_precompact_size_cap
 
 

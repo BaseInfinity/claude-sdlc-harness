@@ -38,6 +38,19 @@ HOLD_REASONS=""
 # in-flight git operation without needing a real .git/ state, so consumers
 # can smoke-test every code path (read-only, no writes).
 GITDIR="$ROOT/.git"
+# In a linked worktree or a submodule, .git is a file holding
+# "gitdir: <path>" (absolute, or relative to $ROOT), and the in-flight
+# markers below live under that path, not under $ROOT/.git/. Builtins only,
+# like the rest of this hook.
+if [ -f "$GITDIR" ]; then
+    POINTER=""
+    IFS= read -r POINTER < "$GITDIR" 2>/dev/null || true
+    POINTER="${POINTER%$'\r'}"
+    case "$POINTER" in
+        "gitdir: /"*|gitdir:\ [A-Za-z]:*) GITDIR="${POINTER#gitdir: }" ;;
+        "gitdir: "?*) GITDIR="$ROOT/${POINTER#gitdir: }" ;;
+    esac
+fi
 # Step 1: when dry-run var matches a known scenario, simulate it.
 # Otherwise (unset, empty, or unknown value) fall through to the real
 # .git/ checks below — this prevents an unintended safety bypass when
