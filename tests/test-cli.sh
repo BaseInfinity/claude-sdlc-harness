@@ -838,6 +838,87 @@ FIXTURE
     rm -rf "$d"
 }
 
+# Every wizard hook command in the template must appear in the merged
+# settings.json for the same event, exactly as many times as in the template.
+# Prints the first mismatch and returns 1, or returns 0 when all match.
+assert_template_hooks_merged() {
+    python3 - "$SCRIPT_DIR/../cli/templates/settings.json" "$1" << 'PY'
+import json, sys
+from collections import Counter
+template = json.load(open(sys.argv[1]))
+merged = json.load(open(sys.argv[2]))
+def commands(entries):
+    return Counter(h.get("command") for e in entries for h in e.get("hooks", []))
+for event, entries in template.get("hooks", {}).items():
+    got = commands(merged.get("hooks", {}).get(event, []))
+    for cmd, want in commands(entries).items():
+        if got[cmd] != want:
+            print(f"{event}: {cmd} x{got[cmd]}, want x{want}")
+            sys.exit(1)
+PY
+}
+
+# Test 28b: merging into an event that already has a hook installs EVERY
+# template entry for that event. PreToolUse ships three entries (TDD gate,
+# codex commit gate, handoff check); the merge used to read only the first,
+# so a user with any PreToolUse hook of their own never got the other two,
+# and an upgrade from an install that predates them never gained them.
+test_merge_adds_every_template_entry() {
+    local d ok=true why=""
+    d=$(make_temp)
+    mkdir -p "$d/.claude"
+    cat > "$d/.claude/settings.json" << 'FIXTURE'
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "bash my-formatter.sh" }
+        ]
+      }
+    ]
+  }
+}
+FIXTURE
+    (cd "$d" && node "$CLI" init > /dev/null 2>&1)
+    why=$(assert_template_hooks_merged "$d/.claude/settings.json") || ok=false
+    grep -q "my-formatter" "$d/.claude/settings.json" || { ok=false; why="$why; user hook dropped"; }
+    # Idempotent: a second run adds nothing
+    (cd "$d" && node "$CLI" init > /dev/null 2>&1)
+    [ "$ok" = true ] && { why=$(assert_template_hooks_merged "$d/.claude/settings.json") || ok=false; }
+    rm -rf "$d"
+
+    # Upgrade path: an older install whose PreToolUse holds only the TDD
+    # entry gains the newer entries on `init --force`.
+    d=$(make_temp)
+    mkdir -p "$d/.claude"
+    cat > "$d/.claude/settings.json" << 'FIXTURE'
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/tdd-pretool-check.sh" }
+        ]
+      }
+    ]
+  }
+}
+FIXTURE
+    if [ "$ok" = true ]; then
+        (cd "$d" && node "$CLI" init --force > /dev/null 2>&1)
+        why=$(assert_template_hooks_merged "$d/.claude/settings.json") || ok=false
+    fi
+    rm -rf "$d"
+    if [ "$ok" = true ]; then
+        pass "merge installs every template entry into an event that already has hooks"
+    else
+        fail "merge should install every template entry for an existing event ($why)"
+    fi
+}
+
 # Test 29: --force updates wizard hooks but preserves custom keys
 test_merge_force_updates_hooks() {
     local d
@@ -1004,6 +1085,7 @@ test_merge_preserves_keys
 test_merge_invalid_json_fallback
 test_merge_force_invalid_json
 test_merge_idempotent
+test_merge_adds_every_template_entry
 test_merge_force_updates_hooks
 test_cleanup_period_default_applied
 test_cleanup_period_user_override_preserved

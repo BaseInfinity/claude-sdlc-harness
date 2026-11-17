@@ -77,10 +77,11 @@ const OBSOLETE_PATHS = [
   '.claude/skills/testing',  // consolidated into /sdlc in v1.17.0
 ];
 
-function isWizardHookEntry(hookEntry) {
-  if (!hookEntry || !hookEntry.hooks) return false;
-  return hookEntry.hooks.some((h) =>
-    WIZARD_HOOK_MARKERS.some((marker) => h.command && h.command.includes(marker))
+// The wizard hook scripts a settings.json hook entry runs (by file name).
+function wizardHookMarkers(hookEntry) {
+  if (!hookEntry || !Array.isArray(hookEntry.hooks)) return [];
+  return WIZARD_HOOK_MARKERS.filter((marker) =>
+    hookEntry.hooks.some((h) => h && typeof h.command === 'string' && h.command.includes(marker))
   );
 }
 
@@ -129,14 +130,20 @@ function mergeSettings(existingPath, templatePath, force) {
         continue;
       }
 
-      // Each template event has exactly one hook entry
-      const templateEntry = templateEntries[0];
-      const existingIdx = existing.hooks[event].findIndex(isWizardHookEntry);
+      // An event can carry several template entries (PreToolUse has the TDD
+      // gate, the codex commit gate and the handoff check). Merge each one,
+      // matched to an existing entry by the wizard hook scripts it runs.
+      for (const templateEntry of templateEntries) {
+        const markers = wizardHookMarkers(templateEntry);
+        const existingIdx = existing.hooks[event].findIndex((entry) =>
+          wizardHookMarkers(entry).some((marker) => markers.includes(marker))
+        );
 
-      if (existingIdx === -1) {
-        existing.hooks[event].push(templateEntry);
-      } else if (force) {
-        existing.hooks[event][existingIdx] = templateEntry;
+        if (existingIdx === -1) {
+          existing.hooks[event].push(templateEntry);
+        } else if (force) {
+          existing.hooks[event][existingIdx] = templateEntry;
+        }
       }
     }
 
