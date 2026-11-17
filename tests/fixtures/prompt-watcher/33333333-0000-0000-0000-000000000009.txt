@@ -1,0 +1,7 @@
+⏺ Two follow-ups:
+  1. Re-run the scan.
+  2. Note that the footer reads Enter to select · Tab/Arrow keys to navigate · Esc to cancel here.
+
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────

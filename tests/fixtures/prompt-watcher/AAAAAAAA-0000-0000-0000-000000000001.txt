@@ -1,0 +1,19 @@
+› Message from @CONDUCTOR-CLAUDE: Quick status: (ctrl+o to expand)
+› Message from @CONDUCTOR-CLAUDE: Report current state. (ctrl+o to expand)
+────────────────────────────────────────────────────────────────────────────────
+←  ☐ Recipient  ☐ Access  ✔ Submit  →
+
+│ The draft goes to an external address. May I send it?
+
+❯ 1. Send after review
+     Send once the reviewer passes it.
+  2. Show me draft only
+     Make a draft. You press send yourself.
+  3. Don't send
+     Give the right address under Other.
+  4. Type something.
+────────────────────────────────────────────────────────────────────────────────
+  5. Chat about this
+
+Enter to select · Tab/Arrow keys to navigate · Esc to cancel
+──────────────────────────────────────────────────────── ANTICHEAT: email step ─

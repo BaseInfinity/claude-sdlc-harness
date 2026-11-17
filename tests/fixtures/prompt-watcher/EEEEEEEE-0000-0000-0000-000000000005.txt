@@ -1,0 +1,11 @@
+• Running the review leg.
+
+  Would you like to run the following command?
+
+  $ git diff --stat origin/main...HEAD
+
+› 1. Yes, proceed (y)
+  2. Yes, and don't ask again for this command in this session (a)
+  3. No, and tell Codex what to do differently (esc)
+
+  Press enter to confirm or esc to cancel

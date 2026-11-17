@@ -1,0 +1,13 @@
+   Edge-case handling          5/10
+  ─────────────────────────  ───────
+   Security                    8/10
+
+  The specified range contains four commits; all were reviewed.
+
+  Worked for 1h 24m 52s • 8:40 PM
+
+
+› Ask Codex to do anything
+
+  ~/repo · GPT-6.1-Sol medium · Context 23% used · 475K window · …
+  ← for agents · ? for shortcuts

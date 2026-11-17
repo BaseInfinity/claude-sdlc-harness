@@ -1,0 +1,12 @@
+⏺ Bash(grep -ciE 'do you want to|would you like to run|yes, and don.t ask|esc to cancel')
+  ⎿  Error: Exit code 1
+
+⏺ The scan regex listed "Do you want to proceed?" and "No, and tell Claude what to do differently"
+  and "Would you like to run the following command?" inline. Nothing matched.
+
+  Enter to select · Tab/Arrow keys to navigate · Esc to cancel was quoted here too.
+
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle)

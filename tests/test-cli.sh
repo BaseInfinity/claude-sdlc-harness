@@ -97,12 +97,13 @@ test_creates_all_files() {
     [ -f "$d/.claude/skills/conduct/scripts/claude-desktop.py" ] && count=$((count + 1))
     [ -f "$d/.claude/skills/conduct/scripts/codex-thread.py" ] && count=$((count + 1))
     [ -x "$d/.claude/skills/conduct/scripts/status.cjs" ] && count=$((count + 1))
+    [ -x "$d/.claude/skills/conduct/scripts/prompts.cjs" ] && count=$((count + 1))
     [ -f "$d/.claude/skills/fleet/SKILL.md" ] && count=$((count + 1))
     [ -f "$d/CLAUDE_CODE_SDLC_WIZARD.md" ] && count=$((count + 1))
-    if [ "$count" -eq 20 ]; then
-        pass "init creates all 20 expected files (#254 ships _find-sdlc-root.sh)"
+    if [ "$count" -eq 21 ]; then
+        pass "init creates all 21 expected files (#254 ships _find-sdlc-root.sh)"
     else
-        fail "init should create 20 files, found $count"
+        fail "init should create 21 files, found $count"
     fi
     rm -rf "$d"
 }
